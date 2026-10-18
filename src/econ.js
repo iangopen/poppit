@@ -1,0 +1,133 @@
+'use strict';
+/* ---------- Economy: pure functions, no DOM. Tested headlessly in node. ---------- */
+const ECON = (() => {
+  // base cost, growth per level, max level, optional requirement on current levels
+  const UPG = {
+    tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
+    sweep:  { base: 35,  grow: 3.4,  max: 5,  group: 'attr' },
+    chain:  { base: 110, grow: 2.5,  max: 8,  group: 'verb' },
+    auto:   { base: 90,  grow: 1.3,  max: 20, group: 'verb' },
+    golden: { base: 400, grow: 2.3, max: 6, group: 'marble', req: (L) => L.mint > 0 },
+    marble: { base: 7000, grow: 2.4, max: 5, group: 'marble', req: (L) => L.coral > 0 && L.tool >= 3 },
+    sharp:  { base: 8,   grow: 1.55, max: 99, group: 'tune' },
+    lucky:  { base: 30,  grow: 1.8,  max: 8,  group: 'marble' },
+    spawn:  { base: 20,  grow: 1.65, max: 12, group: 'tune' },
+    combo:  { base: 16,  grow: 1.6,  max: 10, group: 'tune' },
+    fuel:   { base: 90,  grow: 2.0,  max: 5,  group: 'tune' },
+    tempo:  { base: 260, grow: 2.6,  max: 10, group: 'tune', req: (L) => L.auto > 0 },
+    board:  { base: 600, grow: 14,   max: 2,  group: 'tune' },
+    mint:   { base: 150,    grow: 2.4, max: 5, group: 'marble', req: (L) => L.lucky > 0 },
+    violet: { base: 1200,   grow: 2.4, max: 5, group: 'marble', req: (L) => L.golden > 0 },
+    coral:  { base: 3000,   grow: 2.4, max: 5, group: 'marble', req: (L) => L.violet > 0 },
+    opal:   { base: 14000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.marble > 0 },
+    ruby:   { base: 28000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.opal > 0 },
+    black:  { base: 60000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.ruby > 0 },
+    shiny:  { base: 400,    grow: 2.2, max: 10, group: 'tune' },
+  };
+  const ORDER = ['lucky', 'sweep', 'chain', 'auto', 'sharp', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black', 'shiny', 'spawn', 'combo', 'fuel', 'tempo', 'board'];
+  // the cursor is a tool; harder pearls need more damage per hit, so they crack before they burst
+  const TOOLS = [
+    { name: 'Steel Pin', power: 1, speed: 1 }, { name: 'Awl', power: 2, speed: 1.1 }, { name: 'Brass Mallet', power: 3, speed: 1.2 },
+    { name: 'Steel Hammer', power: 6, speed: 1.4 }, { name: 'Sledgehammer', power: 10, speed: 1.6 }, { name: 'Diamond Hammer', power: 18, speed: 2 },
+  ];
+  // The roster. `pearl` is the base type (shown as Rose). cap = most of that type alive on the board at once.
+  const PEARLS = [
+    { id: 'pearl',  name: 'Rose Pearl',   hp: 1, mult: 1,   cap: 99 },
+    { id: 'blue',   name: 'Blue Pearl',   hp: 3, mult: 5,   cap: 8 },
+    { id: 'mint',   name: 'Mint Pearl',   hp: 7, mult: 12,   cap: 6 },
+    { id: 'golden', name: 'Golden Pearl', hp: 15, mult: 30,  cap: 2 },
+    { id: 'violet', name: 'Violet Pearl', hp: 30, mult: 70,  cap: 5 },
+    { id: 'coral',  name: 'Coral Pearl',  hp: 50, mult: 150,  cap: 4 },
+    { id: 'marble', name: 'Glass Marble', hp: 80, mult: 350,  cap: 3 },
+    { id: 'opal',   name: 'Opal Pearl',   hp: 130, mult: 800, cap: 3 },
+    { id: 'ruby',   name: 'Ruby Pearl',   hp: 200, mult: 2000, cap: 2 },
+    { id: 'black',  name: 'Black Pearl',  hp: 320, mult: 5000, cap: 1 },
+  ];
+  const KIND = {}; PEARLS.forEach((t) => { KIND[t.id] = { hp: t.hp, mult: t.mult }; });
+  const SHINY_MULT = 5;
+  // spawn weight of a type, relative to a base pearl weight of 100 (0 = locked)
+  const NEW_BASE = { mint: 3, golden: 2, violet: 1.2, coral: 0.8, marble: 0.5, opal: 0.35, ruby: 0.25, black: 0.15 };
+  function typeWeight(id, L) {
+    if (id === 'pearl') return 100;
+    if (id === 'blue') return L.lucky > 0 ? 4 + 3 * L.lucky : 0;
+    return L[id] > 0 ? NEW_BASE[id] * (1 + 0.4 * (L[id] - 1)) : 0;
+  }
+  const isUnlocked = (id, L) => typeWeight(id, L) > 0;
+  // the upgrade that unlocks (and levels) a type; the base pearl has none
+  const unlockUpg = (id) => (id === 'pearl' ? null : id === 'blue' ? 'lucky' : id);
+  // a type can be switched off only once the next type up has its unlock upgrade at max level; the top type is always free
+  function canToggleOff(id, L) {
+    const i = PEARLS.findIndex((t) => t.id === id), nx = PEARLS[i + 1];
+    if (!nx) return true;
+    const u = unlockUpg(nx.id);
+    return L[u] >= UPG[u].max;
+  }
+  // chosen types plus every type that is not allowed to be off yet, in roster order
+  const effectivePool = (pool, L) => PEARLS.map((t) => t.id).filter((id) => pool.includes(id) || !canToggleOff(id, L));
+  // chance of each pooled, unlocked type; the others' odds are renormalized so the board always fills at the same rate
+  function poolChances(pool, L, frenzy) {
+    const ids = effectivePool(pool, L).filter((id) => isUnlocked(id, L));
+    if (!ids.length) return { pearl: 1 };
+    const w = {}; let tot = 0;
+    for (const id of ids) { w[id] = typeWeight(id, L) * (frenzy && id !== 'pearl' ? 2 : 1); tot += w[id]; }
+    for (const id of ids) w[id] /= tot;
+    return w;
+  }
+  const shinyChance = (L) => 0.005 + 0.0025 * (L.shiny || 0);
+  const COST_SCALE = 6; // global dial: how long each upgrade takes to afford
+  const COLLAPSE_MIN_RUN = 1200000;
+
+  const zeroLevels = () => { const o = {}; for (const k in UPG) o[k] = 0; return o; };
+  const cost = (id, lvl) => Math.ceil(UPG[id].base * COST_SCALE * Math.pow(UPG[id].grow, lvl));
+  // each tool can be upgraded on its own: power adds a step per level, pop speed adds 12% of its base per level
+  const TOOL_UP_MAX = 5;
+  const powerStep = (i) => Math.max(1, Math.round(TOOLS[i].power * 0.2));
+  const toolPower = (i, p) => TOOLS[i].power + p * powerStep(i);
+  const toolSpeed = (i, s) => TOOLS[i].speed * (1 + 0.12 * s);
+  const toolUpCost = (i, kind, lvl) => Math.ceil(Math.max(400, cost('tool', i) * 0.5) * Math.pow(2.2, lvl) * (kind === 'speed' ? 0.8 : 1));
+  const toolPrice = (idx) => (idx <= 0 ? 0 : cost('tool', idx - 1)); // a tool in the store costs what its tier used to cost
+
+  function stats(st) {
+    const L = st.lv;
+    const echoMult = 1 + 0.2 * st.echoes;
+    const autoCd = 2.4 * Math.pow(0.9, L.tempo);
+    const eq = (st.equip == null || st.equip < 0) ? L.tool : st.equip; // the tool in hand, not necessarily the best one owned
+    const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0 };
+    return {
+      echoMult,
+      toolIdx: eq, toolName: TOOLS[eq].name, power: toolPower(eq, up.p), toolSpeed: toolSpeed(eq, up.s),
+      popBase: 2 + L.sharp,
+      spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)),
+      comboWindow: 1.1 + 0.15 * L.combo,
+      sweep: L.sweep > 0,
+      brush: 0.045 + 0.02 * Math.max(0, L.sweep - 1), // fraction of half the short board side
+      chain: L.chain > 0 ? Math.min(0.65, 0.14 + 0.07 * (L.chain - 1)) : 0,
+      autoRate: L.auto / autoCd,
+      autoCd,
+      frenzyNeed: 50 - 6 * L.fuel,
+      tier: L.board,
+    };
+  }
+
+  const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
+  function popValue(S, combo, frenzy, kind) {
+    return S.popBase * S.echoMult * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
+  }
+  const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
+  const collapseGain = (run) => Math.floor(Math.sqrt(run / 12500));
+  const collapseReady = (run) => run >= COLLAPSE_MIN_RUN && collapseGain(run) >= 2;
+  const idleRate = (S) => S.autoRate * S.popBase * S.echoMult * 1.2;
+
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, SHINY_MULT, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, idleRate };
+})();
+if (typeof module !== 'undefined') module.exports = ECON;
+
+const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+function fmt(n) {
+  if (!(n > 0)) return '0';
+  if (n < 10000) return Math.floor(n).toLocaleString('en-US');
+  let i = 0;
+  while (n >= 1000 && i < SUFFIX.length - 1) { n /= 1000; i++; }
+  return (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)) + SUFFIX[i];
+}
+function fmtV(n) { return n < 10 ? String(Math.round(n * 10) / 10) : fmt(n); }
