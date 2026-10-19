@@ -27,7 +27,7 @@ const VARIANTS = {
   C_plusCost12: { minRun: (e) => 3e6 * Math.pow(1 + 0.2 * e, 2), gain: logGain, costScale: 12 },
   cost12: { costScale: 12 },
   scaledFloorOnly: { minRun: (e) => 1.2e6 * Math.pow(1 + 0.2 * e, 2) },
-  moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12, sweep: 8 } },
+  moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12 } },
 };
 
 // The economy the sim plays: ECON itself, with a variant's levers swapped in.
@@ -38,16 +38,18 @@ function econ(v) {
   const cost = (id, lvl) => Math.ceil(UPG[id].base * scale * Math.pow(UPG[id].grow, lvl));
   const toolUpCost = (i, kind, lvl) => Math.ceil(Math.max(400, cost('tool', i) * 0.5) * Math.pow(2.2, lvl) * (kind === 'speed' ? 0.8 : 1));
   const toolPrice = (idx) => (idx <= 0 ? 0 : cost('tool', idx - 1));
+  const uniqueCost = (i, lvl) => { const u = E.TOOLS[i].unique; return Math.ceil(u.base * scale * Math.pow(u.grow, lvl)); };
   const collapseGain = v.gain || E.collapseGain;
   const minRun = (echoes) => (typeof v.minRun === 'function' ? v.minRun(echoes) : v.minRun || E.COLLAPSE_MIN_RUN);
   const collapseReady = (run, echoes) => run >= minRun(echoes) && collapseGain(run) >= 2;
-  return Object.assign({}, E, { UPG, cost, toolUpCost, toolPrice, collapseGain, collapseReady, minRun });
+  return Object.assign({}, E, { UPG, cost, toolUpCost, toolPrice, uniqueCost, collapseGain, collapseReady, minRun });
 }
 function checkCopies() {
   const X = econ({});
   for (const id in E.UPG) for (let l = 0; l < 12; l++) if (X.cost(id, l) !== E.cost(id, l)) throw new Error('sim cost copy drifted: ' + id);
   for (let i = 0; i < E.TOOLS.length; i++) {
     if (X.toolPrice(i) !== E.toolPrice(i)) throw new Error('sim toolPrice copy drifted');
+    if (E.TOOLS[i].unique) for (let l = 0; l < E.TOOLS[i].unique.max; l++) if (X.uniqueCost(i, l) !== E.uniqueCost(i, l)) throw new Error('sim uniqueCost copy drifted');
     for (let l = 0; l < E.TOOL_UP_MAX; l++) for (const k of ['power', 'speed']) if (X.toolUpCost(i, k, l) !== E.toolUpCost(i, k, l)) throw new Error('sim toolUpCost copy drifted');
   }
   for (const r of [0, 5e4, 1.2e6, 3e7]) if (X.collapseReady(r, 0) !== E.collapseReady(r)) throw new Error('sim collapseReady copy drifted');
@@ -64,12 +66,12 @@ function freshRun(st) {
 // A variant's waitMin makes the player keep going until that minute even when Fresh Batch is ready earlier.
 function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
   freshRun(st);
-  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0;
+  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null;
   const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200];
   const fill = () => CELLS[st.lv.board];
   for (let i = 0; i < Math.max(3, Math.round(fill() * 0.3)); i++) pearls.push({ kind: 'pearl', dmg: 0, hp: X.KIND.pearl.hp, sh: false });
   const bestOwned = () => { let b = 0; st.owned.forEach((o, i) => { if (o) b = i; }); return b; };
-  const up = (i) => st.toolUp[i] || (st.toolUp[i] = { p: 0, s: 0 });
+  const up = (i) => st.toolUp[i] || (st.toolUp[i] = { p: 0, s: 0, u: 0 });
   const income = {}; X.PEARLS.forEach((p) => { income[p.id] = 0; });
   const maxAt = {}, top = { sparks: 0, pop: 0, rate: 0, cost: 0 };
   const win = []; // [t, gain] over the last 60 s, for income per second
@@ -82,6 +84,8 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
     const e = bestOwned(), U = up(e);
     if (U.p < X.TOOL_UP_MAX) cands.push({ n: 'pow' + e, c: X.toolUpCost(e, 'power', U.p), s: X.toolUpCost(e, 'power', U.p), f: () => U.p++ });
     if (U.s < X.TOOL_UP_MAX) cands.push({ n: 'spd' + e, c: X.toolUpCost(e, 'speed', U.s), s: X.toolUpCost(e, 'speed', U.s), f: () => U.s++ });
+    const un = X.TOOLS[e].unique; // the held tool's own upgrade (Wide Swing on the Steel Pin), weighted like the shop upgrade it replaced
+    if (un && U.u < un.max) cands.push({ n: 'uniq' + e, c: X.uniqueCost(e, U.u), s: X.uniqueCost(e, U.u), f: () => U.u++ });
     return cands;
   };
   while (!(ready != null && t >= (waitMin || 0) * 60) && t < MAX_CYCLE_MIN * 60) {
@@ -99,17 +103,13 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
       }
     }
     let gain = 0;
-    const hit = (p, dmg, manual, depth) => {
+    const hit = (p, dmg, manual) => {
       const i = pearls.indexOf(p); if (i < 0) return;
       p.dmg += dmg; if (p.dmg < p.hp) return;
       pearls.splice(i, 1);
       const val = X.popValue(S, manual ? combo : 0, frenzy > 0, p.kind) * (p.sh ? X.SHINY_MULT : 1);
       gain += val; income[p.kind] += val; if (val > top.pop) top.pop = val;
       if (manual) meter += 1;
-      if (S.chain > 0 && depth < 5) {
-        const nb = Math.min(pearls.length, Math.round(3 * Math.min(1, pearls.length / (fill() * 0.55))));
-        for (let k = 0; k < nb; k++) if (rng() < S.chain * Math.pow(0.78, depth) && pearls.length) hit(pearls[Math.floor(rng() * pearls.length)], S.power, false, depth + 1);
-      }
     };
     tapAcc += dt * tapsPerSec * S.toolSpeed * (S.sweep ? 2 : 1);
     while (tapAcc >= 1 && pearls.length) {
@@ -117,10 +117,10 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
       if (rng() < skill) { pick = pearls[0]; let bs = -1; for (const p of pearls) { const s = X.KIND[p.kind].mult / Math.ceil((p.hp - p.dmg) / S.power); if (s > bs) { bs = s; pick = p; } } }
       else pick = pearls[Math.floor(rng() * pearls.length)];
       combo = comboT < S.comboWindow ? combo + 1 : 1; comboT = 0;
-      hit(pick, S.power, true, 0);
+      hit(pick, S.power, true);
     }
     autoAcc += dt * S.autoRate;
-    while (autoAcc >= 1 && pearls.length) { autoAcc -= 1; const c = pearls.filter((p) => p.hp <= S.power * 3); if (c.length) hit(c[Math.floor(rng() * c.length)], S.power, false, 0); }
+    while (autoAcc >= 1 && pearls.length) { autoAcc -= 1; const c = pearls.filter((p) => p.hp <= S.power * 3); if (c.length) hit(c[Math.floor(rng() * c.length)], S.power, false); }
     if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = 7; }
     sparks += gain; runEarned += gain; earnedWin += gain;
     if (gain > 0) win.push([t, gain]);
@@ -134,17 +134,18 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
     const left = candidates(); if (left.every((c) => c.c <= sparks)) satiated += dt;
     if (left.every((c) => c.n === 'sharp' || c.c <= sparks)) satiatedX += dt;
     for (const c of left) if (c.c > top.cost) top.cost = c.c;
+    if (helperAt == null && st.lv.auto > 0) helperAt = t / 60;
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
-    while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' lv=' + st.lv.sweep + '/' + st.lv.chain + '/' + st.lv.auto); earnedWin = 0; lastMark = m; }
+    while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
     if (ready == null && X.collapseReady(runEarned, st.echoes)) ready = t;
   }
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
   const gainF = ready == null ? 0 : X.collapseGain(runEarned);
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
-  return { furthest, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + 0.2 * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { furthest, helperAt, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + 0.2 * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose) {
@@ -162,9 +163,9 @@ function report(name, v, verbose) {
   for (const p of PROFILES) {
     const rs = play(v, p, verbose), cols = rs.map((_, i) => 'C' + (i + 1));
     console.log('\n## ' + p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + ', seed ' + p[3] + ')\n');
-    console.log('| cycle | Fresh Batch ready (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl |');
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|');
-    rs.forEach((r, i) => console.log('| ' + (i + 1) + ' | ' + (r.ready == null ? 'not by ' + MAX_CYCLE_MIN : f1(r.ready / 60)) + ' | ' + f1(r.minutes) + ' | ' + big(r.runEarned) + ' | +' + r.gain + ' | ' + r.echoes + ' | ' + r.mult.toFixed(1) + ' | ' + f1(r.satiated) + ' | ' + f1(r.satiatedX) + ' | ' + big(r.rate) + ' | ' + r.furthest + ' |'));
+    console.log('| cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl |');
+    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|');
+    rs.forEach((r, i) => console.log('| ' + (i + 1) + ' | ' + (r.ready == null ? 'not by ' + MAX_CYCLE_MIN : f1(r.ready / 60)) + ' | ' + f1(r.helperAt) + ' | ' + f1(r.minutes) + ' | ' + big(r.runEarned) + ' | +' + r.gain + ' | ' + r.echoes + ' | ' + r.mult.toFixed(1) + ' | ' + f1(r.satiated) + ' | ' + f1(r.satiatedX) + ' | ' + big(r.rate) + ' | ' + r.furthest + ' |'));
     console.log('\nMinute each upgrade reaches max level (- = not maxed before Fresh Batch):\n');
     console.log('| upgrade (max) | ' + cols.join(' | ') + ' |'); console.log('|---|' + cols.map(() => '---|').join(''));
     for (const id of ['tool'].concat(E.ORDER)) console.log('| ' + id + ' (' + econ(v).UPG[id].max + ') | ' + rs.map((r) => f1(r.maxAt[id])).join(' | ') + ' |');

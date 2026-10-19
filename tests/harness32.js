@@ -36,7 +36,7 @@ const globals = {
   matchMedia: win.matchMedia, requestAnimationFrame: (f) => { rafCb = f; }, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
 };
 const names = Object.keys(globals);
-const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
+const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,upTool,viewTool:(i)=>{toolView=i;updateToolPanel()},loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
 new Function(...names, src + '\n' + hook)(...names.map((n) => globals[n]));
 const G = globalThis.__g;
 const W = () => G.state.sparks + Object.values(G.state.invV).reduce((a, b) => a + b, 0);
@@ -52,6 +52,7 @@ const live = () => G.pearls.filter((p) => p.st === 'live');
 
 frames(3);
 const [C0, R0] = G.dims();
+G.updateShelf(); const verbsHiddenAtStart = els.hVerbs.hidden === true;
 ok('boots with a hex board and prefilled pearls', G.cells.length === R0 * C0 - Math.floor(R0 / 2) && live().length >= 3, C0 + 'x' + R0 + ' cells, ' + live().length + ' pearls');
 
 // grow, then tap a plump pearl
@@ -98,32 +99,31 @@ const S0 = G.getS();
   const mb = G.spawnAt(G.cells[18], 'marble'); mb.born = 1; const e0 = W(); let hits = 0;
   while (mb.st === 'live' && hits < 200) { G.hitPearl(mb, G.getS().power, 'tap'); hits++; }
   ok('marble takes 14 steel-hammer hits and pays 350x base', mb.st === 'dead' && hits === 14 && W() - e0 > G.getS().popBase * 300, hits + ' hits, ' + (W() - e0).toFixed(1));
-  G.state.lv.tool = 0; G.state.lv.marble = 0; G.state.sparks = 0; G.state.lv.sweep = 0; G.state.lv.chain = 0; G.state.lv.auto = 0;
+  G.state.lv.tool = 0; G.state.lv.marble = 0; G.state.sparks = 0; G.state.lv.auto = 0;
   frames(2);
 }
 
 // upgrades
 G.state.sparks = 1e7;
-Object.assign(G.state.lv, { lucky: 1, mint: 1 });
-for (const id of ['sweep', 'chain', 'auto', 'golden', 'sharp', 'fuel', 'tempo']) G.buy(id);
-ok('verbs bought', G.state.lv.sweep === 1 && G.state.lv.chain === 1 && G.state.lv.auto === 1 && G.state.lv.golden >= 1, JSON.stringify(G.state.lv));
+Object.assign(G.state.lv, { lucky: 1, mint: 1, coral: 0 });
+G.state.lv.coral = 1; G.updateShelf();
+ok('New techniques heading is hidden until Helpers can show, then appears', verbsHiddenAtStart && els.hVerbs.hidden === false);
+for (const id of ['auto', 'golden', 'sharp', 'fuel', 'tempo']) G.buy(id);
+ok('verbs bought', G.state.lv.auto === 1 && G.state.lv.golden >= 1 && G.state.lv.tempo === 1, JSON.stringify(G.state.lv));
+ok('Chain Reaction and Wide Swing are gone from the shop', !('chain' in E.UPG) && !('sweep' in E.UPG) && !E.ORDER.includes('chain') && !E.ORDER.includes('sweep') && !('chain' in G.getS()));
 
 // fill the board so cascades have neighbors
 G.cells.forEach((c) => { if (!c.p) G.spawnAt(c, 'pearl'); });
 G.pearls.forEach((q) => { q.age = 10; q.born = 1; });
 
-// chain reaction: raise chain to its cap and pop one pearl in the middle
-for (let i = 0; i < 7; i++) G.buy('chain');
+// no chain reaction: popping a pearl in the middle of a full board touches nothing else
 const mid = G.cells[Math.floor(G.cells.length / 2)].p;
-const n0 = live().length;
 { const R = Math.random; Math.random = () => 0.01; G.popPearl(mid, 'tap'); Math.random = R; }
-ok('chain pops queue neighbors', G.queue.length > 0, G.queue.length + ' queued');
-frames(120);
-ok('a cascade pops more than one pearl', n0 - live().length > 1 || G.state.runEarned > 0, 'popped ' + (n0 - live().length) + ' net (board also refills)');
+ok('a pop no longer queues its neighbours', G.queue.length === 0, G.queue.length + ' queued');
 
 
 // golden pays 30x a normal pearl at the same plumpness
-G.queue.length = 0; G.state.lv.chain = 0; G.state.lv.auto = 0; // isolate for this check
+G.queue.length = 0; G.state.lv.auto = 0; // isolate for this check
 const Sx = E.stats(G.state);
 const g1 = E.popValue(Sx, 0, false, 'golden'), n1 = E.popValue(Sx, 0, false, 'pearl');
 ok('golden pays 30x', Math.abs(g1 / n1 - 30) < 1e-9, (g1 / n1).toFixed(2));
@@ -135,17 +135,28 @@ G.popPearl(q1, 'tap');
 ok('filling the meter starts Frenzy', G.getFrenzy() > 0, G.getFrenzy());
 frames(30);
 
-// sweep across the board
-G.state.lv.chain = 0;
-G.cells.forEach((c) => { if (!c.p) { const q = G.spawnAt(c, 'pearl'); q.age = 5; q.born = 1; } });
-const e0 = W(), c0 = live().length;
-ev('pointerdown', 20, 350);
-for (let x = 20; x < 880; x += 25) ev('pointermove', x, 350 + Math.sin(x / 60) * 60);
-ev('pointerup', 880, 350); frames(4);
-ok('sweep pops several pearls in one drag', c0 - live().length >= 3 && W() > e0, (c0 - live().length) + ' pearls');
+// sweep across the board: Wide Swing is the Steel Pin's own upgrade, so it only works with the pin in hand
+const drag = () => {
+  G.cells.forEach((c) => { if (!c.p) { const q = G.spawnAt(c, 'pearl'); q.age = 5; q.born = 1; } });
+  const before = live().length; let popped = 0; const h0 = G.state.col.pearl.popped;
+  ev('pointerdown', 20, 350);
+  for (let x = 20; x < 880; x += 25) ev('pointermove', x, 350 + Math.sin(x / 60) * 60);
+  ev('pointerup', 880, 350); popped = G.state.col.pearl.popped - h0; frames(1);
+  return popped;
+};
+G.state.owned[1] = true; G.state.toolUp[0] = { p: 0, s: 0, u: 1 }; G.state.equip = 0; G.recalc();
+const e0 = W(), withPin = drag();
+ok('sweep pops several pearls in one drag', withPin >= 3 && W() > e0, withPin + ' pearls');
+ok('sweep is active with the Steel Pin equipped', G.getS().sweep === true && G.getS().brush > 0);
+G.state.equip = 1; G.recalc();
+const withAwl = drag();
+ok('sweep is inactive with the Awl equipped: a drag pops at most the pearl under the press', G.getS().sweep === false && withAwl <= 1, withAwl + ' pearls');
+G.state.equip = 0; G.state.toolUp[0].u = 0; G.recalc();
+ok('a Steel Pin without Wide Swing does not sweep either', G.getS().sweep === false);
+G.state.owned[1] = false; G.state.equip = -1; G.recalc();
 
 // helper taps keep working
-G.state.lv.auto = 3; const d0 = W(); frames(1800);
+G.state.lv.auto = 3; G.recalc(); const d0 = W(); frames(1800);
 ok('helper taps pop pearls on their own for 30s', W() - d0 > 15, (W() - d0).toFixed(0) + ' juice');
 
 // bigger board
@@ -165,7 +176,7 @@ ok('board is back to tier 0 and prefilled', G.dims().join('x') === C0 + 'x' + R0
 
 // save round trip, render, long idle
 const snap = JSON.parse(JSON.stringify(G.serialize()));
-ok('save has flavors and levels', snap.echoes >= 2 && typeof snap.lv.sweep === 'number');
+ok('save has flavors and levels', snap.echoes >= 2 && typeof snap.lv.sharp === 'number' && snap.version === G.SAVE_VERSION);
 G.updateShelf(); G.updateHud(0.1); G.render();
 ok('render and hud do not throw', true);
 frames(3600);
@@ -176,7 +187,7 @@ let bad = 0;
 // backpack: sell all moves inventory into juice, auto-sell empties it by itself
 {
   G.state.sparks = 0; Object.keys(G.state.inv).forEach((k) => { G.state.inv[k] = 0; G.state.invV[k] = 0; });
-  const p = live()[0]; G.popPearl(p, 'tap'); frames(2);
+  const p = live()[0]; G.popPearl(p, 'tap'); frames(6); // > 0.08 s, so the HUD tick refreshes the backpack
   ok('popped pearl lands in the backpack, not in juice', G.state.inv.pearl === 1 && G.state.sparks === 0 && G.state.invV.pearl > 0, 'inv ' + G.state.inv.pearl);
   const worth = G.state.invV.pearl; G.sellAll(true);
   ok('sell all pays the stored value and empties the backpack', Math.abs(G.state.sparks - worth) < 1e-9 && G.state.inv.pearl === 0, 'juice ' + G.state.sparks.toFixed(2));
@@ -184,7 +195,7 @@ let bad = 0;
 // sell a chosen quantity, and auto-sell must leave the backpack alone
 {
   G.state.autoSell = false; G.state.sparks = 0; Object.keys(G.state.inv).forEach((k) => { G.state.inv[k] = 0; G.state.invV[k] = 0; });
-  G.state.inv.pearl = 10; G.state.invV.pearl = 50;
+  G.state.inv.pearl = 10; G.state.invV.pearl = 50; frames(6);
   G.sellSome('pearl', 4);
   ok('selling 4 of 10 pays 4/10 of the stack value and keeps the rest', G.state.inv.pearl === 6 && Math.abs(G.state.sparks - 20) < 1e-9 && Math.abs(G.state.invV.pearl - 30) < 1e-9, G.state.inv.pearl + ' left, ' + G.state.sparks + ' juice');
   G.sellSome('pearl', 99);
@@ -211,10 +222,10 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
 // ---- save codes, versions and hardened loading ----
 {
   // compare saves without the timestamp; a {p:0,s:0} tool entry is what toolUp() creates on first read, the same as none
-  const noT = (o) => { const c = JSON.parse(JSON.stringify(o)); delete c.t; for (const i in c.toolUp) if (!c.toolUp[i].p && !c.toolUp[i].s) delete c.toolUp[i]; return JSON.stringify(c); };
-  const lvA = Object.assign(E.zeroLevels(), { lucky: 8, mint: 5, golden: 3, violet: 1, sweep: 2, chain: 4, auto: 7, sharp: 23, tool: 3, board: 1 });
-  const A = { version: 2, sparks: 123456.789, runEarned: 2.5e9, lifetime: 7.25e11, lv: lvA, echoes: 41, collapses: 3, muted: true, musicOn: false, musicVol: 0.3, autoSell: true,
-    owned: [true, true, false, true, false, false], equip: 1, toolUp: { 1: { p: 2, s: 1 }, 3: { p: 5, s: 4 } },
+  const noT = (o) => { const c = JSON.parse(JSON.stringify(o)); delete c.t; for (const i in c.toolUp) if (!c.toolUp[i].p && !c.toolUp[i].s && !c.toolUp[i].u) delete c.toolUp[i]; return JSON.stringify(c); };
+  const lvA = Object.assign(E.zeroLevels(), { lucky: 8, mint: 5, golden: 3, violet: 1, coral: 1, auto: 7, sharp: 23, tool: 3, board: 1 });
+  const A = { version: G.SAVE_VERSION, sparks: 123456.789, runEarned: 2.5e9, lifetime: 7.25e11, lv: lvA, echoes: 41, collapses: 3, muted: true, musicOn: false, musicVol: 0.3, autoSell: true,
+    owned: [true, true, false, true, false, false], equip: 1, toolUp: { 0: { p: 1, s: 0, u: 2 }, 1: { p: 2, s: 1, u: 0 }, 3: { p: 5, s: 4, u: 0 } },
     inv: { pearl: 12, golden: 2, 'blue:s': 1 }, invV: { pearl: 99.5, golden: 4400.25, 'blue:s': 61 }, seen: { pearl: true, blue: true, golden: true },
     pool: ['pearl', 'golden', 'blue', 'mint', 'violet'], shinyOn: false,
     col: { pearl: { found: true, popped: 900, sFound: true, sPopped: 2 }, blue: { found: true, popped: 80, sFound: false, sPopped: 0 }, mint: { found: true, popped: 5, sFound: false, sPopped: 0 }, golden: { found: true, popped: 31, sFound: true, sPopped: 1 }, violet: { found: true, popped: 0, sFound: false, sPopped: 0 } } };
@@ -243,7 +254,7 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
   const v1 = { sparks: 1234.5, runEarned: 5000, lifetime: 9000, lv: Object.assign(E.zeroLevels(), { tool: 2, sweep: 1, chain: 2, auto: 3, golden: 1, lucky: 0 }), echoes: 3, collapses: 1, muted: false,
     owned: [true, true, true, false, false, false], equip: 1, toolUp: { 1: { p: 2, s: 1 } }, inv: { pearl: 4, golden: 1 }, invV: { pearl: 20, golden: 30 }, seen: { pearl: true, blue: true, golden: true }, t: 0 };
   const st = G.state;
-  ok('v1 fixture loads through the migration table', G.migrateSave(v1).save.version === 2 && G.loadState(v1) === 'ok' && st.sparks === 1234.5 && st.echoes === 3 && st.lv.lucky === 1 && st.lv.chain === 2 && st.equip === 1 && st.toolUp[1].p === 2 && st.inv.golden === 1 && st.pool.join() === 'pearl,blue,golden' && st.col.golden.found && st.shinyOn === true, st.pool.join());
+  ok('v1 fixture loads through the migration table', G.migrateSave(v1).save.version === G.SAVE_VERSION && G.loadState(v1) === 'ok' && st.sparks === 1234.5 + 660 + 1650 && st.echoes === 3 && st.lv.lucky === 1 && st.toolUp[0].u === 1 && !('chain' in st.lv) && !('sweep' in st.lv) && st.equip === 1 && st.toolUp[1].p === 2 && st.inv.golden === 1 && st.pool.join() === 'pearl,blue,golden' && st.col.golden.found && st.shinyOn === true, st.pool.join());
   const v2 = { version: 2, sparks: 50, lv: Object.assign(E.zeroLevels(), { lucky: 2, mint: 1 }), pool: ['blue', 'mint'], shinyOn: false, col: { blue: { found: true, popped: 3 }, mint: { found: true, popped: 1, sFound: true, sPopped: 1 } }, musicVol: 0.2, t: 1 };
   ok('v2 fixture loads as written', G.loadState(v2) === 'ok' && st.sparks === 50 && st.pool.join() === 'blue,mint' && st.shinyOn === false && st.col.mint.sFound && st.col.blue.popped === 3 && st.musicVol === 0.2 && st.lv.mint === 1);
   // untrusted values: everything clamps or defaults, unknown keys are dropped
@@ -251,7 +262,7 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
     lv: { sharp: 9999, tool: 9999, board: -4, chain: 'abc', lucky: 3.7, nope: 5 }, owned: 'all', equip: 77, toolUp: { 0: { p: 999, s: -1 }, 9: { p: 3, s: 3 }, 2: 'x' },
     inv: { pearl: 'lots', golden: 1e400, dragon: 5 }, invV: { pearl: -3 }, seen: 'everything', pool: ['pearl', 'unicorn', 'golden', 'golden', 7], col: { golden: { found: true, popped: -5, sPopped: NaN }, unicorn: { found: true } }, evil: { x: 1 } };
   const r = G.loadState(bad);
-  ok('a save with lv 9999, NaN sparks and an unknown pool id loads clamped', r === 'ok' && st.sparks === 0 && st.runEarned === 0 && st.lifetime === 0 && st.lv.sharp === 99 && st.lv.tool === 5 && st.lv.board === 0 && st.lv.chain === 0 && st.lv.lucky === 3 && !('nope' in st.lv) && st.pool.join() === 'pearl,golden', JSON.stringify({ lv: [st.lv.sharp, st.lv.tool], pool: st.pool }));
+  ok('a save with lv 9999, NaN sparks and an unknown pool id loads clamped', r === 'ok' && st.sparks === 0 && st.runEarned === 0 && st.lifetime === 0 && st.lv.sharp === 99 && st.lv.tool === 5 && st.lv.board === 0 && !('chain' in st.lv) && st.lv.lucky === 3 && !('nope' in st.lv) && st.pool.join() === 'pearl,golden', JSON.stringify({ lv: [st.lv.sharp, st.lv.tool], pool: st.pool }));
   ok('every loaded number is finite and in range', st.echoes === 0 && st.collapses === 7 && st.musicVol === 0.5 && st.muted === false && st.toolUp[0].p === 5 && st.toolUp[0].s === 0 && !st.toolUp[9] && !st.toolUp[2] && st.inv.pearl === 0 && st.inv.golden === 0 && st.invV.pearl === 0 && !('dragon' in st.inv) && !st.col.unicorn && st.col.golden.popped === 0 && st.col.golden.sPopped === 0 && !('evil' in st) && st.owned.length === 6 && st.owned.every((o) => o === true) && st.equip === 5, JSON.stringify(st.toolUp));
   ok('an empty or all-unknown pool falls back to the base pearl', G.loadState({ version: 2, pool: ['unicorn'] }) === 'ok' && st.pool.join() === 'pearl' && G.loadState({ version: 2, pool: [] }) === 'ok' && st.pool.join() === 'pearl');
   ok('a hand-edited code with NaN-like values decodes and loads clamped', G.checkImport(G.encodeSave({ version: 2, sparks: 'NaN', lv: { sharp: 9999 }, pool: ['unicorn'] })) === 'ok' && G.applyImport() && st.sparks === 0 && st.lv.sharp === 99 && st.pool.join() === 'pearl');
@@ -265,6 +276,24 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
   ok('an unreadable save never pushes out a good backup', G.loadStored() === 'invalid' && store['poppit.backup'] === good && store['poppit.unreadable'] === '[1, 2]' && G.UNREADABLE_KEY === 'poppit.unreadable');
   delete store['poppit.backup']; delete store['poppit.unreadable']; store['poppit.v1'] = good;
   ok('a good stored save loads at boot and makes no backup', G.loadStored() === 'ok' && G.state.sparks === 9 && !store['poppit.backup']);
+  // v2 -> v3: Chain Reaction refunded at its v2 prices, Wide Swing moved onto the Steel Pin
+  const v2c = { version: 2, sparks: 100, lv: Object.assign(E.zeroLevels(), { chain: 3, sweep: 2, lucky: 2 }), toolUp: { 0: { p: 1, s: 2 } }, autoSell: false };
+  const mig = G.migrateSave(v2c).save, oldChain = [0, 1, 2].reduce((a, l) => a + Math.ceil(110 * 6 * Math.pow(2.5, l)), 0);
+  ok('a save with chain level 3 and sweep level 2 migrates with the exact refund, toolUp[0].u 2, and no lv.chain or lv.sweep',
+    oldChain === 6435 && mig.version === 3 && mig.sparks === 100 + 6435 && !('chain' in mig.lv) && !('sweep' in mig.lv) && mig.toolUp[0].u === 2 && mig.toolUp[0].p === 1 &&
+    G.loadState(v2c) === 'ok' && st.sparks === 6535 && st.toolUp[0].u === 2 && st.toolUp[0].s === 2 && !('chain' in st.lv) && !('sweep' in st.lv) && !('chain' in G.serialize().lv), 'sparks ' + st.sparks);
+  ok('the migration does not change the stored v2 object', v2c.lv.chain === 3 && v2c.sparks === 100);
+  ok('a chain refund is capped at the old max level 8', G.migrateSave({ version: 2, sparks: 0, lv: { chain: 99 } }).save.sparks === 670950);
+  ok('a unique level above the max clamps, and tools without one keep 0', G.loadState({ version: 3, toolUp: { 0: { u: 40 }, 1: { u: 3 } } }) === 'ok' && st.toolUp[0].u === 5 && st.toolUp[1].u === 0);
+  // the Tools panel reads the tool's unique definition
+  G.loadState({ version: 3, sparks: 5000, owned: [true, true, false, false, false, false], equip: 0 }); G.recalc();
+  G.viewTool(0); const pinRow = !els.uRow.hidden && els.uNone.hidden && els.uName.textContent === 'Wide Swing' && /Level 0\/5/.test(els.uLv.textContent);
+  G.upTool('u'); const bought = st.toolUp[0].u === 1 && st.sparks === 5000 - E.uniqueCost(0, 0) && G.getS().sweep === true;
+  G.viewTool(1); const awlRow = els.uRow.hidden && !els.uNone.hidden;
+  G.upTool('u'); const awlNoBuy = !(st.toolUp[1] && st.toolUp[1].u);
+  ok('Tools panel shows Wide Swing on the Steel Pin page and buys it there', pinRow && bought, els.uLv.textContent);
+  ok('Tools panel shows the muted line on the Awl and sells nothing there', awlRow && awlNoBuy);
+  G.viewTool(0);
   G.state.sparks = 4242; (winL.pagehide || []).forEach((h) => h());
   ok('pagehide saves', (winL.pagehide || []).length === 1 && JSON.parse(store['poppit.v1']).sparks === 4242);
   G.loadState({ version: 2, lv: E.zeroLevels() }); delete store['poppit.backup'];

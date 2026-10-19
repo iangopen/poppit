@@ -106,7 +106,7 @@ const Snd = (() => {
       squish(0.32, 2600 + frac * 2200);
       tone({ f: hz(2 + Math.round(frac * 6)), type: 'triangle', dur: 0.12, gain: 0.05 + 0.06 * frac, echo: 0.3 });
     },
-    // a hit on a hard pearl: one recorded impact per hit, a little higher as the pearl nears breaking; helpers and chains play it softer
+    // a hit on a hard pearl: one recorded impact per hit, a little higher as the pearl nears breaking; helpers play it softer
     hit(kind, frac, soft) {
       const t = HARD_SND[kind]; if (!t) return;
       const c = ensure(); if (!c || muted) return;

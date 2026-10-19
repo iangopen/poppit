@@ -18,7 +18,7 @@ module.exports = ({ G, ok, frames, live, E, store, els }) => {
   const snap = JSON.parse(JSON.stringify(G.serialize()));
   G.loadState({ version: 2, lv: E.zeroLevels() });
   G.loadState(snap);
-  ok('v2 round trip keeps pool, toggle and collection counts', snap.version === 2 && st.pool.join() === 'pearl,golden' && st.shinyOn === false && st.col.golden.popped === 7 && st.col.golden.sFound && st.col.golden.sPopped === 2, st.pool.join());
+  ok('v2 round trip keeps pool, toggle and collection counts', snap.version === G.SAVE_VERSION && st.pool.join() === 'pearl,golden' && st.shinyOn === false && st.col.golden.popped === 7 && st.col.golden.sFound && st.col.golden.sPopped === 2, st.pool.join());
   G.loadState({ version: 2, lv: E.zeroLevels() });
   const first = G.discover('mint', false), again = G.discover('mint', false);
   ok('first discovery auto-adds to the pool, once', first === true && again === false && st.pool.includes('mint'), st.pool.join());

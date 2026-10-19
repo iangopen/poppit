@@ -4,8 +4,6 @@ const ECON = (() => {
   // base cost, growth per level, max level, optional requirement on current levels
   const UPG = {
     tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
-    sweep:  { base: 35,  grow: 3.4,  max: 5,  group: 'attr' },
-    chain:  { base: 110, grow: 2.5,  max: 8,  group: 'verb' },
     auto:   { base: 90,  grow: 1.3,  max: 20, group: 'verb' },
     golden: { base: 400, grow: 2.3, max: 6, group: 'marble', req: (L) => L.mint > 0 },
     marble: { base: 7000, grow: 2.4, max: 5, group: 'marble', req: (L) => L.coral > 0 && L.tool >= 3 },
@@ -24,10 +22,14 @@ const ECON = (() => {
     black:  { base: 60000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.ruby > 0 },
     shiny:  { base: 400,    grow: 2.2, max: 10, group: 'tune' },
   };
-  const ORDER = ['lucky', 'sweep', 'chain', 'auto', 'sharp', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black', 'shiny', 'spawn', 'combo', 'fuel', 'tempo', 'board'];
+  const ORDER = ['lucky', 'auto', 'sharp', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black', 'shiny', 'spawn', 'combo', 'fuel', 'tempo', 'board'];
   // the cursor is a tool; harder pearls need more damage per hit, so they crack before they burst
+  // unique: the tool's own upgrade, bought on its page in the Tools panel and active only while that tool is in hand.
+  // effect(level) returns the stats it adds; base, grow and max price it like a shop upgrade. Every tool gets one later.
   const TOOLS = [
-    { name: 'Steel Pin', power: 1, speed: 1 }, { name: 'Awl', power: 2, speed: 1.1 }, { name: 'Brass Mallet', power: 3, speed: 1.2 },
+    { name: 'Steel Pin', power: 1, speed: 1, unique: { id: 'sweep', name: 'Wide Swing', desc: 'Hold and drag to hit everything in reach', base: 35, grow: 3.4, max: 5,
+      effect: (lvl) => ({ sweep: true, brush: 0.045 + 0.02 * Math.max(0, lvl - 1) }) } }, // brush: fraction of half the short board side
+    { name: 'Awl', power: 2, speed: 1.1 }, { name: 'Brass Mallet', power: 3, speed: 1.2 },
     { name: 'Steel Hammer', power: 6, speed: 1.4 }, { name: 'Sledgehammer', power: 10, speed: 1.6 }, { name: 'Diamond Hammer', power: 18, speed: 2 },
   ];
   // The roster. `pearl` is the base type (shown as Rose). cap = most of that type alive on the board at once.
@@ -85,6 +87,8 @@ const ECON = (() => {
   const toolPower = (i, p) => TOOLS[i].power + p * powerStep(i);
   const toolSpeed = (i, s) => TOOLS[i].speed * (1 + 0.12 * s);
   const toolUpCost = (i, kind, lvl) => Math.ceil(Math.max(400, cost('tool', i) * 0.5) * Math.pow(2.2, lvl) * (kind === 'speed' ? 0.8 : 1));
+  const uniqueCost = (i, lvl) => { const u = TOOLS[i].unique; return Math.ceil(u.base * COST_SCALE * Math.pow(u.grow, lvl)); };
+  const uniqueLevel = (i, up) => (TOOLS[i].unique && up ? Math.max(0, Math.min(TOOLS[i].unique.max, up.u | 0)) : 0);
   const toolPrice = (idx) => (idx <= 0 ? 0 : cost('tool', idx - 1)); // a tool in the store costs what its tier used to cost
 
   function stats(st) {
@@ -92,21 +96,20 @@ const ECON = (() => {
     const echoMult = 1 + 0.2 * st.echoes;
     const autoCd = 2.4 * Math.pow(0.9, L.tempo);
     const eq = (st.equip == null || st.equip < 0) ? L.tool : st.equip; // the tool in hand, not necessarily the best one owned
-    const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0 };
-    return {
+    const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0, u: 0 };
+    const ul = uniqueLevel(eq, up);
+    return Object.assign({
       echoMult,
       toolIdx: eq, toolName: TOOLS[eq].name, power: toolPower(eq, up.p), toolSpeed: toolSpeed(eq, up.s),
       popBase: 2 + L.sharp,
       spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)),
       comboWindow: 1.1 + 0.15 * L.combo,
-      sweep: L.sweep > 0,
-      brush: 0.045 + 0.02 * Math.max(0, L.sweep - 1), // fraction of half the short board side
-      chain: L.chain > 0 ? Math.min(0.65, 0.14 + 0.07 * (L.chain - 1)) : 0,
+      sweep: false, brush: 0, // only the equipped tool's unique upgrade turns these on
       autoRate: L.auto / autoCd,
       autoCd,
       frenzyNeed: 50 - 6 * L.fuel,
       tier: L.board,
-    };
+    }, ul > 0 ? TOOLS[eq].unique.effect(ul) : {});
   }
 
   const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
@@ -118,7 +121,7 @@ const ECON = (() => {
   const collapseReady = (run) => run >= COLLAPSE_MIN_RUN && collapseGain(run) >= 2;
   const idleRate = (S) => S.autoRate * S.popBase * S.echoMult * 1.2;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, SHINY_MULT, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, SHINY_MULT, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 

@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -43,6 +43,18 @@ const MIGRATIONS = {
     for (const t of ECON.PEARLS) col[t.id] = { found: t.id === 'pearl' || ECON.isUnlocked(t.id, L) || !!seen[t.id], popped: 0, sFound: false, sPopped: 0 };
     const pool = ECON.PEARLS.map((t) => t.id).filter((k) => col[k].found); // locked types are ignored by poolChances, so a re-buy after a Fresh Batch spawns them again
     return Object.assign({}, d, { version: 2, lv, col, pool, shinyOn: true });
+  },
+  // v2 had Chain Reaction and Wide Swing in the shop. Chain is gone: refund what its levels cost. Wide Swing is now the
+  // Steel Pin's unique upgrade: its level moves to toolUp[0].u. The prices are frozen here as they were when v2 shipped
+  // (chain base 110, grow 2.5, max 8, COST_SCALE 6), so later economy changes never alter this refund.
+  2: (d) => {
+    const lv = Object.assign({}, isObj(d.lv) ? d.lv : {}), toolUp = Object.assign({}, isObj(d.toolUp) ? d.toolUp : {});
+    const chain = Math.max(0, Math.min(8, lv.chain | 0)), sweep = Math.max(0, Math.min(5, lv.sweep | 0));
+    let refund = 0; for (let l = 0; l < chain; l++) refund += Math.ceil(110 * 6 * Math.pow(2.5, l));
+    const n = +d.sparks, sparks = (Number.isFinite(n) && n > 0 ? n : 0) + refund;
+    if (sweep > 0 || isObj(toolUp[0])) toolUp[0] = Object.assign({}, isObj(toolUp[0]) ? toolUp[0] : { p: 0, s: 0 }, { u: sweep });
+    delete lv.chain; delete lv.sweep;
+    return Object.assign({}, d, { version: 3, lv, toolUp, sparks });
   },
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }

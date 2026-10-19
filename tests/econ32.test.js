@@ -94,3 +94,19 @@ test('fmt never prints an exponent or more than 3 significant digits up to 1e60'
   for (let e = 4; e < 60; e += 0.001) { const s = fmt(Math.pow(10, e)); assert.ok(!/e/.test(s) && s.replace(/\D/g, '').length <= 3 && s.length <= 7, e + ' -> ' + s); }
   assert.strictEqual(fmt(Infinity), '∞');
 });
+// ---- Chain Reaction is gone: only the v2 -> v3 save migration (which refunds it) may still name it ----
+test('no code path references chain', () => {
+  const fs = require('fs'), path = require('path'), root = path.join(__dirname, '..'), hits = [];
+  for (const dir of ['src', 'tools']) for (const f of fs.readdirSync(path.join(root, dir)).filter((n) => /\.(js|html)$/.test(n))) {
+    let s = fs.readFileSync(path.join(root, dir, f), 'utf8');
+    if (f === 'save.js') s = s.replace(/\/\/ v2 had Chain Reaction[\s\S]*?\n {2}2: \(d\) => \{[\s\S]*?\n {2}\},/, '');
+    s.split(/\r?\n/).forEach((line, i) => { if (/\bchain\b/i.test(line)) hits.push(dir + '/' + f + ':' + (i + 1)); });
+  }
+  assert.deepStrictEqual(hits, []);
+});
+test('only the Steel Pin has a unique upgrade, priced like the old Wide Swing', () => {
+  assert.deepStrictEqual(E.TOOLS.map((t) => !!t.unique), [true, false, false, false, false, false]);
+  const u = E.TOOLS[0].unique; assert.strictEqual(u.name, 'Wide Swing'); assert.strictEqual(u.max, 5);
+  assert.deepStrictEqual([0, 1, 2, 3, 4].map((l) => E.uniqueCost(0, l)), [210, 714, 2428, 8254, 28064]);
+  assert.strictEqual(E.TOOLS[0].unique.effect(1).brush, 0.045); assert.ok(Math.abs(E.TOOLS[0].unique.effect(3).brush - 0.085) < 1e-12);
+});

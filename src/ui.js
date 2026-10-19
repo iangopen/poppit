@@ -9,8 +9,6 @@ function typeDesc(id, locked) {
 }
 const blurb = (id, lead) => { const t = ECON.PEARLS.find((x) => x.id === id); return lead + ': ' + t.mult + 'x payout, ' + t.hp + ' hits.'; };
 const META = {
-  sweep:  { name: 'Wide Swing', desc: () => state.lv.sweep ? 'Hold and drag to hit everything in reach' : 'Hold and drag to hit many pearls at once.' },
-  chain:  { name: 'Chain Reaction', desc: () => state.lv.chain ? Math.round(S.chain * 100) + '% chance each neighbor is hit too' : 'Pops spread to the pearls next to them.' },
   auto:   { name: 'Helpers', desc: () => state.lv.auto ? S.autoRate.toFixed(2) + ' automatic hits per second' : 'Helpers hit pearls for you.' },
   golden: { name: 'Golden Pearls', desc: () => typeDesc('golden', blurb('golden', 'Rare gold pearls')) },
   marble: { name: 'Glass Marbles', desc: () => typeDesc('marble', blurb('marble', 'Very tough marbles')) },
@@ -41,7 +39,7 @@ function buildShelf() {
     b.type = 'button'; b.className = 'up'; b.dataset.id = id; b.dataset.g = ECON.UPG[id].group;
     b.innerHTML = '<span class="top"><span class="nm"></span><span class="lv"></span></span><span class="ds"></span><span class="cs"></span>';
     b.addEventListener('click', () => buy(id));
-    ({ verb: $('listVerbs'), marble: $('listMarble'), attr: $('listAttr') }[ECON.UPG[id].group] || $('listTune')).appendChild(b);
+    ({ verb: $('listVerbs'), marble: $('listMarble') }[ECON.UPG[id].group] || $('listTune')).appendChild(b);
     rows[id] = { el: b, nm: b.querySelector('.nm'), lv: b.querySelector('.lv'), ds: b.querySelector('.ds'), cs: b.querySelector('.cs'), cache: {} };
     rows[id].nm.textContent = META[id].name;
   });
@@ -51,7 +49,7 @@ function updateShelf() {
   ECON.ORDER.forEach((id) => {
     const u = ECON.UPG[id], r = rows[id], lvl = state.lv[id];
     const reqOk = !u.req || u.req(state.lv), maxed = lvl >= u.max, c = ECON.cost(id, lvl);
-    const shown = reqOk && (u.group === 'attr' || lvl > 0 || state.runEarned >= c * 0.4 || state.sparks >= c * 0.4);
+    const shown = reqOk && (lvl > 0 || state.runEarned >= c * 0.4 || state.sparks >= c * 0.4);
     r.el.hidden = !shown;
     if (!shown) return;
     const can = !maxed && state.sparks >= c;
@@ -62,7 +60,7 @@ function updateShelf() {
     setText(r, 'cs', r.cs, maxed ? 'Max' : fmt(c));
   });
   if (!$('tools').hidden) updateToolPanel();
-  $('hMarble').hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === 'marble' && !rows[id].el.hidden);
+  for (const [h, grp] of [['hVerbs', 'verb'], ['hMarble', 'marble']]) $(h).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === grp && !rows[id].el.hidden); // no empty headings
   const run = state.runEarned, ready = ECON.collapseReady(run), btn = $('collapseBtn');
   btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
   if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
@@ -81,7 +79,7 @@ function buy(id) {
     buildCells(); addShake(2); toast('Bigger board! Lots more pearls to pop');
   }
   if (lvl === 0) {
-    const msg = { tool: 'New tool! The ' + S.toolName + ' hits with power ' + S.power, marble: 'Glass marbles can show up now. They are tough!', sweep: 'Hold and drag to swing at lots of pearls at once!', chain: 'Pops now bounce into the pearls next door!', auto: 'Little helpers will poke pearls for you!', golden: 'Golden pearls can show up now!' }[id];
+    const msg = { tool: 'New tool! The ' + S.toolName + ' hits with power ' + S.power, marble: 'Glass marbles can show up now. They are tough!', auto: 'Little helpers will poke pearls for you!', golden: 'Golden pearls can show up now!' }[id];
     if (msg) toast(msg);
   }
   syncDiscoveries();
@@ -363,13 +361,19 @@ function buildToolPanel() {
   $('tNext').addEventListener('click', () => stepTool(1));
   $('pUp').addEventListener('click', () => upTool('p'));
   $('sUp').addEventListener('click', () => upTool('s'));
+  $('uUp').addEventListener('click', () => upTool('u'));
   $('tAct').addEventListener('click', () => { Snd.resume(); const i = toolView; if (state.owned[i]) equipTool(i); else buyTool(i); });
   document.addEventListener('keydown', (e) => { if ($('tools').hidden) return; if (e.key === 'ArrowLeft') stepTool(-1); else if (e.key === 'ArrowRight') stepTool(1); });
 }
 function stepTool(dir) {
   const n = ECON.TOOLS.length; toolView = (toolView + dir + n) % n; spinKick = 9; Snd.click(); updateToolPanel();
 }
-const toolUp = (i) => state.toolUp[i] || (state.toolUp[i] = { p: 0, s: 0 });
+const toolUp = (i) => state.toolUp[i] || (state.toolUp[i] = { p: 0, s: 0, u: 0 });
+// price and cap of one tool upgrade: power and speed share TOOL_UP_MAX, the unique one is priced by the tool's own definition
+function toolUpgrade(i, kind, lvl) {
+  if (kind === 'u') { const un = ECON.TOOLS[i].unique; return un ? { max: un.max, cost: ECON.uniqueCost(i, lvl) } : null; }
+  return { max: ECON.TOOL_UP_MAX, cost: ECON.toolUpCost(i, kind === 'p' ? 'power' : 'speed', lvl) };
+}
 function syncTop() { let t = 0; state.owned.forEach((o, i) => { if (o) t = i; }); state.lv.tool = t; }
 function buyTool(i) {
   const price = ECON.toolPrice(i);
@@ -383,11 +387,11 @@ function equipTool(i) {
   state.equip = i; recalc(); Snd.equip(); toast(S.toolName + ' equipped'); updateToolPanel(); save();
 }
 function upTool(kind) {
-  const i = toolView, u = toolUp(i), lvl = u[kind];
-  if (collapse || !state.owned[i] || lvl >= ECON.TOOL_UP_MAX) return;
-  const c = ECON.toolUpCost(i, kind === 'p' ? 'power' : 'speed', lvl);
-  if (state.sparks < c) return;
-  state.sparks -= c; u[kind] = lvl + 1; recalc(); Snd.buy(u[kind] + 1); updateShelf(); updateToolPanel(); save();
+  const i = toolView, u = toolUp(i), lvl = u[kind] | 0, up = toolUpgrade(i, kind, lvl);
+  if (collapse || !up || !state.owned[i] || lvl >= up.max || state.sparks < up.cost) return;
+  state.sparks -= up.cost; u[kind] = lvl + 1; recalc(); Snd.buy(u[kind] + 1);
+  if (kind === 'u' && lvl === 0) toast(ECON.TOOLS[i].unique.name + '! ' + ECON.TOOLS[i].unique.desc + (state.equip >= 0 && state.equip !== i ? ' (with the ' + ECON.TOOLS[i].name + ' in hand)' : ''));
+  updateShelf(); updateToolPanel(); save();
 }
 function updateToolPanel() {
   const i = toolView, t = ECON.TOOLS[i], owned = state.owned[i], eq = (state.equip >= 0 ? state.equip : state.lv.tool) === i, u = toolUp(i);
@@ -401,6 +405,14 @@ function updateToolPanel() {
     setLbl(bid, !owned ? 'Buy tool first' : max ? 'Maxed' : 'Upgrade ' + fmt(c));
     btn.classList.toggle('can', owned && !max && state.sparks >= c);
   });
+  // the tool's own upgrade, read from its definition; tools without one show a muted line
+  const un = t.unique; $('uRow').hidden = !un; $('uNone').hidden = !!un;
+  if (un) {
+    const lvl = u.u | 0, max = lvl >= un.max, c = ECON.uniqueCost(i, Math.min(lvl, un.max - 1));
+    setLbl('uName', un.name); setLbl('uDesc', un.desc); setLbl('uLv', 'Level ' + lvl + '/' + un.max);
+    setLbl('uUp', !owned ? 'Buy tool first' : max ? 'Maxed' : 'Upgrade ' + fmt(c));
+    $('uUp').classList.toggle('can', owned && !max && state.sparks >= c);
+  }
   const act = $('tAct'), price = ECON.toolPrice(i);
   setLbl('tAct', eq ? 'Equipped' : owned ? 'Equip' : 'Buy for ' + fmt(price));
   act.disabled = eq || (!owned && state.sparks < price);
@@ -491,7 +503,7 @@ function sweepSeg(x0, y0, x1, y1) {
     if (p.st !== 'live') continue;
     const px = p.cell.x, py = p.cell.y, k = clamp(((px - x0) * dx + (py - y0) * dy) / len2, 0, 1);
     if (Math.hypot(px - (x0 + dx * k), py - (y0 + dy * k)) < S.brush * U * 0.55 + radiusOf(p) && time - p.lastSweep > 0.16 / S.toolSpeed) { // the small circle only has to touch any part of a pearl
-      p.lastSweep = time; swing(); // the tool strikes for every pearl the player hits, never for chain or helper pops
+      p.lastSweep = time; swing(); // the tool strikes for every pearl the player hits, never for helper pops
       hitPearl(p, Math.max(1, Math.round(S.power * 0.5)), 'sweep');
     }
   }
@@ -556,7 +568,7 @@ function loadState(raw) {
   state.owned = ECON.TOOLS.map((_, i) => (owned ? owned[i] === true : i <= topT) || i === 0);
   state.equip = d.equip === -1 ? -1 : owned && Number.isInteger(d.equip) && d.equip >= 0 && state.owned[d.equip] ? d.equip : topT; // -1 = always hold the best tool
   state.toolUp = {};
-  ECON.TOOLS.forEach((_, i) => { const u = toolUp[i]; if (isObj(u)) state.toolUp[i] = { p: whole(u.p, ECON.TOOL_UP_MAX), s: whole(u.s, ECON.TOOL_UP_MAX) }; });
+  ECON.TOOLS.forEach((_, i) => { const u = toolUp[i]; if (isObj(u)) state.toolUp[i] = { p: whole(u.p, ECON.TOOL_UP_MAX), s: whole(u.s, ECON.TOOL_UP_MAX), u: ECON.uniqueLevel(i, { u: whole(u.u, 99) }) }; });
   state.seen = { pearl: true };
   for (const k of INV_IDS) { state.inv[k] = whole(inv[k], BIG); state.invV[k] = fin(invV[k]); if (seen[k]) state.seen[k] = true; }
   state.col = blankCol(); state.shinyOn = typeof d.shinyOn === 'boolean' ? d.shinyOn : true;

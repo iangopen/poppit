@@ -216,20 +216,9 @@ function popPearl(p, src, opts) {
     if (time - pointer.lastSweepSnd > 0.022) { pointer.lastSweepSnd = time; Snd.pop(step, true); }
   } else if (manual) Snd.pop(step, true);
   else if (src === 'auto') Snd.pop(4 + Math.floor(Math.random() * 6), true, true);
-  else if (src === 'chain') Snd.pop(step, false, true);
   else if (src === 'batch') Snd.pop(opts.step || 0, false, true);
 
   if (manual) { if (p.kind === 'pearl') addShake(0.1); try { if (navigator.vibrate) navigator.vibrate(6); } catch (e) { /* vibration is optional */ } }
-  if (src !== 'batch' && S.chain > 0) {
-    const chance = S.chain * Math.pow(0.78, opts.depth || 0);
-    let hop = 0;
-    for (const n of p.cell.nb) {
-      if (n.p && n.p.st === 'live' && !n.p.queued && Math.random() < chance) {
-        n.p.queued = true; hop++;
-        queue.push({ p: n.p, at: time + 0.06 + rnd(0, 0.05), src: 'chain', depth: (opts.depth || 0) + 1, step: step + 1 + (opts.depth || 0) });
-      }
-    }
-  }
   if (!firstPop) { firstPop = true; $('hint').classList.add('gone'); }
   return true;
 }
@@ -250,7 +239,7 @@ function hitPearl(p, dmg, src, opts) {
   const x = p.cell.x, y = p.cell.y, col = [p.h, p.s, p.l], frac = p.dmg / p.hpMax;
   p.jv += 12; p.press = 1;
   burst(x, y, 4 + Math.round(frac * 4), 150 * U / 350, col, false);
-  Snd.hit(p.kind, frac, !(src === 'tap' || src === 'sweep')); // pink pearls have no crack sound; hard ones ring with their own hit, softer for helpers and chains
+  Snd.hit(p.kind, frac, !(src === 'tap' || src === 'sweep')); // pink pearls have no crack sound; hard ones ring with their own hit, softer for helpers
   if (src === 'tap' || src === 'sweep') { if (combo > 0) comboT = Math.min(comboT, S.comboWindow * 0.4); addShake(0.25); try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { /* vibration is optional */ } }
   if (!firstPop) { firstPop = true; $('hint').classList.add('gone'); }
   return true;
