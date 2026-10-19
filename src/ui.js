@@ -517,40 +517,47 @@ cv.addEventListener('pointercancel', endPtr);
 cv.addEventListener('pointerleave', () => { hover = null; if (!pointer.touch) pointer.has = false; });
 
 /* ----- save / load ----- */
-const KEY = 'poppit.v1';
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: 2, pool: state.pool, shinyOn: state.shinyOn, col: state.col, t: Date.now() }; }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
+const KEY = 'poppit.v1'; // never rename: every existing save lives under this key; the format version is inside the JSON
+const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, for Restore previous save
+let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, t: Date.now() }; }
+function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSave() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
-function loadState(d) {
-  if (!d || typeof d !== 'object') return;
-  state.sparks = Math.max(0, +d.sparks || 0); state.runEarned = Math.max(0, +d.runEarned || 0); state.lifetime = Math.max(0, +d.lifetime || 0);
-  state.echoes = Math.max(0, d.echoes | 0); state.collapses = Math.max(0, d.collapses | 0); state.muted = !!d.muted; state.musicOn = d.musicOn !== false; state.musicVol = typeof d.musicVol === 'number' ? clamp(d.musicVol, 0, 1) : 0.5;
-  state.autoSell = !!d.autoSell;
-  const topT = clamp((d.lv && d.lv.tool) | 0, 0, ECON.TOOLS.length - 1);
-  state.owned = ECON.TOOLS.map((_, i) => (Array.isArray(d.owned) ? !!d.owned[i] : i <= topT) || i === 0);
-  state.equip = Array.isArray(d.owned) && d.equip >= 0 && state.owned[d.equip | 0] ? d.equip | 0 : topT;
+// saves come from storage, pasted codes and hand edits, so every field is untrusted: finite, in range, the right shape
+const fin = (x) => { const n = +x; return Number.isFinite(n) && n > 0 ? n : 0; };
+const whole = (x, max) => Math.min(max, Math.floor(fin(x)));
+const objOf = (o) => (isObj(o) ? o : {});
+const BIG = Number.MAX_SAFE_INTEGER;
+// Returns 'ok', or 'invalid' / 'newer' and leaves the state exactly as it was. Unknown keys are ignored.
+function loadState(raw) {
+  const m = migrateSave(raw); if (!m.save) return m.error;
+  const d = m.save, lv = objOf(d.lv), toolUp = objOf(d.toolUp), inv = objOf(d.inv), invV = objOf(d.invV), seen = objOf(d.seen), dc = objOf(d.col);
+  state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime);
+  state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
+  state.muted = d.muted === true; state.musicOn = d.musicOn !== false; state.musicVol = Number.isFinite(d.musicVol) ? clamp(d.musicVol, 0, 1) : 0.5;
+  state.autoSell = d.autoSell === true;
+  for (const k in ECON.UPG) state.lv[k] = whole(lv[k], ECON.UPG[k].max);
+  const topT = state.lv.tool, owned = Array.isArray(d.owned) ? d.owned : null;
+  state.owned = ECON.TOOLS.map((_, i) => (owned ? owned[i] === true : i <= topT) || i === 0);
+  state.equip = d.equip === -1 ? -1 : owned && Number.isInteger(d.equip) && d.equip >= 0 && state.owned[d.equip] ? d.equip : topT; // -1 = always hold the best tool
   state.toolUp = {};
-  ECON.TOOLS.forEach((_, i) => { const u = d.toolUp && d.toolUp[i]; if (u) state.toolUp[i] = { p: clamp(u.p | 0, 0, ECON.TOOL_UP_MAX), s: clamp(u.s | 0, 0, ECON.TOOL_UP_MAX) }; });
-  const inv = d.inv && typeof d.inv === 'object' ? d.inv : {}, invV = d.invV && typeof d.invV === 'object' ? d.invV : {}, seen = d.seen && typeof d.seen === 'object' ? d.seen : {};
-  for (const k of INV_IDS) { state.inv[k] = Math.max(0, inv[k] | 0); state.invV[k] = Math.max(0, +invV[k] || 0); if (seen[k]) state.seen[k] = true; }
-  for (const k in ECON.UPG) state.lv[k] = clamp((d.lv && d.lv[k]) | 0, 0, ECON.UPG[k].max);
-  const v2 = (d.version | 0) >= 2;
-  if (!v2 && state.lv.lucky < 1) state.lv.lucky = 1; // v1 saves always had blue pearls; blue is now the first unlock
-  state.col = blankCol(); state.shinyOn = v2 && typeof d.shinyOn === 'boolean' ? d.shinyOn : true;
-  const dc = v2 && d.col && typeof d.col === 'object' ? d.col : {};
+  ECON.TOOLS.forEach((_, i) => { const u = toolUp[i]; if (isObj(u)) state.toolUp[i] = { p: whole(u.p, ECON.TOOL_UP_MAX), s: whole(u.s, ECON.TOOL_UP_MAX) }; });
+  state.seen = { pearl: true };
+  for (const k of INV_IDS) { state.inv[k] = whole(inv[k], BIG); state.invV[k] = fin(invV[k]); if (seen[k]) state.seen[k] = true; }
+  state.col = blankCol(); state.shinyOn = typeof d.shinyOn === 'boolean' ? d.shinyOn : true;
   for (const t of ECON.PEARLS) {
-    const c = state.col[t.id], o = dc[t.id] && typeof dc[t.id] === 'object' ? dc[t.id] : {};
-    c.found = c.found || !!o.found || (!v2 && (ECON.isUnlocked(t.id, state.lv) || !!seen[t.id]));
-    c.popped = Math.max(0, o.popped | 0); c.sFound = !!o.sFound; c.sPopped = Math.max(0, o.sPopped | 0);
+    const c = state.col[t.id], o = objOf(dc[t.id]);
+    c.found = c.found || o.found === true; c.popped = whole(o.popped, BIG); c.sFound = o.sFound === true; c.sPopped = whole(o.sPopped, BIG);
   }
-  const ids = ECON.PEARLS.map((t) => t.id);
-  state.pool = v2 && Array.isArray(d.pool) ? ids.filter((k) => d.pool.includes(k) && state.col[k].found) : ids.filter((k) => state.col[k].found); // locked types are ignored by poolChances, so a re-buy after a Fresh Batch spawns them again
+  const ids = ECON.PEARLS.map((t) => t.id), ok = (k) => ids.includes(k) && state.col[k].found;
+  state.pool = Array.isArray(d.pool) ? [...new Set(d.pool)].filter(ok) : ids.filter(ok); // locked types are ignored by poolChances, so a re-buy after a Fresh Batch spawns them again
   if (!state.pool.length) state.pool = ['pearl'];
   syncTop();
+  return 'ok';
 }
 function awayBonus(secs) {
   recalc();
-  if (S.autoRate <= 0 || secs < 20) return;
+  if (S.autoRate <= 0 || !(secs >= 20)) return; // also refuses NaN from a broken save time
   const gain = ECON.idleRate(S) * Math.min(secs, 28800) * 0.5;
   state.sparks += gain; state.runEarned += gain; state.lifetime += gain;
   toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice while you were away');
@@ -577,8 +584,90 @@ $('resetBtn').addEventListener('click', () => {
   if (!wipeArmed) { wipeArmed = true; b.textContent = 'Click again to erase'; clearTimeout(wipeTimer); wipeTimer = setTimeout(() => { wipeArmed = false; b.textContent = 'Reset save'; }, 3000); return; }
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+  saveBlocked = false;
   Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: false, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() }); zeroInv(); resetTools(); $('autoSell').checked = false;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
+});
+
+/* ----- save codes: copy or download one, paste or open one, then Load and Confirm. The replaced save goes to BACKUP_KEY. ----- */
+const saveMsg = (msg) => { $('saveMsg').textContent = msg; };
+function exportCode() { save(); return encodeSave(serialize()); }
+function copyText(text) { // resolves true when the text reached the clipboard
+  const viaCommand = () => {
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta); return ok;
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(() => true, () => viaCommand());
+  return Promise.resolve(viaCommand());
+}
+$('copySave').addEventListener('click', () => {
+  Snd.click(); const code = exportCode(), out = $('saveOut');
+  copyText(code).then((ok) => {
+    if (ok) { out.hidden = true; saveMsg('Save code copied. Keep it somewhere safe.'); return; }
+    out.value = code; out.hidden = false; out.focus(); out.select(); saveMsg('Could not copy it for you. The code is selected below, copy it by hand.');
+  });
+});
+$('dlSave').addEventListener('click', () => {
+  Snd.click();
+  const url = URL.createObjectURL(new Blob([exportCode()], { type: 'text/plain' })), a = document.createElement('a');
+  a.href = url; a.download = 'poppit-save.txt'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+  saveMsg('Downloaded poppit-save.txt.');
+});
+$('saveFile').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  if (file.size > 1e6) { saveMsg('That file is too big to be a Poppit save.'); return; }
+  file.text().then((t) => { cancelImport(); $('saveText').value = t.trim(); saveMsg('File opened. Press Load to check it.'); }, () => saveMsg('Could not read that file.'));
+});
+let pendingImport = null;
+const REFUSED = { invalid: 'That is not a whole Poppit save code. Check that nothing was cut off.', newer: 'That save is from a newer version of Poppit. Reload the game to update, then load it.' };
+// Load: check the code and show what it holds; nothing changes until Confirm
+function checkImport(text) {
+  cancelImport();
+  const d = decodeSave(text), m = d ? migrateSave(d) : { error: 'invalid' };
+  if (!m.save) { saveMsg(REFUSED[m.error]); toast(REFUSED[m.error]); return m.error; }
+  pendingImport = d;
+  $('saveSum').textContent = 'Load ' + fmt(fin(m.save.sparks)) + ' juice and ' + whole(m.save.echoes, BIG) + ' Flavors? This replaces your progress (it is kept as a backup).';
+  $('saveConfirm').hidden = false; saveMsg('');
+  return 'ok';
+}
+function cancelImport() { pendingImport = null; $('saveConfirm').hidden = true; }
+// Confirm: keep the current save as the backup, then load the new one
+function applyImport() {
+  const d = pendingImport; cancelImport(); if (!d) return false;
+  let cur = null; try { cur = localStorage.getItem(KEY); } catch (e) { cur = null; }
+  try { localStorage.setItem(BACKUP_KEY, cur || JSON.stringify(serialize())); } catch (e) { if (cur) { saveMsg('Could not keep a backup of your current save, so nothing was loaded.'); return false; } }
+  if (loadState(d) !== 'ok') return false;
+  saveBlocked = false; afterLoad(); save();
+  $('saveText').value = ''; saveMsg('Save loaded.'); toast('Save loaded'); return true;
+}
+function backupRaw() { try { return localStorage.getItem(BACKUP_KEY); } catch (e) { return null; } }
+function paintRestore() { $('restoreRow').hidden = !backupRaw(); }
+function restoreBackup() {
+  let d = null; try { d = JSON.parse(backupRaw()); } catch (e) { d = null; }
+  const res = loadState(d);
+  if (res !== 'ok') { saveMsg(res === 'newer' ? REFUSED.newer : 'The previous save could not be read.'); return res; }
+  saveBlocked = false; afterLoad(); save();
+  try { localStorage.removeItem(BACKUP_KEY); } catch (e) { /* ignore */ }
+  paintRestore(); saveMsg('Previous save restored.'); toast('Previous save restored'); return 'ok';
+}
+// everything outside state that has to follow a newly loaded save
+function afterLoad() {
+  collapse = null; armed = false; clearTimeout(armTimer); toolView = state.equip >= 0 ? state.equip : state.lv.tool;
+  resetRun(); syncDiscoveries(); $('autoSell').checked = state.autoSell;
+  paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); paintMusic();
+  updateShelf(); updatePack(); updatePool(); paintRestore();
+}
+$('loadSave').addEventListener('click', () => { Snd.click(); checkImport($('saveText').value); });
+$('confirmLoad').addEventListener('click', () => { Snd.click(); applyImport(); });
+$('cancelLoad').addEventListener('click', () => { Snd.click(); cancelImport(); saveMsg(''); });
+$('saveText').addEventListener('input', () => cancelImport());
+let restoreArmed = false, restoreTimer = 0;
+$('restoreBtn').addEventListener('click', () => {
+  const b = $('restoreBtn'); Snd.click();
+  if (!restoreArmed) { restoreArmed = true; b.textContent = 'Click again to restore'; clearTimeout(restoreTimer); restoreTimer = setTimeout(() => { restoreArmed = false; b.textContent = 'Restore'; }, 3500); return; }
+  restoreArmed = false; clearTimeout(restoreTimer); b.textContent = 'Restore'; restoreBackup();
 });
 
 /* ----- main loop ----- */
@@ -613,14 +702,16 @@ function frame(ts) {
 }
 function start(data) {
   if (started) return; started = true;
-  loadState(data && data.lv ? data : readSave());
-  const away = (data && data.t ? 0 : (readSave() || {}).t);
+  const stored = data && data.lv ? data : readSave(), loaded = stored ? loadState(stored) : 'ok';
+  if (loaded === 'newer') { saveBlocked = true; toast('Your save is from a newer version of Poppit, so it was not loaded or changed. Reload to update.'); }
+  const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
-  if (away) awayBonus((Date.now() - away) / 1000);
-  paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf();
+  if (Number.isFinite(away) && away > 0) awayBonus((Date.now() - away) / 1000);
+  paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+  window.addEventListener('pagehide', () => save()); // iOS Safari does not reliably fire visibilitychange when a tab is closed
   requestAnimationFrame(frame);
 }
 (function boot() {

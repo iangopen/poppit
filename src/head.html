@@ -178,6 +178,17 @@ body {
 #shinyBtn.on { background: var(--accent); color: #fff; }
 .setRow input[type=range] { flex: 1; max-width: 170px; accent-color: #c9588a; cursor: pointer; }
 .setRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px 8px 14px; font: 800 13.5px var(--font-ui); }
+.setRow[hidden], .saveTxt[hidden] { display: none; }
+#settings { max-height: calc(100% - 56px); overflow-y: auto; }
+.setHd { margin: 4px 0 -4px 4px; font: 400 24px/1 var(--font-brand); color: var(--fg); }
+.setRow.saveIn { flex-direction: column; align-items: stretch; padding: 10px; }
+#saveConfirm { border-color: #3a2e1c; font-weight: 700; }
+.saveBtns { display: flex; justify-content: flex-end; gap: 8px; }
+.saveTxt { width: 100%; resize: vertical; min-height: 58px; font: 600 11.5px/1.35 ui-monospace, Consolas, monospace; color: var(--fg); background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 14px 6px 12px 6px / 6px 12px 6px 14px; padding: 7px 9px; word-break: break-all; user-select: text; -webkit-user-select: text; cursor: text; }
+.saveTxt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip.hot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 #packBtn { position: absolute; left: 6px; bottom: 2px; width: 72px; height: 72px; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; transform-origin: center bottom; transition: transform 120ms ease; filter: drop-shadow(0 6px 6px rgba(100, 80, 40, 0.3)); }
 #packBtn svg { display: block; margin: 4px auto 0; transform: rotate(-4deg); }
 #packBtn:hover { transform: rotate(-3deg) scale(1.06); }
@@ -352,6 +363,17 @@ body {
       <div class="setRow"><span>Music<small id="musicNote"></small></span><button class="chip" id="musicBtn" type="button">Music on</button></div>
       <div class="setRow"><span>Music volume</span><input id="musicVol" type="range" min="0" max="100" step="1" value="50" aria-label="Music volume"></div>
       <div class="setRow"><span>Progress</span><button class="chip" id="resetBtn" type="button">Reset save</button></div>
+      <h4 class="setHd">Save</h4>
+      <div class="setRow"><span>Save code<small>Paste it on any device to carry on</small></span><button class="chip" id="copySave" type="button">Copy save code</button></div>
+      <div class="setRow"><span>Save file</span><button class="chip" id="dlSave" type="button">Download save file</button></div>
+      <textarea class="saveTxt" id="saveOut" readonly hidden aria-label="Your save code" rows="3"></textarea>
+      <div class="setRow saveIn">
+        <textarea class="saveTxt" id="saveText" rows="3" placeholder="Paste a save code here" aria-label="Save code to load" spellcheck="false" autocomplete="off"></textarea>
+        <div class="saveBtns"><label class="chip" for="saveFile">Open file</label><input id="saveFile" class="vh" type="file" accept=".txt,text/plain"><button class="chip" id="loadSave" type="button">Load</button></div>
+      </div>
+      <div class="setRow saveIn scrib" id="saveConfirm" hidden><span id="saveSum"></span><div class="saveBtns"><button class="chip" id="cancelLoad" type="button">Cancel</button><button class="chip hot" id="confirmLoad" type="button">Confirm</button></div></div>
+      <p class="hint2" id="saveMsg" role="status" aria-live="polite"></p>
+      <div class="setRow" id="restoreRow" hidden><span>Restore previous save<small>The progress you had before your last load</small></span><button class="chip" id="restoreBtn" type="button">Restore</button></div>
     </section>
     <button id="toolBtn" type="button" aria-expanded="false" aria-controls="tools" aria-label="Tools">
       <svg viewBox="0 0 64 64" width="60" height="60" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">

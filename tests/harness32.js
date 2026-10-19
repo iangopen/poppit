@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const dir = __dirname;
-const src = ['econ.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'].map((f) => fs.readFileSync(path.join(dir, '..', 'src', f), 'utf8')).join('\n');
+const src = ['econ.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'].map((f) => fs.readFileSync(path.join(dir, '..', 'src', f), 'utf8')).join('\n');
 
 const els = {};
 function mkEl(id) {
@@ -28,14 +28,15 @@ const document = {
 };
 let rafCb = null;
 const store = {};
-const win = { claude: undefined, devicePixelRatio: 1, AudioContext: undefined, matchMedia: () => ({ matches: false }), addEventListener() {}, ResizeObserver: undefined };
+const winL = {}; // window listeners, so tests can fire pagehide
+const win = { claude: undefined, devicePixelRatio: 1, AudioContext: undefined, matchMedia: () => ({ matches: false }), addEventListener(t, f) { (winL[t] = winL[t] || []).push(f); }, ResizeObserver: undefined };
 const globals = {
   window: win, document, navigator: { vibrate() {} },
   localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } },
   matchMedia: win.matchMedia, requestAnimationFrame: (f) => { rafCb = f; }, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
 };
 const names = Object.keys(globals);
-const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
+const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
 new Function(...names, src + '\n' + hook)(...names.map((n) => globals[n]));
 const G = globalThis.__g;
 const W = () => G.state.sparks + Object.values(G.state.invV).reduce((a, b) => a + b, 0);
@@ -207,6 +208,57 @@ let bad = 0;
   G.loadState({ version: 2 }); ok('older saves default music on at half volume', G.state.musicOn === true && G.state.musicVol === 0.5);
 }
 const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E, store, els }); PT.task3({ G, ok, frames, live, E }); PT.task4({ G, ok, frames, E }); PT.task5({ G, ok, frames, E }); PT.task6({ G, ok, frames, E }); PT.task7({ G, ok, frames, E }); PT.final({ G, ok, E });
+// ---- save codes, versions and hardened loading ----
+{
+  // compare saves without the timestamp; a {p:0,s:0} tool entry is what toolUp() creates on first read, the same as none
+  const noT = (o) => { const c = JSON.parse(JSON.stringify(o)); delete c.t; for (const i in c.toolUp) if (!c.toolUp[i].p && !c.toolUp[i].s) delete c.toolUp[i]; return JSON.stringify(c); };
+  const lvA = Object.assign(E.zeroLevels(), { lucky: 8, mint: 5, golden: 3, violet: 1, sweep: 2, chain: 4, auto: 7, sharp: 23, tool: 3, board: 1 });
+  const A = { version: 2, sparks: 123456.789, runEarned: 2.5e9, lifetime: 7.25e11, lv: lvA, echoes: 41, collapses: 3, muted: true, musicOn: false, musicVol: 0.3, autoSell: true,
+    owned: [true, true, false, true, false, false], equip: 1, toolUp: { 1: { p: 2, s: 1 }, 3: { p: 5, s: 4 } },
+    inv: { pearl: 12, golden: 2, 'blue:s': 1 }, invV: { pearl: 99.5, golden: 4400.25, 'blue:s': 61 }, seen: { pearl: true, blue: true, golden: true },
+    pool: ['pearl', 'golden', 'blue', 'mint', 'violet'], shinyOn: false,
+    col: { pearl: { found: true, popped: 900, sFound: true, sPopped: 2 }, blue: { found: true, popped: 80, sFound: false, sPopped: 0 }, mint: { found: true, popped: 5, sFound: false, sPopped: 0 }, golden: { found: true, popped: 31, sFound: true, sPopped: 1 }, violet: { found: true, popped: 0, sFound: false, sPopped: 0 } } };
+  G.loadState(A); G.syncDiscoveries(); G.save();
+  const before = noT(G.serialize()), code = G.exportCode();
+  G.loadState({ version: 2, sparks: 5, lv: E.zeroLevels() }); G.save(); const other = noT(G.serialize());
+  const chk = G.checkImport(code), pendingBeforeConfirm = noT(G.serialize()) === other;
+  const applied = G.applyImport();
+  ok('save code round trip reproduces the state exactly', chk === 'ok' && pendingBeforeConfirm && applied && noT(G.serialize()) === before, code.length + ' chars');
+  ok('import keeps the replaced save as poppit.backup and shows Restore', G.BACKUP_KEY === 'poppit.backup' && noT(JSON.parse(store['poppit.backup'])) === other && els.restoreRow.hidden === false);
+  ok('restore previous save brings the replaced save back and removes the backup', G.restoreBackup() === 'ok' && noT(G.serialize()) === other && !store['poppit.backup'] && els.restoreRow.hidden === true);
+  ok('the save key is still poppit.v1', G.KEY === 'poppit.v1' && !!store['poppit.v1']);
+  const body = code.slice(8, -9), mid = Math.floor(body.length / 2), swap = body[mid] === 'A' ? 'B' : 'A';
+  ok('a truncated save code is rejected', G.decodeSave(code.slice(0, -3)) === null && G.decodeSave(code.slice(0, Math.floor(code.length / 2))) === null && G.decodeSave(code.slice(0, -10)) === null);
+  ok('a save code with one changed character is rejected', G.decodeSave('POPPIT2:' + body.slice(0, mid) + swap + body.slice(mid + 1) + code.slice(-9)) === null && G.decodeSave(code.slice(0, -1) + (code.endsWith('0') ? '1' : '0')) === null);
+  ok('a save code with a wrong prefix is rejected', G.decodeSave('POPPIT3:' + code.slice(8)) === null && G.decodeSave(code.slice(8)) === null && G.decodeSave('') === null && G.decodeSave(null) === null);
+  ok('a wrapped or padded code still decodes', !!G.decodeSave('  ' + code.slice(0, 40) + '\n' + code.slice(40) + '\n'));
+  ok('Load refuses a broken code without touching the state', G.checkImport(code.slice(0, -4)) === 'invalid' && !G.getPending() && els.saveConfirm.hidden === true && noT(G.serialize()) === other);
+  const v99 = G.encodeSave(Object.assign(JSON.parse(code ? JSON.stringify(A) : '{}'), { version: 99 }));
+  const s99 = store['poppit.v1'];
+  ok('a save claiming version 99 is refused and the current state is unchanged', G.checkImport(v99) === 'newer' && !G.getPending() && G.loadState({ version: 99, sparks: 1e9, lv: lvA }) === 'newer' && noT(G.serialize()) === other && store['poppit.v1'] === s99);
+  G.setSaveBlocked(true); G.state.sparks = 777; G.save(); const blockedOk = store['poppit.v1'] === s99; G.setSaveBlocked(false);
+  ok('while the stored save is newer, autosave leaves it alone', blockedOk);
+  ok('bad versions are refused: 0, -1, 2.5, "abc", and non-objects', ['invalid', 'invalid', 'invalid', 'invalid', 'invalid', 'invalid'].join() === [G.loadState({ version: 0 }), G.loadState({ version: -1 }), G.loadState({ version: 2.5 }), G.loadState({ version: 'abc' }), G.loadState([1, 2]), G.loadState(null)].join());
+  // fixtures: a v1 save as the old game wrote it (no version, no pool or collection), and a v2 save
+  const v1 = { sparks: 1234.5, runEarned: 5000, lifetime: 9000, lv: Object.assign(E.zeroLevels(), { tool: 2, sweep: 1, chain: 2, auto: 3, golden: 1, lucky: 0 }), echoes: 3, collapses: 1, muted: false,
+    owned: [true, true, true, false, false, false], equip: 1, toolUp: { 1: { p: 2, s: 1 } }, inv: { pearl: 4, golden: 1 }, invV: { pearl: 20, golden: 30 }, seen: { pearl: true, blue: true, golden: true }, t: 0 };
+  const st = G.state;
+  ok('v1 fixture loads through the migration table', G.migrateSave(v1).save.version === 2 && G.loadState(v1) === 'ok' && st.sparks === 1234.5 && st.echoes === 3 && st.lv.lucky === 1 && st.lv.chain === 2 && st.equip === 1 && st.toolUp[1].p === 2 && st.inv.golden === 1 && st.pool.join() === 'pearl,blue,golden' && st.col.golden.found && st.shinyOn === true, st.pool.join());
+  const v2 = { version: 2, sparks: 50, lv: Object.assign(E.zeroLevels(), { lucky: 2, mint: 1 }), pool: ['blue', 'mint'], shinyOn: false, col: { blue: { found: true, popped: 3 }, mint: { found: true, popped: 1, sFound: true, sPopped: 1 } }, musicVol: 0.2, t: 1 };
+  ok('v2 fixture loads as written', G.loadState(v2) === 'ok' && st.sparks === 50 && st.pool.join() === 'blue,mint' && st.shinyOn === false && st.col.mint.sFound && st.col.blue.popped === 3 && st.musicVol === 0.2 && st.lv.mint === 1);
+  // untrusted values: everything clamps or defaults, unknown keys are dropped
+  const bad = { version: 2, sparks: NaN, runEarned: 'NaN', lifetime: -50, echoes: Infinity, collapses: '7', musicVol: NaN, muted: 'yes',
+    lv: { sharp: 9999, tool: 9999, board: -4, chain: 'abc', lucky: 3.7, nope: 5 }, owned: 'all', equip: 77, toolUp: { 0: { p: 999, s: -1 }, 9: { p: 3, s: 3 }, 2: 'x' },
+    inv: { pearl: 'lots', golden: 1e400, dragon: 5 }, invV: { pearl: -3 }, seen: 'everything', pool: ['pearl', 'unicorn', 'golden', 'golden', 7], col: { golden: { found: true, popped: -5, sPopped: NaN }, unicorn: { found: true } }, evil: { x: 1 } };
+  const r = G.loadState(bad);
+  ok('a save with lv 9999, NaN sparks and an unknown pool id loads clamped', r === 'ok' && st.sparks === 0 && st.runEarned === 0 && st.lifetime === 0 && st.lv.sharp === 99 && st.lv.tool === 5 && st.lv.board === 0 && st.lv.chain === 0 && st.lv.lucky === 3 && !('nope' in st.lv) && st.pool.join() === 'pearl,golden', JSON.stringify({ lv: [st.lv.sharp, st.lv.tool], pool: st.pool }));
+  ok('every loaded number is finite and in range', st.echoes === 0 && st.collapses === 7 && st.musicVol === 0.5 && st.muted === false && st.toolUp[0].p === 5 && st.toolUp[0].s === 0 && !st.toolUp[9] && !st.toolUp[2] && st.inv.pearl === 0 && st.inv.golden === 0 && st.invV.pearl === 0 && !('dragon' in st.inv) && !st.col.unicorn && st.col.golden.popped === 0 && st.col.golden.sPopped === 0 && !('evil' in st) && st.owned.length === 6 && st.owned.every((o) => o === true) && st.equip === 5, JSON.stringify(st.toolUp));
+  ok('an empty or all-unknown pool falls back to the base pearl', G.loadState({ version: 2, pool: ['unicorn'] }) === 'ok' && st.pool.join() === 'pearl' && G.loadState({ version: 2, pool: [] }) === 'ok' && st.pool.join() === 'pearl');
+  ok('a hand-edited code with NaN-like values decodes and loads clamped', G.checkImport(G.encodeSave({ version: 2, sparks: 'NaN', lv: { sharp: 9999 }, pool: ['unicorn'] })) === 'ok' && G.applyImport() && st.sparks === 0 && st.lv.sharp === 99 && st.pool.join() === 'pearl');
+  G.state.sparks = 4242; (winL.pagehide || []).forEach((h) => h());
+  ok('pagehide saves', (winL.pagehide || []).length === 1 && JSON.parse(store['poppit.v1']).sparks === 4242);
+  G.loadState({ version: 2, lv: E.zeroLevels() }); delete store['poppit.backup'];
+}
 for (const [n, c, x] of results) { if (!c) bad++; console.log((c ? 'PASS ' : 'FAIL ') + n + (x !== undefined ? '  [' + x + ']' : '')); }
 
 
