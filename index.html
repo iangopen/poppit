@@ -341,6 +341,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
     </button>
     <section class="panel" id="pack" hidden aria-label="Backpack">
       <header><h3>Backpack</h3><button class="x" type="button" data-close="pack" aria-label="Close backpack">&#10005;</button></header>
+      <p class="hint2" id="packNote"></p>
       <div class="slots" id="slots"></div>
       <div class="sellRow" id="sellRow" hidden>
         <span class="sw2" id="sellWhat">Pearl</span>
@@ -420,7 +421,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
     </section>
     <div id="surge">Frenzy</div>
     <div id="toast" role="status"></div>
-    <div id="hint">Poke a pearl to pop it into your backpack, then sell your haul for juice. Tough ones crack first, so keep going.</div>
+    <div id="hint">Poke a pearl to pop it for juice. Tough ones crack first, so keep going.</div>
     <div id="bottom">
       <div id="combo"><span class="lbl">Combo</span><span id="comboN">0</span><span id="comboBar"><i></i></span><span id="comboX">x1.00</span></div>
       <div id="toolLbl">Steel Pin</div>
@@ -896,7 +897,7 @@ const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const INV_IDS = ECON.PEARLS.flatMap((t) => [t.id, t.id + ':s']); // normal and shiny stacks
 const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); return o; };
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: false, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() };
+const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() };
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
 function syncDiscoveries() { for (const t of ECON.PEARLS) if (ECON.isUnlocked(t.id, state.lv)) discover(t.id, false); }
 // first sight of a type (or its shiny) fills a collection entry; a new normal type joins the pool once
@@ -1739,6 +1740,7 @@ function updatePack() {
   if (packBump > 0) { packBump = 0; const b = $('packBtn'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
   if (selling || $('pack').hidden) return;
   if (selKind && !(state.inv[selKind] > 0)) selKind = null;
+  setLbl('packNote', state.autoSell ? 'Auto-sell is on, so pops turn into juice right away. Switch it off to collect pearls here and sell them yourself.' : 'Pops land here. Sell them for juice, or switch auto-sell on.');
   const owned = KINDS.filter((k) => (state.inv[k[0]] || 0) > 0);
   slotEls.forEach((s, i) => {
     const kind = owned[i] ? owned[i][0] : null;
@@ -2148,7 +2150,7 @@ function loadState(raw) {
   state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime);
   state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
   state.muted = d.muted === true; state.musicOn = d.musicOn !== false; state.musicVol = Number.isFinite(d.musicVol) ? clamp(d.musicVol, 0, 1) : 0.5;
-  state.autoSell = d.autoSell === true;
+  state.autoSell = typeof d.autoSell === 'boolean' ? d.autoSell : true; // on unless the save says off
   for (const k in ECON.UPG) state.lv[k] = whole(lv[k], ECON.UPG[k].max);
   const topT = state.lv.tool, owned = Array.isArray(d.owned) ? d.owned : null;
   state.owned = ECON.TOOLS.map((_, i) => (owned ? owned[i] === true : i <= topT) || i === 0);
@@ -2198,7 +2200,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: false, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() }); zeroInv(); resetTools(); $('autoSell').checked = false;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
 });
 

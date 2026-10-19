@@ -52,6 +52,7 @@ const live = () => G.pearls.filter((p) => p.st === 'live');
 
 frames(3);
 const [C0, R0] = G.dims();
+ok('a new game has autoSell true', G.state.autoSell === true && els.autoSell.checked === true);
 G.updateShelf(); const verbsHiddenAtStart = els.hVerbs.hidden === true;
 ok('boots with a hex board and prefilled pearls', G.cells.length === R0 * C0 - Math.floor(R0 / 2) && live().length >= 3, C0 + 'x' + R0 + ' cells, ' + live().length + ' pearls');
 
@@ -188,6 +189,7 @@ ok('particle and stain pools stay bounded', G.fx.parts.length < 400 && G.stains.
 let bad = 0;
 // backpack: sell all moves inventory into juice, auto-sell empties it by itself
 {
+  G.state.autoSell = false; // manual selling, now that auto-sell starts on
   G.state.sparks = 0; Object.keys(G.state.inv).forEach((k) => { G.state.inv[k] = 0; G.state.invV[k] = 0; });
   const p = live()[0]; G.popPearl(p, 'tap'); frames(6); // > 0.08 s, so the HUD tick refreshes the backpack
   ok('popped pearl lands in the backpack, not in juice', G.state.inv.pearl === 1 && G.state.sparks === 0 && G.state.invV.pearl > 0, 'inv ' + G.state.inv.pearl);
@@ -287,6 +289,8 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
   ok('the migration does not change the stored v2 object', v2c.lv.chain === 3 && v2c.sparks === 100);
   ok('a chain refund is capped at the old max level 8', G.migrateSave({ version: 2, sparks: 0, lv: { chain: 99 } }).save.sparks === 670950);
   ok('a unique level above the max clamps, and tools without one keep 0', G.loadState({ version: 3, toolUp: { 0: { u: 40 }, 1: { u: 3 } } }) === 'ok' && st.toolUp[0].u === 5 && st.toolUp[1].u === 0);
+  ok('a stored autoSell false stays false', G.loadState({ version: 3, autoSell: false }) === 'ok' && st.autoSell === false);
+  ok('a save with no autoSell field starts with it on', G.loadState({ version: 3 }) === 'ok' && st.autoSell === true && G.loadState({ version: 2, autoSell: 'no' }) === 'ok' && st.autoSell === true);
   // the Tools panel reads the tool's unique definition
   G.loadState({ version: 3, sparks: 5000, owned: [true, true, false, false, false, false], equip: 0 }); G.recalc();
   G.viewTool(0); const pinRow = !els.uRow.hidden && els.uNone.hidden && els.uName.textContent === 'Wide Swing' && /Level 0\/5/.test(els.uLv.textContent);
@@ -299,6 +303,8 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
   G.state.sparks = 4242; (winL.pagehide || []).forEach((h) => h());
   ok('pagehide saves', (winL.pagehide || []).length === 1 && JSON.parse(store['poppit.v1']).sparks === 4242);
   G.loadState({ version: 2, lv: E.zeroLevels() }); delete store['poppit.backup'];
+  G.state.autoSell = false; els.resetBtn.fire('click', {}); els.resetBtn.fire('click', {});
+  ok('Reset save starts with autoSell on', G.state.autoSell === true && els.autoSell.checked === true);
 }
 for (const [n, c, x] of results) { if (!c) bad++; console.log((c ? 'PASS ' : 'FAIL ') + n + (x !== undefined ? '  [' + x + ']' : '')); }
 

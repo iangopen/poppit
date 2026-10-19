@@ -153,6 +153,7 @@ function updatePack() {
   if (packBump > 0) { packBump = 0; const b = $('packBtn'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
   if (selling || $('pack').hidden) return;
   if (selKind && !(state.inv[selKind] > 0)) selKind = null;
+  setLbl('packNote', state.autoSell ? 'Auto-sell is on, so pops turn into juice right away. Switch it off to collect pearls here and sell them yourself.' : 'Pops land here. Sell them for juice, or switch auto-sell on.');
   const owned = KINDS.filter((k) => (state.inv[k[0]] || 0) > 0);
   slotEls.forEach((s, i) => {
     const kind = owned[i] ? owned[i][0] : null;
@@ -562,7 +563,7 @@ function loadState(raw) {
   state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime);
   state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
   state.muted = d.muted === true; state.musicOn = d.musicOn !== false; state.musicVol = Number.isFinite(d.musicVol) ? clamp(d.musicVol, 0, 1) : 0.5;
-  state.autoSell = d.autoSell === true;
+  state.autoSell = typeof d.autoSell === 'boolean' ? d.autoSell : true; // on unless the save says off
   for (const k in ECON.UPG) state.lv[k] = whole(lv[k], ECON.UPG[k].max);
   const topT = state.lv.tool, owned = Array.isArray(d.owned) ? d.owned : null;
   state.owned = ECON.TOOLS.map((_, i) => (owned ? owned[i] === true : i <= topT) || i === 0);
@@ -612,7 +613,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: false, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() }); zeroInv(); resetTools(); $('autoSell').checked = false;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
 });
 
