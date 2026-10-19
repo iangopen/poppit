@@ -84,3 +84,13 @@ test('only per-type upgrades sit in the Pearls & Marbles group', () => {
   const types = new Set(['lucky', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black']);
   for (const id in E.UPG) assert.strictEqual(E.UPG[id].group === 'marble', types.has(id), id);
 });
+// ---- number display: fmt lives in econ.js but is not exported, so load it the way the page does ----
+const { fmt } = new Function(require('fs').readFileSync(require('path').join(__dirname, '../src/econ.js'), 'utf8') + '\nreturn { fmt };')();
+test('fmt rolls over to the next suffix when rounding reaches 1000', () => {
+  assert.strictEqual(fmt(99950), '100K'); assert.strictEqual(fmt(999500), '1.00M'); assert.strictEqual(fmt(999.6e6), '1.00B'); assert.strictEqual(fmt(9.996e12), '10.0T');
+  assert.strictEqual(fmt(0), '0'); assert.strictEqual(fmt(0.5), '0'); assert.strictEqual(fmt(9999), '9,999'); assert.strictEqual(fmt(793571074364), '794B');
+});
+test('fmt never prints an exponent or more than 3 significant digits up to 1e60', () => {
+  for (let e = 4; e < 60; e += 0.001) { const s = fmt(Math.pow(10, e)); assert.ok(!/e/.test(s) && s.replace(/\D/g, '').length <= 3 && s.length <= 7, e + ' -> ' + s); }
+  assert.strictEqual(fmt(Infinity), '∞');
+});

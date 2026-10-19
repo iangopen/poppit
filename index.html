@@ -536,13 +536,17 @@ const ECON = (() => {
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 
-const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd', 'Td', 'Qad', 'Qid', 'Sxd', 'Spd', 'Ocd', 'Nod', 'Vg'];
 function fmt(n) {
   if (!(n > 0)) return '0';
   if (n < 10000) return Math.floor(n).toLocaleString('en-US');
+  if (!isFinite(n)) return '∞';
   let i = 0;
   while (n >= 1000 && i < SUFFIX.length - 1) { n /= 1000; i++; }
-  return (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)) + SUFFIX[i];
+  // pick the digits from the rounded value, so 99.95K shows as 100K and 999.5K as 1.00M (not 100.0K / 1000K)
+  let d = n >= 100 ? 0 : n >= 10 ? 1 : 2;
+  if (+n.toFixed(d) >= [1000, 100, 10][d]) { if (d > 0) d--; else if (i < SUFFIX.length - 1) { n /= 1000; i++; d = 2; } }
+  return n.toFixed(d) + SUFFIX[i];
 }
 function fmtV(n) { return n < 10 ? String(Math.round(n * 10) / 10) : fmt(n); }
 /* ---------- Samples: CC0 and user-supplied clips, trimmed and normalized, embedded as base64 MP3 ---------- */
