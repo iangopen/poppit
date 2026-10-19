@@ -5,6 +5,13 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 ## Architecture contract
 
 - **`index.html` is a build output.** Never edit it by hand; edit `src/` and rebuild. It is committed because Pages serves it.
+- **Standalone page rules.** `index.html` is served as is by GitHub Pages, with no wrapper, so it must be a complete document. `tests/page.test.js` checks all of this:
+  - `src/head.html` opens the document: `<!doctype html>`, `<html lang="en">`, `<head>`, `<meta charset="utf-8">` first (it must stay within the first 1024 bytes), then the viewport meta `width=device-width, initial-scale=1, viewport-fit=cover`, `<title>`, the font links, `<style>`, `</head>`, `<body>`, the markup, and finally an open `<script>`.
+  - `src/tail.html` closes it: `</script>`, `</body>`, `</html>`.
+  - Without the doctype the page falls into quirks mode. Without the charset, a server that sends no charset (such as `python -m http.server`) shows "Â·" for "·".
+  - **The hidden rule:** the CSS starts with `[hidden] { display: none !important; }`. Panels, rows, slots and the Restore row are all shown and hidden with the `hidden` attribute, so never give one a `display` that beats it some other way.
+  - Inline SVG icons inside buttons need `display: block` where their box matters. Standards mode adds a baseline gap under inline images; the book arrows had one.
+  - `tools/build.js` stays a plain byte concatenation.
 - **Concat order (fixed):**
   - `src/head.html`
   - then `src/econ.js`, `save.js`, `samples.js`, `audio.js`, `music.js`, `world.js`, `render.js`, `ui.js`
@@ -55,12 +62,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - Before an import, the current raw save (or the serialized state, if nothing is stored yet) is copied to `localStorage` key `poppit.backup`.
   - If a stored save exists and the backup cannot be written, the import is aborted.
   - **Restore previous save** shows only while `poppit.backup` exists. It needs a second click to confirm, loads the backup, and deletes it.
+  - **Unreadable stored save:** at boot, `loadStored()` copies a stored save that is not JSON (or not a loadable save) to `poppit.backup` before the fresh game's first save replaces it, and shows a toast. If `poppit.backup` already holds a good save, the raw text goes to `poppit.unreadable` instead, so a good backup is never pushed out.
+  - When the backup cannot be loaded, the Restore row says "Your last save could not be read". Restore then shows the raw text, selected, in the read-only box so the player can copy it, and keeps the backup.
 
 ## Commands (Windows PowerShell and macOS alike, no bash needed)
 
 - `npm run build`: runs `node tools/build.js`, which concatenates into `build/all.js` (gitignored), syntax-checks it with `vm.Script`, and writes `index.html`. **This is the gate.**
 - `npm test`:
   - `tests/econ32.test.js`: `node:test` unit tests of `ECON` and `fmt`.
+  - `tests/page.test.js`: checks that the built `index.html` is a standalone page (doctype, charset, viewport, `[hidden]` rule, head/body structure) and was built from the current `head.html` / `tail.html`. **Run `npm run build` before `npm test`.**
   - `tests/harness32.js`: runs the real concatenated game against stubbed DOM APIs and drives it like a player. It prints PASS/FAIL lines and ends with `ALL PASSED`. It pulls in `tests/pearl_tests.js`.
 - `npm run sim`: runs `tools/sim32.js`, the seeded pacing sim. It plays 6 Fresh Batch cycles for a casual and an engaged profile, and the output is identical run to run.
   - `--wait=25`: the player keeps going to minute 25 before pressing Fresh Batch.
@@ -72,7 +82,13 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 ## State: real and verified (2026-10-18)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 22 unit tests and 102 harness checks pass. 19 of the harness checks cover save codes, versions, clamping, backup/restore and `pagehide`.
+- **Tests:** 22 unit tests, 6 page tests and 105 harness checks pass. 23 of the harness checks cover save codes, versions, clamping, backup/restore, unreadable saves and `pagehide`.
+- **Standalone page (2026-10-18):** measured in Chrome with `python -m http.server`, which sends no charset:
+  - `compatMode` is CSS1Compat (it was BackCompat) and `characterSet` is UTF-8 (it was windows-1252);
+  - the viewport meta is present;
+  - every panel is `display: none` until opened and `none` again after closing;
+  - the tool label renders "·".
+- **Standards-mode layout check:** compared at 1280×800 and 390×844 across the board and every panel. Upgrade cards are 0.6 px taller each (line-height strut), which was left as is. The book arrows were 3 px taller; fixed. Nothing else changed.
 - **Save export / import (2026-10-18):** all four paths work in Chrome:
   - copy → clear site data → paste → Load → Confirm brings the progress back;
   - the copy fallback shows the selected code;
@@ -96,9 +112,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - See the report's options A, B and C and the open question about Flavor-scaled costs.
 - **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: helper idle rate × 50%, capped at 8 h).
 - **Save sync between devices:** not built. Moving a save is manual (code or file). Tested only on desktop Chrome so far; iOS Safari `pagehide` and the clipboard on phones are not yet verified on a device.
-- **Unreadable stored save:** if `poppit.v1` holds broken JSON, the game starts fresh and the next autosave overwrites it. This is the same as before; it is not backed up.
-- **"Copy save code" button:** the label wraps to two lines in the 318 px panel.
-- **Phone layout:** not built or verified. There is only one `@media (max-width: 820px)` rule that stacks the panel under the board.
+- **Phone layout:** not built. The viewport meta now makes phones lay the page out at device width instead of 980 px desktop width. This has not been checked on a real phone; the 390 px checks ran in desktop Chrome. At 390 px the board and the shop share the height tightly, and the only phone rule is one `@media (max-width: 820px)` that stacks the panel under the board.
 - **Artifacts:** not built. A Flavor shop or other spending that lasts across Fresh Batches would also be the natural fix for the empty late-game shelf.
 - **Raw numbers:** the Fresh Batch button and the Flavors line print raw integers (`+6666 Flavors`, `x3238.4`). They fit today, but they don't use `fmt`.
 - **Sim limitations** (see the report): no backpack selling, no away bonus, pool never toggled, fixed cell counts per board tier.

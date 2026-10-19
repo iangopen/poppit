@@ -17,3 +17,9 @@
 - Hardened `loadState`: every field is clamped or defaulted, and newer versions are refused. A refused stored save is never overwritten.
 - Added a Save section to Settings: copy, download, paste or open a file, then Load → Confirm. The replaced save is kept as `poppit.backup` and can be restored.
 - Added a `pagehide` save, and an `awayBonus` guard against a NaN save time.
+
+## 2026-10-18: standalone page
+
+- `index.html` is now a complete document: doctype, charset and viewport metas, `<head>` / `<body>`, and a global `[hidden]` rule. Standards mode was measured against the old quirks-mode page at two sizes; the one visible regression (the book arrows) is fixed.
+- An unreadable stored save is kept in `poppit.backup` (or `poppit.unreadable`) and can be recovered as text.
+- The "Copy save code" button no longer wraps.
