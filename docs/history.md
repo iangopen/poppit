@@ -23,3 +23,11 @@
 - `index.html` is now a complete document: doctype, charset and viewport metas, `<head>` / `<body>`, and a global `[hidden]` rule. Standards mode was measured against the old quirks-mode page at two sizes; the one visible regression (the book arrows) is fixed.
 - An unreadable stored save is kept in `poppit.backup` (or `poppit.unreadable`) and can be recovered as text.
 - The "Copy save code" button no longer wraps.
+
+## 2026-10-18: tool unique upgrades, late Helpers, auto-sell on
+
+- Removed Chain Reaction. Save v3 refunds it at its v2 prices.
+- Wide Swing became the Steel Pin's unique upgrade, the first of a per-tool upgrade slot (`TOOLS[i].unique`, level in `toolUp[i].u`), shown on the tool's page in the Tools panel.
+- Helpers now need Coral Pearls and cost base 8500. In the sim the first helper lands at 84% (casual) and 80% (engaged) of the way to the first Fresh Batch.
+- Auto-sell is on for new games, after Reset save, and for saves without the field. The first-run hint and the backpack text were updated to match.
+- The "New techniques" heading hides while it is empty.
