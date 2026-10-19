@@ -10,3 +10,10 @@
   - it adds a 25-minute player policy and tuning variants.
 - Fixed `fmt` rollover at suffix boundaries, extended suffixes to Vg, and added tests.
 - Wrote `docs/balance-report.md`, with three problems and options A/B/C. No balance change was applied.
+
+## 2026-10-18: save export and import
+
+- Added `src/save.js`: save codes (`POPPIT2:` + base64 + FNV-1a checksum), `SAVE_VERSION` and a `MIGRATIONS` table. The v1 → v2 logic moved into it unchanged.
+- Hardened `loadState`: every field is clamped or defaulted, and newer versions are refused. A refused stored save is never overwritten.
+- Added a Save section to Settings: copy, download, paste or open a file, then Load → Confirm. The replaced save is kept as `poppit.backup` and can be restored.
+- Added a `pagehide` save, and an `awayBonus` guard against a NaN save time.
