@@ -518,11 +518,26 @@ cv.addEventListener('pointerleave', () => { hover = null; if (!pointer.touch) po
 
 /* ----- save / load ----- */
 const KEY = 'poppit.v1'; // never rename: every existing save lives under this key; the format version is inside the JSON
-const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, for Restore previous save
+const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
+const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
 function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
-function readSave() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
+const parsesToObject = (text) => { try { return isObj(JSON.parse(text)); } catch (e) { return false; } };
+// Boot: load the stored save. One that is not JSON, or not a save, is still the player's data: keep its raw text for
+// Restore before the fresh game's first autosave replaces it, without pushing out a good backup.
+function loadStored() {
+  const raw = readSaveRaw(); if (!raw) return 'ok';
+  const d = readSave(), res = d ? loadState(d) : 'invalid';
+  if (res === 'invalid') {
+    const b = backupRaw();
+    try { localStorage.setItem(b && b !== raw && parsesToObject(b) ? UNREADABLE_KEY : BACKUP_KEY, raw); } catch (e) { /* storage may be unavailable */ }
+    toast('Your save could not be read, so a new game started. The old one is kept in Settings.');
+  }
+  return res;
+}
 // saves come from storage, pasted codes and hand edits, so every field is untrusted: finite, in range, the right shape
 const fin = (x) => { const n = +x; return Number.isFinite(n) && n > 0 ? n : 0; };
 const whole = (x, max) => Math.min(max, Math.floor(fin(x)));
@@ -643,11 +658,18 @@ function applyImport() {
   $('saveText').value = ''; saveMsg('Save loaded.'); toast('Save loaded'); return true;
 }
 function backupRaw() { try { return localStorage.getItem(BACKUP_KEY); } catch (e) { return null; } }
-function paintRestore() { $('restoreRow').hidden = !backupRaw(); }
+function paintRestore() {
+  const b = backupRaw(); $('restoreRow').hidden = !b;
+  if (b) $('restoreNote').textContent = parsesToObject(b) ? 'The progress you had before your last load' : 'Your last save could not be read';
+}
 function restoreBackup() {
-  let d = null; try { d = JSON.parse(backupRaw()); } catch (e) { d = null; }
+  const raw = backupRaw(); let d = null; try { d = JSON.parse(raw); } catch (e) { d = null; }
   const res = loadState(d);
-  if (res !== 'ok') { saveMsg(res === 'newer' ? REFUSED.newer : 'The previous save could not be read.'); return res; }
+  if (res === 'newer') { saveMsg(REFUSED.newer); return res; }
+  if (res !== 'ok') { // damaged: the game cannot load it, so hand the text back to the player and keep the backup
+    const out = $('saveOut'); out.value = raw || ''; out.hidden = false; out.focus(); out.select();
+    saveMsg('That save is damaged and cannot be loaded. Its text is selected above, copy it somewhere safe.'); return res;
+  }
   saveBlocked = false; afterLoad(); save();
   try { localStorage.removeItem(BACKUP_KEY); } catch (e) { /* ignore */ }
   paintRestore(); saveMsg('Previous save restored.'); toast('Previous save restored'); return 'ok';
@@ -702,7 +724,7 @@ function frame(ts) {
 }
 function start(data) {
   if (started) return; started = true;
-  const stored = data && data.lv ? data : readSave(), loaded = stored ? loadState(stored) : 'ok';
+  const loaded = data && data.lv ? loadState(data) : loadStored();
   if (loaded === 'newer') { saveBlocked = true; toast('Your save is from a newer version of Poppit, so it was not loaded or changed. Reload to update.'); }
   const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;

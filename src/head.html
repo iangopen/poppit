@@ -191,6 +191,7 @@ body {
 .setRow.saveIn { flex-direction: column; align-items: stretch; padding: 10px; }
 #saveConfirm { border-color: #3a2e1c; font-weight: 700; }
 .saveBtns { display: flex; justify-content: flex-end; gap: 8px; }
+#copySave, #dlSave, #restoreBtn { flex: none; white-space: nowrap; }
 .saveTxt { width: 100%; resize: vertical; min-height: 58px; font: 600 11.5px/1.35 ui-monospace, Consolas, monospace; color: var(--fg); background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 14px 6px 12px 6px / 6px 12px 6px 14px; padding: 7px 9px; word-break: break-all; user-select: text; -webkit-user-select: text; cursor: text; }
 .saveTxt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chip.hot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -381,7 +382,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       </div>
       <div class="setRow saveIn scrib" id="saveConfirm" hidden><span id="saveSum"></span><div class="saveBtns"><button class="chip" id="cancelLoad" type="button">Cancel</button><button class="chip hot" id="confirmLoad" type="button">Confirm</button></div></div>
       <p class="hint2" id="saveMsg" role="status" aria-live="polite"></p>
-      <div class="setRow" id="restoreRow" hidden><span>Restore previous save<small>The progress you had before your last load</small></span><button class="chip" id="restoreBtn" type="button">Restore</button></div>
+      <div class="setRow" id="restoreRow" hidden><span>Restore previous save<small id="restoreNote">The progress you had before your last load</small></span><button class="chip" id="restoreBtn" type="button">Restore</button></div>
     </section>
     <button id="toolBtn" type="button" aria-expanded="false" aria-controls="tools" aria-label="Tools">
       <svg viewBox="0 0 64 64" width="60" height="60" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">

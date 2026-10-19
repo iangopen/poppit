@@ -16,7 +16,7 @@ function mkEl(id) {
     appendChild(c) { this.children.push(c); return c; },
     querySelector() { return mkEl('q'); },
     getBoundingClientRect() { return { left: 0, top: 0, width: 900, height: 700 }; },
-    setPointerCapture() {}, offsetWidth: 1, disabled: false,
+    setPointerCapture() {}, focus() {}, select() {}, offsetWidth: 1, disabled: false,
     getContext() { const gr = { addColorStop() {} }; return new Proxy({}, { get: (_, k) => (k === 'measureText' ? () => ({ width: 40 }) : k === 'createRadialGradient' || k === 'createLinearGradient' ? () => gr : () => {}), set: () => true }); },
     width: 0, height: 0,
   };
@@ -36,7 +36,7 @@ const globals = {
   matchMedia: win.matchMedia, requestAnimationFrame: (f) => { rafCb = f; }, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
 };
 const names = Object.keys(globals);
-const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
+const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
 new Function(...names, src + '\n' + hook)(...names.map((n) => globals[n]));
 const G = globalThis.__g;
 const W = () => G.state.sparks + Object.values(G.state.invV).reduce((a, b) => a + b, 0);
@@ -255,6 +255,16 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
   ok('every loaded number is finite and in range', st.echoes === 0 && st.collapses === 7 && st.musicVol === 0.5 && st.muted === false && st.toolUp[0].p === 5 && st.toolUp[0].s === 0 && !st.toolUp[9] && !st.toolUp[2] && st.inv.pearl === 0 && st.inv.golden === 0 && st.invV.pearl === 0 && !('dragon' in st.inv) && !st.col.unicorn && st.col.golden.popped === 0 && st.col.golden.sPopped === 0 && !('evil' in st) && st.owned.length === 6 && st.owned.every((o) => o === true) && st.equip === 5, JSON.stringify(st.toolUp));
   ok('an empty or all-unknown pool falls back to the base pearl', G.loadState({ version: 2, pool: ['unicorn'] }) === 'ok' && st.pool.join() === 'pearl' && G.loadState({ version: 2, pool: [] }) === 'ok' && st.pool.join() === 'pearl');
   ok('a hand-edited code with NaN-like values decodes and loads clamped', G.checkImport(G.encodeSave({ version: 2, sparks: 'NaN', lv: { sharp: 9999 }, pool: ['unicorn'] })) === 'ok' && G.applyImport() && st.sparks === 0 && st.lv.sharp === 99 && st.pool.join() === 'pearl');
+  // a stored save that is not valid JSON goes to the backup before the fresh game overwrites it
+  delete store['poppit.backup']; delete store['poppit.unreadable']; store['poppit.v1'] = '{bad json';
+  const lc = G.loadStored(); G.paintRestore();
+  ok('corrupt JSON in storage leaves poppit.backup holding the raw text', lc === 'invalid' && store['poppit.backup'] === '{bad json' && els.restoreRow.hidden === false && /could not be read/.test(els.restoreNote.textContent), lc);
+  document.getElementById('saveOut').value = ''; document.getElementById('saveOut').hidden = true;
+  ok('restoring a damaged backup hands its text back and keeps the backup', G.restoreBackup() === 'invalid' && document.getElementById('saveOut').value === '{bad json' && document.getElementById('saveOut').hidden === false && store['poppit.backup'] === '{bad json');
+  const good = JSON.stringify({ version: 2, sparks: 9 }); store['poppit.backup'] = good; store['poppit.v1'] = '[1, 2]';
+  ok('an unreadable save never pushes out a good backup', G.loadStored() === 'invalid' && store['poppit.backup'] === good && store['poppit.unreadable'] === '[1, 2]' && G.UNREADABLE_KEY === 'poppit.unreadable');
+  delete store['poppit.backup']; delete store['poppit.unreadable']; store['poppit.v1'] = good;
+  ok('a good stored save loads at boot and makes no backup', G.loadStored() === 'ok' && G.state.sparks === 9 && !store['poppit.backup']);
   G.state.sparks = 4242; (winL.pagehide || []).forEach((h) => h());
   ok('pagehide saves', (winL.pagehide || []).length === 1 && JSON.parse(store['poppit.v1']).sparks === 4242);
   G.loadState({ version: 2, lv: E.zeroLevels() }); delete store['poppit.backup'];
