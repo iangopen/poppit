@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const ORDER = ['econ.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'];
+const ORDER = ['econ.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'];
 const read = (f) => fs.readFileSync(path.join(root, 'src', f));
 
 const all = Buffer.concat(ORDER.map(read));
