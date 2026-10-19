@@ -24,6 +24,7 @@ const VARIANTS = {
   B_logGain: { gain: logGain },
   C_scaledFloorLog: { minRun: (e) => 3e6 * Math.pow(1 + 0.2 * e, 2), gain: logGain },
   // also tried, see the report
+  C_plusCost12: { minRun: (e) => 3e6 * Math.pow(1 + 0.2 * e, 2), gain: logGain, costScale: 12 },
   cost12: { costScale: 12 },
   scaledFloorOnly: { minRun: (e) => 1.2e6 * Math.pow(1 + 0.2 * e, 2) },
   moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12, sweep: 8 } },
