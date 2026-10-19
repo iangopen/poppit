@@ -106,6 +106,8 @@ const S0 = G.getS();
 // upgrades
 G.state.sparks = 1e7;
 Object.assign(G.state.lv, { lucky: 1, mint: 1, coral: 0 });
+G.buy('auto');
+ok('Helpers stay locked until Coral Pearls', G.state.lv.auto === 0 && E.UPG.auto.req(G.state.lv) === false);
 G.state.lv.coral = 1; G.updateShelf();
 ok('New techniques heading is hidden until Helpers can show, then appears', verbsHiddenAtStart && els.hVerbs.hidden === false);
 for (const id of ['auto', 'golden', 'sharp', 'fuel', 'tempo']) G.buy(id);

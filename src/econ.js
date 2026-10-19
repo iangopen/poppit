@@ -4,7 +4,7 @@ const ECON = (() => {
   // base cost, growth per level, max level, optional requirement on current levels
   const UPG = {
     tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
-    auto:   { base: 90,  grow: 1.3,  max: 20, group: 'verb' },
+    auto:   { base: 8500, grow: 1.3, max: 20, group: 'verb', req: (L) => L.coral > 0 }, // late game: opens with Coral Pearls, priced so the first helper lands ~80% of the way to the first Fresh Batch (tools/sim32.js)
     golden: { base: 400, grow: 2.3, max: 6, group: 'marble', req: (L) => L.mint > 0 },
     marble: { base: 7000, grow: 2.4, max: 5, group: 'marble', req: (L) => L.coral > 0 && L.tool >= 3 },
     sharp:  { base: 8,   grow: 1.55, max: 99, group: 'tune' },
