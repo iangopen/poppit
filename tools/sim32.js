@@ -110,6 +110,10 @@ const helperHours = (X, st, board, cells, seed) => [0, 1, 2, 3].reduce((a, k) =>
 function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
   freshRun(st);
   let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0, idleHelper = null, idleReady = null;
+  // Rose collection for the Pink Duck: normal Rose pops and their juice over the last 60 s (the sim cannot keep pearls)
+  const roseWin = [], roseSnap = () => { const w = roseWin.filter((r) => r[0] > t - 60), juice = win.reduce((a, x) => a + x[1], 0), n = w.length, rj = w.reduce((a, r) => a + r[1], 0);
+    return { perMin: n * 60 / Math.min(60, t), juiceEach: n ? rj / n : 0, share: juice > 0 ? rj / juice : 0 }; };
+  let roseHelper = null, roseReady = null;
   const black = { at: null, spawnsAfter: 0, expected: 0, spawned: 0, capped: 0, byTap: 0, byHelper: 0, hitsAtUnlock: null, hitsAtEnd: null, powerAtEnd: null };
   const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200];
   const fill = () => CELLS[st.lv.board];
@@ -156,6 +160,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
       const val = X.popValue(S, manual ? combo : 0, frenzy > 0, p.kind) * (p.sh ? X.SHINY_MULT : 1);
       gain += val; income[p.kind] += val; if (val > top.pop) top.pop = val;
       if (p.kind === 'black') black[manual ? 'byTap' : 'byHelper']++;
+      if (p.kind === 'pearl' && !p.sh) roseWin.push([t, val]);
       if (manual) meter += 1;
     };
     tapAcc += dt * tapsPerSec * S.toolSpeed * (S.sweep ? 2 : 1);
@@ -172,6 +177,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     sparks += gain; runEarned += gain; earnedWin += gain;
     if (gain > 0) win.push([t, gain]);
     while (win.length && win[0][0] <= t - 60) win.shift();
+    while (roseWin.length && roseWin[0][0] <= t - 60) roseWin.shift();
     const cands = candidates();
     let best = null; for (const c of cands) if (c.c <= sparks && (!best || c.s < best.s)) best = c;
     if (best) { sparks -= best.c; best.f(); if (best.n.startsWith('buy')) bought.push(best.n.slice(4) + '@' + (t / 60).toFixed(1)); }
@@ -183,20 +189,20 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     for (const c of left) if (c.c > top.cost) top.cost = c.c;
     // awayBonus() in src/ui.js for a 1 hour absence: idle rate at the pool's expected payout, half rate
     const away1h = () => X.idleRate(X.stats(st), X.PEARLS.map((p) => p.id), st.lv) * 3600 * 0.5;
-    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
+    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); roseHelper = roseSnap(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
     if (black.at == null && st.lv.black > 0) { black.at = t / 60; black.hitsAtUnlock = X.hitsNeeded('black', X.stats(st).power); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
-    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
+    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); roseReady = roseSnap(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
   }
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
   const gainF = ready == null ? 0 : X.collapseGain(runEarned);
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
-  return { furthest, helperAt, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { furthest, helperAt, roseHelper, roseReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose, measure) {
@@ -233,6 +239,12 @@ function report(name, v, verbose) {
       console.log('| checkpoint | helper-only juice, 1 h | half of it | away bonus, 1 h | away / half |'); console.log('|---|---|---|---|---|');
       const row = (name, idle, away) => console.log('| ' + name + ' | ' + big(idle) + ' | ' + big(idle / 2) + ' | ' + big(away) + ' | ' + (idle > 0 ? (away / (idle / 2)).toFixed(2) : '-') + ' |');
       rs.forEach((r, i) => { if (r.idleHelper != null) row('C' + (i + 1) + ' first helper (' + f1(r.helperAt) + ' min)', r.idleHelper, r.awayHelper); if (r.idleReady != null) row('C' + (i + 1) + ' Fresh Batch ready (' + f1(r.ready / 60) + ' min)', r.idleReady, r.awayReady); });
+      // the Pink Duck costs 10,000 kept Rose Pearls: at each checkpoint's Rose rate, how long they take and what selling them would have paid
+      console.log('\nRose collection for the Pink Duck (normal Rose pops over the 60 s before each checkpoint; keeping is not simulated):\n');
+      console.log('| checkpoint | Rose pops / min | minutes for 10,000 | juice 10,000 would sell for | Rose share of income |'); console.log('|---|---|---|---|---|');
+      const rrow = (name, r) => console.log('| ' + name + ' | ' + (r ? r.perMin.toFixed(0) : '-') + ' | ' + (r && r.perMin > 0 ? (10000 / r.perMin).toFixed(0) : '-') + ' | ' + (r ? big(10000 * r.juiceEach) : '-') + ' | ' + (r ? (100 * r.share).toFixed(1) + '%' : '-') + ' |');
+      rrow('C1 first helper (' + f1(rs[0].helperAt) + ' min)', rs[0].roseHelper); rrow('C1 first Fresh Batch (' + f1(rs[0].ready / 60) + ' min)', rs[0].roseReady);
+      const l = rs[rs.length - 1]; rrow('C' + rs.length + ' Fresh Batch (' + f1(l.ready / 60) + ' min)', l.roseReady);
       console.log('\nBlack Pearls per cycle:\n');
       console.log('| cycle | unlocked (min) | run length (min) | spawns after unlock | Blacks expected | spawned | spawns turned Rose by the cap | popped by taps | popped by helpers | hits at unlock | hits at end (power) |'); console.log('|---|---|---|---|---|---|---|---|---|---|---|');
       rs.forEach((r, i) => { const b = r.black; console.log('| ' + (i + 1) + ' | ' + f1(b.at) + ' | ' + f1(r.minutes) + ' | ' + b.spawnsAfter + ' | ' + b.expected.toFixed(2) + ' | ' + b.spawned + ' | ' + b.capped + ' | ' + b.byTap + ' | ' + b.byHelper + ' | ' + (b.hitsAtUnlock == null ? '-' : b.hitsAtUnlock) + ' | ' + b.hitsAtEnd + ' (' + b.powerAtEnd + ') |'); });
