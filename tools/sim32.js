@@ -3,6 +3,7 @@
 //   node tools/sim32.js --variant=NAME  one tuning option from VARIANTS below (nothing in src/ changes)
 //   node tools/sim32.js --wait=25       the player keeps playing until minute 25 even if Fresh Batch is ready sooner
 //   node tools/sim32.js --compare       one summary line per variant, profile and player policy
+//   node tools/sim32.js --duck                the player owns the Pink Duck from the start (no ducks by default)
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
 const E = require('../src/econ.js');
 const CELLS = [120, 252, 440];
@@ -17,7 +18,7 @@ function mulberry32(a) {
 
 // Tuning options for docs/balance-report.md. Each overrides only the levers it names; the sim never edits src/econ.js.
 // minRun may depend on Flavors (echoes); gain replaces collapseGain(run); base and max override an upgrade's base cost or max level;
-// flavorBonus replaces FLAVOR_BONUS (what each Flavor adds to every payout).
+// flavorBonus replaces FLAVOR_BONUS (what each Flavor adds to every payout); artifacts lists artifact ids owned from the start.
 const VARIANTS = {
   baseline: {},
   scaledFloor: { minRun: (e) => E.COLLAPSE_MIN_RUN * (1 + 0.2 * e) }, // the floor rises with the Flavor payout multiplier
@@ -25,6 +26,7 @@ const VARIANTS = {
   moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12 } },
   flavor10: { flavorBonus: 0.1 }, // each Flavor adds 10% instead of 20%
   flavor5: { flavorBonus: 0.05 },
+  pinkDuck: { artifacts: ['pink_duck'] }, // same as --duck
 };
 
 // The economy the sim plays: ECON itself, with a variant's levers swapped in.
@@ -194,12 +196,13 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
-  return { furthest, helperAt, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + X.FLAVOR_BONUS * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { furthest, helperAt, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose, measure) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
-  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {} };
+  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {} };
+  for (const id of v.artifacts || []) st.artifacts[id] = true; // artifacts are never wiped by Fresh Batch
   const out = [];
   for (let c = 0; c < CYCLES; c++) { const r = cycle(X, st, rng, taps, skill, verbose, v.waitMin, measure ? 1000 * seed + 10 * c : 0); out.push(r); if (r.ready == null) break; }
   return out;
@@ -208,7 +211,7 @@ function play(v, profile, verbose, measure) {
 const f1 = (x) => (x == null ? '-' : x.toFixed(1));
 const big = (x) => (x >= 1e6 ? (x / 1e6).toFixed(x >= 1e8 ? 0 : 1) + 'M' : x >= 1e4 ? (x / 1e3).toFixed(0) + 'K' : Math.round(x).toString());
 function report(name, v, verbose) {
-  console.log('# variant: ' + name + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready'));
+  console.log('# variant: ' + name + (v.artifacts && v.artifacts.length ? ', owns ' + v.artifacts.join(', ') : '') + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready'));
   for (const p of PROFILES) {
     const rs = play(v, p, verbose, !v.waitMin), cols = rs.map((_, i) => 'C' + (i + 1));
     console.log('\n## ' + p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + ', seed ' + p[3] + ')\n');
@@ -252,5 +255,5 @@ module.exports = { play, PROFILES, VARIANTS, econ, helperHour }; // tests/away.t
 if (require.main === module) {
   const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
   if (arg('compare')) compare();
-  else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}), !!arg('log')); }
+  else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}, arg('duck') ? { artifacts: ['pink_duck'] } : {}), !!arg('log')); }
 }
