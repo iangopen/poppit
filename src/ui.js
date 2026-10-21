@@ -291,8 +291,9 @@ const ART_ICON = { pink_duck: DUCK_SVG };
 let artSig = '';
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
-    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts),
-    cost: a.cost.map((c) => ({ kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's' })),
+    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
+    cost: a.cost.map((c) => (ARTS.isMat(c) ? { kind: c.id, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, label: (FORGE.byId(c.id) || { name: c.id }).name, unit: 'in stock' }
+      : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
   })) }));
 }
 const whole2 = (n) => Math.floor(n).toLocaleString('en-US');
@@ -302,13 +303,13 @@ function updateArts() {
   if (sig === artSig) return; artSig = sig;
   $('artHalls').innerHTML = v.map((h) => '<section class="hall"><h4>' + h.name + '</h4><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map((a) =>
     '<div class="acard' + (a.owned ? ' own' : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div><h5>' + a.name + '</h5><p class="ad">' + a.desc + '</p>' +
-    a.cost.map((c) => '<div class="acost"><span>' + whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' kept</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
+    a.cost.map((c) => '<div class="acost"><span>' + whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
       (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
     (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
     '</div>').join('') + '</div></section>').join('');
 }
 function craftArtifact(id) {
-  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV)) return false;
+  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock)) return false;
   recalc(); const a = ARTS.byId(id);
   toast(a.name + ' crafted! ' + a.description); Snd.golden(); addShake(1.5);
   artSig = ''; updateArts(); updatePack(); updateHud(0.016); save(); return true;
@@ -620,7 +621,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, keep: state.keep, t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, keep: state.keep, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -669,16 +670,29 @@ function loadState(raw) {
   const da = objOf(d.artifacts), dk = objOf(d.keep); // only known ids set to true; anything else is dropped
   state.artifacts = {}; for (const a of ARTS.ARTIFACTS) if (da[a.id] === true) state.artifacts[a.id] = true;
   state.keep = {}; for (const t of ECON.PEARLS) if (dk[t.id] === true) state.keep[t.id] = true;
+  state.forge = FORGE.fromSave(d.forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
   syncTop();
   return 'ok';
 }
+// back from away (boot, or a tab that was hidden): forge jobs whose end time has passed finish, helpers pay half their idle rate
 function awayBonus(secs) {
   recalc();
-  if (S.autoRate <= 0 || !(secs >= 20)) return; // also refuses NaN from a broken save time
-  const gain = ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5; // what helpers alone would earn, halved
-  state.sparks += gain; state.runEarned += gain; state.lifetime += gain;
-  toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice while you were away');
+  const jobs = forgeCatchUp(), helped = S.autoRate > 0 && secs >= 20; // secs >= 20 also refuses NaN from a broken save time
+  const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5 : 0; // what helpers alone would earn, halved
+  if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; }
+  const done = jobs + (jobs === 1 ? ' forge job' : ' forge jobs') + ' finished';
+  if (gain > 0) toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice' + (jobs ? ' and ' + done : '') + ' while you were away');
+  else if (jobs) toast('Welcome back! ' + done[0].toUpperCase() + done.slice(1) + ' while you were away');
+  return { gain, jobs };
 }
+/* ----- forge engine hooks (the forge panel comes later): timers run on wall-clock time ----- */
+// finish every job whose end time has passed; returns how many
+function forgeCatchUp() { return FORGE.collect(state.forge, Date.now()); }
+// frenzy speeds the forge only while the page is open and visible
+function forgeTick() { const now = Date.now(); FORGE.setFrenzy(state.forge, frenzyT > 0 && !document.hidden, now); FORGE.collect(state.forge, now); }
+function forgeStart(slot, mat) { if (!FORGE.start(state.forge, slot, mat, state.inv, Date.now(), state.invV)) return false; updatePack(); save(); return true; }
+function forgeStrike(slot) { return FORGE.strike(state.forge, Date.now(), slot); }
+function forgeBuy(id) { const c = FORGE.buy(state.forge, id, state.sparks, Date.now()); if (!c) return false; state.sparks -= c; save(); return true; }
 
 /* ----- buttons ----- */
 function paintMute() { $('muteBtn').textContent = state.muted ? 'Sound off' : 'Sound on'; }
@@ -702,7 +716,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
 });
 
@@ -820,6 +834,7 @@ function frame(ts) {
   hudT += dt; saveT += dt;
   if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); hudT = 0; }
   if (saveT > 5) { save(); saveT = 0; }
+  forgeTick();
   render();
   if (!$('tools').hidden) drawPedestal(ts);
   adapt(performance.now() - w0, dt);
@@ -830,12 +845,12 @@ function start(data) {
   if (loaded === 'newer') { saveBlocked = true; toast('Your save is from a newer version of Poppit, so it was not loaded or changed. Reload to update.'); }
   const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
-  if (Number.isFinite(away) && away > 0) awayBonus((Date.now() - away) / 1000);
+  awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
   paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
-  window.addEventListener('pagehide', () => save()); // iOS Safari does not reliably fire visibilitychange when a tab is closed
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { FORGE.setFrenzy(state.forge, false, Date.now()); save(); } }); // no frenzy speed while hidden
+  window.addEventListener('pagehide', () => { FORGE.setFrenzy(state.forge, false, Date.now()); save(); }); // iOS Safari does not reliably fire visibilitychange when a tab is closed
   requestAnimationFrame(frame);
 }
 (function boot() {

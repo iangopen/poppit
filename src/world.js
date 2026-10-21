@@ -9,7 +9,7 @@ const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const INV_IDS = ECON.PEARLS.flatMap((t) => [t.id, t.id + ':s']); // normal and shiny stacks
 const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); return o; };
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} };
+const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {}, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery

@@ -22,8 +22,8 @@ test('the head and the script sit inside <head> and <body>', () => {
   const h = html.indexOf('</head>'), b = html.indexOf('<body>');
   assert.ok(h > html.indexOf('</style>') && b > h && b < html.indexOf('<div id="app">') && html.lastIndexOf('<script>') > b);
 });
-test('the script is every src module in build order, artifacts.js first', () => {
-  const order = ['artifacts.js', 'econ.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'];
+test('the script is every src module in build order, artifacts.js and forge.js first', () => {
+  const order = ['artifacts.js', 'forge.js', 'econ.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'];
   assert.strictEqual(html, read('src', 'head.html') + order.map((f) => read('src', f)).join('') + read('src', 'tail.html'));
   assert.ok(html.includes('const ARTS = (() => {') && html.indexOf('const ARTS') < html.indexOf('const ECON'));
 });

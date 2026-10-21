@@ -56,20 +56,20 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   st.col.pearl.popped = pop0; st.col.pearl.sPopped = sp0;
 
   // save v4
-  ok('SAVE_VERSION is 4', G.SAVE_VERSION === 4);
+  ok('SAVE_VERSION is 5 (the forge came after save v4)', G.SAVE_VERSION === 5);
   const m = G.migrateSave({ version: 3, sparks: 5, inv: { pearl: 50 } }).save;
-  ok('a v3 save migrates with no artifacts and nothing kept', m.version === 4 && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
+  ok('a v3 save migrates with no artifacts and nothing kept', m.version === G.SAVE_VERSION && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
   ok('and loads that way', G.loadState({ version: 3, inv: { pearl: 50 } }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && st.inv.pearl === 50);
-  ok('a v1 save walks every step to v4', G.migrateSave({ sparks: 1, lv: {} }).save.version === 4);
+  ok('a v1 save walks every step to the current version', G.migrateSave({ sparks: 1, lv: {} }).save.version === G.SAVE_VERSION);
   ok('loaded artifacts and Keep keep only known ids set to true', G.loadState({ version: 4, artifacts: { pink_duck: true, golden_goose: true, x: 'yes' }, keep: { pearl: true, blue: 1, dragon: true, golden: 'yes', mint: true } }) === 'ok' &&
     JSON.stringify(st.artifacts) === '{"pink_duck":true}' && JSON.stringify(st.keep) === '{"pearl":true,"mint":true}', JSON.stringify([st.artifacts, st.keep]));
   ok('a non-object artifacts or keep loads as empty', G.loadState({ version: 4, artifacts: ['pink_duck'], keep: 'pearl' }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}');
-  ok('a v5 save is refused', G.loadState({ version: 5, artifacts: {} }) === 'newer');
+  ok('a save newer than SAVE_VERSION is refused', G.loadState({ version: G.SAVE_VERSION + 1, artifacts: {} }) === 'newer');
 
   // round trip: serialize, save code, import with its backup, restore
   G.loadState({ version: 4, sparks: 77, artifacts: { pink_duck: true }, keep: { pearl: true, coral: true }, inv: { pearl: 1234 } }); G.recalc();
   const ser = G.serialize();
-  ok('serialize writes artifacts and keep', ser.version === 4 && ser.artifacts.pink_duck === true && ser.keep.pearl === true && ser.keep.coral === true);
+  ok('serialize writes artifacts and keep', ser.version === G.SAVE_VERSION && ser.artifacts.pink_duck === true && ser.keep.pearl === true && ser.keep.coral === true);
   const code = G.encodeSave(ser);
   G.loadState({ version: 4 });
   ok('a save code carries artifacts and keep', G.loadState(G.decodeSave(code)) === 'ok' && st.artifacts.pink_duck === true && st.keep.coral === true && st.inv.pearl === 1234);

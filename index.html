@@ -507,20 +507,25 @@ const ARTS = (() => {
   const PINK_DUCK_PAYOUT = 1.4; // Ian's value (was 1.25); may change again
   // halls in display order; the Artifacts panel draws one section per hall
   const HALLS = [{ id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make every pop pay more.' }];
-  // cost: inventory keys and quantities (a pearl id now; forge materials later). bonus: { type: 'payout', value } multiplies every payout.
+  // cost lines: { kind: <pearl id>, qty } spends normal pearls from the backpack; { kind: 'material', id, qty } spends forge
+  // materials from the forge stock. bonus: { type: 'payout', value } multiplies every payout.
   const ARTIFACTS = [
     { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
   ];
   const byId = (id) => ARTIFACTS.find((a) => a.id === id) || null;
-  function canCraft(id, inv, owned) {
+  const isMat = (c) => c.kind === 'material';
+  // how many of a cost line's item the player has: pearls from inv, materials from the forge stock
+  const have = (c, inv, stock) => (isMat(c) ? (stock && stock[c.id]) || 0 : (inv && inv[c.kind]) || 0);
+  function canCraft(id, inv, owned, stock) {
     const a = byId(id);
     if (!a || (owned && owned[id] === true)) return false;
-    return a.cost.every((c) => ((inv && inv[c.kind]) || 0) >= c.qty);
+    return a.cost.every((c) => have(c, inv, stock) >= c.qty);
   }
-  // consumes exactly the cost (and the matching share of each stack's stored value) and marks it owned
-  function craft(id, inv, owned, invV) {
-    if (!canCraft(id, inv, owned)) return false;
+  // consumes exactly the cost (and the matching share of each pearl stack's stored value) and marks it owned
+  function craft(id, inv, owned, invV, stock) {
+    if (!canCraft(id, inv, owned, stock)) return false;
     for (const c of byId(id).cost) {
+      if (isMat(c)) { stock[c.id] -= c.qty; if (!stock[c.id]) delete stock[c.id]; continue; }
       const have = inv[c.kind];
       if (invV && invV[c.kind] != null) invV[c.kind] = have - c.qty > 0 ? invV[c.kind] * (have - c.qty) / have : 0;
       inv[c.kind] = have - c.qty;
@@ -533,9 +538,130 @@ const ARTS = (() => {
     if (owned) for (const a of ARTIFACTS) if (owned[a.id] === true && a.bonus.type === 'payout') m *= a.bonus.value;
     return m;
   }
-  return { PINK_DUCK_PAYOUT, HALLS, ARTIFACTS, byId, canCraft, craft, payoutMult };
+  return { PINK_DUCK_PAYOUT, HALLS, ARTIFACTS, byId, isMat, have, canCraft, craft, payoutMult };
 })();
 if (typeof module !== 'undefined') module.exports = ARTS;
+/* ---------- Forge: pearls become crafting materials over time. Pure, no DOM; every number is data. ---------- */
+// A job is { mat, start, end } in ms timestamps. end is planned at the forge's current speed (rate): when the rate
+// changes (frenzy, a Forge Speed level) the remaining work is re-timed from now. Saves always store ends at the
+// no-frenzy rate (toSave), so a closed or hidden page never carries frenzy, and a job is done only when now >= end:
+// a clock that jumps backwards can delay a job but never finish it early.
+const FORGE = (() => {
+  // one material per pearl type: the quantity falls and the time doubles per roster position
+  const MATERIALS = [
+    { id: 'rose_dust', name: 'Rose Dust', recipe: { kind: 'pearl', qty: 100, secs: 30 } },
+    { id: 'blue_dust', name: 'Blue Dust', recipe: { kind: 'blue', qty: 70, secs: 60 } },
+    { id: 'mint_dust', name: 'Mint Dust', recipe: { kind: 'mint', qty: 45, secs: 120 } },
+    { id: 'golden_dust', name: 'Golden Dust', recipe: { kind: 'golden', qty: 30, secs: 240 } },
+    { id: 'violet_dust', name: 'Violet Dust', recipe: { kind: 'violet', qty: 20, secs: 480 } },
+    { id: 'coral_dust', name: 'Coral Dust', recipe: { kind: 'coral', qty: 14, secs: 960 } },
+    { id: 'marble_dust', name: 'Marble Dust', recipe: { kind: 'marble', qty: 10, secs: 1920 } },
+    { id: 'opal_dust', name: 'Opal Dust', recipe: { kind: 'opal', qty: 7, secs: 3840 } },
+    { id: 'ruby_dust', name: 'Ruby Dust', recipe: { kind: 'ruby', qty: 5, secs: 7680 } },
+    { id: 'black_dust', name: 'Black Dust', recipe: { kind: 'black', qty: 3, secs: 15360 } }, // 4 h 16 min
+  ];
+  const BASE_SLOTS = 1;
+  const SPEED_PER_LEVEL = 0.25; // Forge Speed: +25% per level
+  const FRENZY_FACTOR = 2; // while frenzy is on and the page is open
+  const STRIKE_SECS = 1, STRIKE_CAP = 5, STRIKE_WINDOW_MS = 1000; // a Strike takes 1 s off the running job, at most 5 per second
+  // upgrades bought with juice and kept through Fresh Batch; cost = ceil(base * grow^level)
+  const UPG = {
+    speed: { name: 'Forge Speed', base: 20000, grow: 2.8, max: 10 },
+    slot: { name: 'Extra Slot', base: 250000, grow: 10, max: 3 },
+  };
+  const byId = (id) => MATERIALS.find((m) => m.id === id) || null;
+  const blank = () => ({ slots: [null], stock: {}, lv: { speed: 0, slot: 0 }, rate: 1, frenzy: false, strikes: [] });
+  const slotCount = (f) => BASE_SLOTS + f.lv.slot;
+  const speedFactor = (speedLv, frenzy) => (1 + SPEED_PER_LEVEL * speedLv) * (frenzy ? FRENZY_FACTOR : 1);
+  const baseRate = (f) => speedFactor(f.lv.speed, false);
+  // re-time every running job for a new speed; the work left (ms at rate 1) never exceeds the recipe
+  function setRate(f, rate, now) {
+    for (const j of f.slots) {
+      if (!j || now >= j.end) continue;
+      const t = Math.max(now, j.start), work = Math.min(byId(j.mat).recipe.secs * 1000, (j.end - t) * f.rate); // a clock behind the start counts from the start
+      j.end = t + work / rate;
+    }
+    f.rate = rate;
+  }
+  function setFrenzy(f, on, now) { if (f.frenzy !== !!on) { f.frenzy = !!on; setRate(f, speedFactor(f.lv.speed, f.frenzy), now); } }
+  function canStart(f, slot, matId, inv) {
+    const m = byId(matId);
+    return !!m && Number.isInteger(slot) && slot >= 0 && slot < slotCount(f) && !f.slots[slot] && ((inv && inv[m.recipe.kind]) || 0) >= m.recipe.qty;
+  }
+  // takes the recipe's normal pearls (and their share of stored sale value) right away
+  function start(f, slot, matId, inv, now, invV) {
+    if (!canStart(f, slot, matId, inv)) return false;
+    const r = byId(matId).recipe, have = inv[r.kind];
+    if (invV && invV[r.kind] != null) invV[r.kind] = have - r.qty > 0 ? invV[r.kind] * (have - r.qty) / have : 0;
+    inv[r.kind] = have - r.qty;
+    f.slots[slot] = { mat: matId, start: now, end: now + r.secs * 1000 / f.rate };
+    return true;
+  }
+  // 0..1 by work done; a clock behind the start reads 0
+  function progress(f, slot, now) {
+    const j = f.slots[slot]; if (!j) return 0;
+    if (now >= j.end) return 1;
+    const total = byId(j.mat).recipe.secs * 1000, left = Math.min(total, (j.end - now) * f.rate);
+    return now < j.start ? 0 : 1 - left / total;
+  }
+  const secsLeft = (f, slot, now) => { const j = f.slots[slot]; return j ? Math.max(0, (j.end - now) / 1000) : 0; };
+  // a done job puts one material in the stock and frees its slot; returns the material id or null
+  function finish(f, slot, now) {
+    const j = f.slots[slot];
+    if (!j || now < j.end) return null;
+    f.stock[j.mat] = (f.stock[j.mat] || 0) + 1; f.slots[slot] = null;
+    return j.mat;
+  }
+  // finishes every done job; returns how many
+  function collect(f, now) { let n = 0; for (let i = 0; i < f.slots.length; i++) if (finish(f, i, now)) n++; return n; }
+  // Strike: 1 s off a running job (the first running one unless a slot is named), capped at 5 per rolling second
+  function strike(f, now, slot) {
+    f.strikes = (f.strikes || []).filter((t) => t > now - STRIKE_WINDOW_MS && t <= now);
+    if (f.strikes.length >= STRIKE_CAP) return false;
+    const i = slot == null ? f.slots.findIndex((j) => j && now < j.end) : slot, j = f.slots[i];
+    if (!j || now >= j.end) return false;
+    j.end = Math.max(now, j.start, j.end - STRIKE_SECS * 1000);
+    f.strikes.push(now);
+    return true;
+  }
+  const upgCost = (id, lvl) => Math.ceil(UPG[id].base * Math.pow(UPG[id].grow, lvl));
+  const canBuy = (f, id, sparks) => !!UPG[id] && f.lv[id] < UPG[id].max && sparks >= upgCost(id, f.lv[id]);
+  // returns the juice to take (0 = not bought); Forge Speed re-times running jobs, Extra Slot opens an empty slot
+  function buy(f, id, sparks, now) {
+    if (!canBuy(f, id, sparks)) return 0;
+    const c = upgCost(id, f.lv[id]); f.lv[id]++;
+    if (id === 'speed') setRate(f, speedFactor(f.lv.speed, f.frenzy), now);
+    while (f.slots.length < slotCount(f)) f.slots.push(null);
+    return c;
+  }
+  // what a save stores: ends re-timed to the no-frenzy rate, no transient fields
+  function toSave(f, now) {
+    const b = baseRate(f);
+    const at = (j) => Math.max(now, j.start);
+    const slots = f.slots.map((j) => (j ? { mat: j.mat, start: j.start, end: now >= j.end || f.rate === b ? j.end : at(j) + Math.min(byId(j.mat).recipe.secs * 1000, (j.end - at(j)) * f.rate) / b } : null));
+    return { slots, stock: Object.assign({}, f.stock), lv: { speed: f.lv.speed, slot: f.lv.slot } };
+  }
+  // untrusted input (a save) -> a valid forge at the no-frenzy rate; bad jobs are dropped, numbers clamped
+  function fromSave(d) {
+    const f = blank(), o = d && typeof d === 'object' && !Array.isArray(d) ? d : {}, lv = o.lv && typeof o.lv === 'object' ? o.lv : {};
+    const lvl = (x, max) => { const n = Math.floor(+x); return Number.isFinite(n) && n > 0 ? Math.min(max, n) : 0; };
+    f.lv.speed = lvl(lv.speed, UPG.speed.max); f.lv.slot = lvl(lv.slot, UPG.slot.max); f.rate = baseRate(f);
+    const stock = o.stock && typeof o.stock === 'object' ? o.stock : {};
+    for (const m of MATERIALS) { const n = lvl(stock[m.id], 1e15); if (n > 0) f.stock[m.id] = n; }
+    const src = Array.isArray(o.slots) ? o.slots : [];
+    f.slots = [];
+    for (let i = 0; i < slotCount(f); i++) {
+      const j = src[i], m = j && byId(j.mat);
+      const okT = (t) => typeof t === 'number' && Number.isFinite(t) && t >= 0;
+      if (!m || !okT(j.start) || !okT(j.end)) { f.slots.push(null); continue; }
+      f.slots.push({ mat: m.id, start: j.start, end: Math.min(Math.max(j.end, j.start), j.start + m.recipe.secs * 1000) });
+    }
+    return f;
+  }
+  return { MATERIALS, BASE_SLOTS, SPEED_PER_LEVEL, FRENZY_FACTOR, STRIKE_SECS, STRIKE_CAP, STRIKE_WINDOW_MS, UPG, byId, blank, slotCount, speedFactor, baseRate,
+    setRate, setFrenzy, canStart, start, progress, secsLeft, finish, collect, strike, upgCost, canBuy, buy, toSave, fromSave };
+})();
+if (typeof module !== 'undefined') module.exports = FORGE;
 'use strict';
 /* ---------- Economy: pure functions, no DOM. Tested headlessly in node. ---------- */
 const ECON = (() => {
@@ -747,7 +873,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -775,6 +901,8 @@ const MIGRATIONS = {
   },
   // v3 had no artifacts and no Keep: none owned, nothing kept
   3: (d) => Object.assign({}, d, { version: 4, artifacts: isObj(d.artifacts) ? d.artifacts : {}, keep: isObj(d.keep) ? d.keep : {} }),
+  // v4 had no forge: one empty slot, no materials, no forge upgrades
+  4: (d) => Object.assign({}, d, { version: 5, forge: isObj(d.forge) ? d.forge : { slots: [null], stock: {}, lv: { speed: 0, slot: 0 } } }),
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
@@ -1027,7 +1155,7 @@ const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const INV_IDS = ECON.PEARLS.flatMap((t) => [t.id, t.id + ':s']); // normal and shiny stacks
 const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); return o; };
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} };
+const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {}, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
@@ -2010,8 +2138,9 @@ const ART_ICON = { pink_duck: DUCK_SVG };
 let artSig = '';
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
-    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts),
-    cost: a.cost.map((c) => ({ kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's' })),
+    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
+    cost: a.cost.map((c) => (ARTS.isMat(c) ? { kind: c.id, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, label: (FORGE.byId(c.id) || { name: c.id }).name, unit: 'in stock' }
+      : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
   })) }));
 }
 const whole2 = (n) => Math.floor(n).toLocaleString('en-US');
@@ -2021,13 +2150,13 @@ function updateArts() {
   if (sig === artSig) return; artSig = sig;
   $('artHalls').innerHTML = v.map((h) => '<section class="hall"><h4>' + h.name + '</h4><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map((a) =>
     '<div class="acard' + (a.owned ? ' own' : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div><h5>' + a.name + '</h5><p class="ad">' + a.desc + '</p>' +
-    a.cost.map((c) => '<div class="acost"><span>' + whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' kept</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
+    a.cost.map((c) => '<div class="acost"><span>' + whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
       (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
     (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
     '</div>').join('') + '</div></section>').join('');
 }
 function craftArtifact(id) {
-  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV)) return false;
+  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock)) return false;
   recalc(); const a = ARTS.byId(id);
   toast(a.name + ' crafted! ' + a.description); Snd.golden(); addShake(1.5);
   artSig = ''; updateArts(); updatePack(); updateHud(0.016); save(); return true;
@@ -2339,7 +2468,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, keep: state.keep, t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, keep: state.keep, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -2388,16 +2517,29 @@ function loadState(raw) {
   const da = objOf(d.artifacts), dk = objOf(d.keep); // only known ids set to true; anything else is dropped
   state.artifacts = {}; for (const a of ARTS.ARTIFACTS) if (da[a.id] === true) state.artifacts[a.id] = true;
   state.keep = {}; for (const t of ECON.PEARLS) if (dk[t.id] === true) state.keep[t.id] = true;
+  state.forge = FORGE.fromSave(d.forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
   syncTop();
   return 'ok';
 }
+// back from away (boot, or a tab that was hidden): forge jobs whose end time has passed finish, helpers pay half their idle rate
 function awayBonus(secs) {
   recalc();
-  if (S.autoRate <= 0 || !(secs >= 20)) return; // also refuses NaN from a broken save time
-  const gain = ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5; // what helpers alone would earn, halved
-  state.sparks += gain; state.runEarned += gain; state.lifetime += gain;
-  toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice while you were away');
+  const jobs = forgeCatchUp(), helped = S.autoRate > 0 && secs >= 20; // secs >= 20 also refuses NaN from a broken save time
+  const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5 : 0; // what helpers alone would earn, halved
+  if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; }
+  const done = jobs + (jobs === 1 ? ' forge job' : ' forge jobs') + ' finished';
+  if (gain > 0) toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice' + (jobs ? ' and ' + done : '') + ' while you were away');
+  else if (jobs) toast('Welcome back! ' + done[0].toUpperCase() + done.slice(1) + ' while you were away');
+  return { gain, jobs };
 }
+/* ----- forge engine hooks (the forge panel comes later): timers run on wall-clock time ----- */
+// finish every job whose end time has passed; returns how many
+function forgeCatchUp() { return FORGE.collect(state.forge, Date.now()); }
+// frenzy speeds the forge only while the page is open and visible
+function forgeTick() { const now = Date.now(); FORGE.setFrenzy(state.forge, frenzyT > 0 && !document.hidden, now); FORGE.collect(state.forge, now); }
+function forgeStart(slot, mat) { if (!FORGE.start(state.forge, slot, mat, state.inv, Date.now(), state.invV)) return false; updatePack(); save(); return true; }
+function forgeStrike(slot) { return FORGE.strike(state.forge, Date.now(), slot); }
+function forgeBuy(id) { const c = FORGE.buy(state.forge, id, state.sparks, Date.now()); if (!c) return false; state.sparks -= c; save(); return true; }
 
 /* ----- buttons ----- */
 function paintMute() { $('muteBtn').textContent = state.muted ? 'Sound off' : 'Sound on'; }
@@ -2421,7 +2563,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
 });
 
@@ -2539,6 +2681,7 @@ function frame(ts) {
   hudT += dt; saveT += dt;
   if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); hudT = 0; }
   if (saveT > 5) { save(); saveT = 0; }
+  forgeTick();
   render();
   if (!$('tools').hidden) drawPedestal(ts);
   adapt(performance.now() - w0, dt);
@@ -2549,12 +2692,12 @@ function start(data) {
   if (loaded === 'newer') { saveBlocked = true; toast('Your save is from a newer version of Poppit, so it was not loaded or changed. Reload to update.'); }
   const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
-  if (Number.isFinite(away) && away > 0) awayBonus((Date.now() - away) / 1000);
+  awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
   paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
-  window.addEventListener('pagehide', () => save()); // iOS Safari does not reliably fire visibilitychange when a tab is closed
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { FORGE.setFrenzy(state.forge, false, Date.now()); save(); } }); // no frenzy speed while hidden
+  window.addEventListener('pagehide', () => { FORGE.setFrenzy(state.forge, false, Date.now()); save(); }); // iOS Safari does not reliably fire visibilitychange when a tab is closed
   requestAnimationFrame(frame);
 }
 (function boot() {

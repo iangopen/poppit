@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -58,6 +58,8 @@ const MIGRATIONS = {
   },
   // v3 had no artifacts and no Keep: none owned, nothing kept
   3: (d) => Object.assign({}, d, { version: 4, artifacts: isObj(d.artifacts) ? d.artifacts : {}, keep: isObj(d.keep) ? d.keep : {} }),
+  // v4 had no forge: one empty slot, no materials, no forge upgrades
+  4: (d) => Object.assign({}, d, { version: 5, forge: isObj(d.forge) ? d.forge : { slots: [null], stock: {}, lv: { speed: 0, slot: 0 } } }),
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
