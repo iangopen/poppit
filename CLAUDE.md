@@ -23,13 +23,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **tool unique upgrades:** a `TOOLS` entry can carry `unique: { id, name, desc, base, grow, max, effect }`. It is bought on that tool's page in the Tools panel and priced by `uniqueCost(i, lvl)` (`base × COST_SCALE × grow^lvl`). Its level lives at `state.toolUp[i].u`, next to `p` and `s`, and Fresh Batch wipes it like the others. `stats()` merges `effect(level)` in only for the **equipped** tool with level > 0, so the upgrade works only while that tool is in hand.
     - Only the Steel Pin has one today: **Wide Swing** (`effect` turns on `sweep` and sets `brush`), with the old shop prices (base 35, grow 3.4, max 5).
     - The UI reads the definition (`updateToolPanel`'s `uRow`, and `toolUpgrade()`). Tools without one show the muted "No special upgrade yet" line. Add a tool's upgrade by adding its `unique` entry; the panel needs no new code.
-  - **Helpers** (`UPG.auto`) are late game: they need Coral Pearls and cost base 8500 (grow 1.3, max 20), priced so the first helper lands about 80% of the way to the first Fresh Batch in the sim. Helper Speed still needs Helpers.
+  - **Helpers** (`UPG.auto`) are late game: they need Coral Pearls and cost base 45000 (grow 1.3, max 20), priced so the first helper lands 70–90% of the way to the first Fresh Batch in the sim. Helper Speed still needs Helpers.
   - **Chain Reaction no longer exists.** `tests/econ32.test.js` fails if `src/` or `tools/` mention "chain" outside the save migration that refunds it.
-  - the pearl roster: `PEARLS`, with hp, payout `mult` and spawn `cap`;
+  - the pearl roster: `PEARLS`, with hp, payout and spawn `cap`. **Payouts are derived:** each entry's table value is kept as `baseMult`, and `mult` = `baseMult × PAYOUT_STEEPNESS^rank` rounded to two significant figures (`PAYOUT_STEEPNESS = 1.5`, Rose is rank 0). This gives 1, 7.5, 27, 100, 350, 1,100, 4,000, 14K, 51K and 190K. Change the curve with the constant, not the table;
   - spawn weights (`NEW_BASE`, `typeWeight`);
-  - `COST_SCALE`, `COLLAPSE_MIN_RUN` and `collapseGain` / `collapseReady`;
+  - **the global dials**, the only levers the last rebalance moved: `COST_SCALE = 2.5`, Helpers base 45000, `COLLAPSE_MIN_RUN = 5e6`, and `collapseGain = floor(sqrt(run / COLLAPSE_GAIN_DIV))` with `COLLAPSE_GAIN_DIV = 1.25e6` (exactly 2 Flavors at the floor). `collapseReady` is unchanged;
+  - frenzy: `stats().frenzyNeed = 200 - 24 × Fuel` (4x the old 50 - 6 × Fuel). Duration 7 s, +1 per tap, +0.25 per helper pop;
+  - `idleRate(S, pool, L)` = autoRate × popBase × echoMult × `popEV(pool, L)` (sum of chance × payout over the pool). `awayBonus()` pays 50% of it, capped at 8 h;
   - `stats()` and `popValue()`.
-  - It is also `require`d by node tests and the sim, so **every economy number lives here**. The number formatters `fmt` / `fmtV` sit at the bottom of it, outside the `ECON` export.
+  - It is also `require`d by node tests and the sim, so **every economy number lives here**. The number formatters `fmt` / `fmtV` / `fmtX` sit at the bottom of it, outside the `ECON` export. `fmtX` prints payouts (`7.5`, `4,000`, `14K`, `1.5M`); the shop text, the Collection book and the pool cards use it.
 - **`src/save.js`** holds pure save helpers with no DOM: `encodeSave` / `decodeSave`, plus `SAVE_VERSION`, `MIGRATIONS` and `migrateSave`.
 - **`src/world.js`** holds state, board, spawning (`trySpawn` enforces the per-type cap) and effects.
 - **`src/render.js`** draws the canvas.
@@ -80,15 +82,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `tests/harness32.js`: runs the real concatenated game against stubbed DOM APIs and drives it like a player. It prints PASS/FAIL lines and ends with `ALL PASSED`. It pulls in `tests/pearl_tests.js`.
 - `npm run sim`: runs `tools/sim32.js`, the seeded pacing sim. It plays 6 Fresh Batch cycles for a casual and an engaged profile, and the output is identical run to run.
   - `--wait=25`: the player keeps going to minute 25 before pressing Fresh Batch.
-  - `--variant=NAME`: plays a tuning option.
+  - `--variant=NAME`: plays a tuning option (`scaledFloor`, `moreFlavors`, `moreTuneLevels`).
   - `--compare`: prints a summary of every variant.
   - `--log`: prints a per-mark pacing log.
   - Variants override levers inside the sim only. The sim's copies of the cost formulas are checked against `src/econ.js` at startup.
 
-## State: real and verified (2026-10-18)
+## State: real and verified (2026-10-21)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 24 unit tests, 6 page tests and 120 harness checks pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate and the auto-sell defaults.
+- **Tests:** 29 unit tests, 6 page tests and 127 harness checks pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus against pool chances, and the book and pool payout strings.
 - **Unique upgrades, Helpers and auto-sell (2026-10-18), checked in Chrome:**
   - a new game earns juice from pops with an empty backpack;
   - the Tools panel shows Wide Swing on the Steel Pin page and the muted line on the Awl page;
@@ -112,21 +114,32 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - **Backpack:** auto-sell is on by default. With it off, pops collect in the backpack to sell by hand.
 - **Other systems:** Frenzy, Fresh Batch and the radio (`music/tracks.json`).
 - **Number display:** `fmt` was fixed for suffix rollover (`1000K` now shows `1.00M`) and checked in the browser up to `99.9Qa`.
-- **Balance:** `docs/balance-report.md` measured the economy **before** Chain Reaction was removed, Wide Swing became Steel Pin only and Helpers became late game. Its numbers are now out of date: the first Fresh Batch moved from 11.1 to 42.9 min (casual) and from 6.3 to 18.6 min (engaged). No tuning option from it has been applied; that choice is Ian's.
+- **Payouts and frenzy (2026-10-21), checked in headless Chrome** (the Chrome extension was not connected) at 1280×800 and 390×844:
+  - the book shows `x190K` / `x950K` on the Black Pearl page;
+  - the pool cards show `x… payout`;
+  - no payout text in the book (all 10 pages) or on the pool cards overflows (`scrollWidth` ≤ `clientWidth`);
+  - the only console messages were the favicon 404 and Chrome's autoplay notice.
+- **Balance (2026-10-21):** `docs/balance-report.md` is current. Pacing targets, with sim results (reference seeds):
+  - **First Fresh Batch:** target 11–13 min casual, 6–8 min engaged. Sim: **12.8** and **6.2** (before this change: 42.9 and 18.6).
+  - **First helper:** target 70–90% of the way to it. Sim: 11.4 min (**89%**) casual, 4.8 min (**77%**) engaged.
+  - **Cycles 2–6:** target shorter each time but never under 4 min. Sim: casual 10.8 / 7.7 / 6.6 / 5.9 / 5.8 (met). Engaged 3.5 / 3.1 / 3.1 / 2.1 / 2.4 (**missed**: see below).
+  - **No upgrade group maxed in run 1:** met by group (verb / Pearls & Marbles / tune). Per upgrade, 10 of 18 reach max (6 before).
 
 ## Still open
 
 - **Other tools' unique upgrades:** only the Steel Pin has one. The other five show "No special upgrade yet".
 - **Balance:**
-  - The first run is now much longer. In the sim the first Fresh Batch is at 42.9 min (casual) and 18.6 min (engaged), up from 11.1 and 6.3. Most of that comes from losing Chain Reaction and from Wide Swing working only with the Steel Pin (28.1 and 14.1 min before Helpers moved). Re-run the balance report before tuning.
+  - **Engaged later cycles drop under 4 min.** At the minimum 2 Flavors per batch (x1.4), engaged C2 is already 3.5 min, and a Flavor-scaled floor does not fix it (`scaledFloor` variant). It needs a lever outside the four global dials: a smaller multiplier per Flavor, or Fresh Batch costs that scale with Flavors.
+  - **First-run times are seed-sensitive.** Over seeds 1–8: casual 12.7 min (10.3–14.5), engaged 5.6 min (3.8–6.9). Casual runs about 2.3x engaged at every dial setting tried, wider than the 13 / 6 the bands allow; that comes from tap rate and skill.
+  - **Away bonus is large.** One hour away at the end of run 1 pays 67–84M against a 5M floor. `popEV` assumes helpers pop the average pooled pearl, but they only break pearls with hp ≤ 3 × power. Candidate fixes are in the report; none applied.
+  - **One type dominates income** (over 60%) in casual C3–C6 and engaged C6 (Opal, Ruby or Marble). Black earns 0%. Spawn weights were not retuned.
   - The sim always holds its best tool, so it uses Wide Swing only until it buys the Awl (about 1.7 min). A real player may switch back to the Steel Pin to sweep; nothing models that.
   - Fresh Batch cycles still shrink when Fresh Batch is taken at once.
-  - Flavors explode (x3,000+) when the player waits.
-  - The upgrade shelf empties in late runs.
-  - See the report's options A, B and C and the open question about Flavor-scaled costs.
-- **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: helper idle rate × 50%, capped at 8 h).
+  - Flavors still explode when the player waits: x366 casual, x714 engaged after six 25-minute runs.
+  - The upgrade shelf empties early: `COST_SCALE` 2.5 maxes most tune upgrades in run 1. The `moreTuneLevels` sim variant halves that at about the same pacing.
+- **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: idle rate at the pool's expected payout × 50%, capped at 8 h).
 - **Save sync between devices:** not built. Moving a save is manual (code or file). Tested only on desktop Chrome so far; iOS Safari `pagehide` and the clipboard on phones are not yet verified on a device.
 - **Phone layout:** not built. The viewport meta now makes phones lay the page out at device width instead of 980 px desktop width. This has not been checked on a real phone; the 390 px checks ran in desktop Chrome. At 390 px the board and the shop share the height tightly, and the only phone rule is one `@media (max-width: 820px)` that stacks the panel under the board.
 - **Artifacts:** not built. A Flavor shop or other spending that lasts across Fresh Batches would also be the natural fix for the empty late-game shelf.
 - **Raw numbers:** the Fresh Batch button and the Flavors line print raw integers (`+6666 Flavors`, `x3238.4`). They fit today, but they don't use `fmt`.
-- **Sim limitations** (see the report): no backpack selling, no away bonus, pool never toggled, fixed cell counts per board tier.
+- **Sim limitations** (see the report): no backpack selling, the away bonus is reported but never taken, pool never toggled, fixed cell counts per board tier, no helper credit to the frenzy meter. The nothing-to-want columns read 0.0 everywhere (before this change too), so they carry no signal.
