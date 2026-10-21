@@ -18,10 +18,30 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `tools/build.js` stays a plain byte concatenation.
 - **Concat order (fixed):**
   - `src/head.html`
-  - then `src/econ.js`, `save.js`, `samples.js`, `audio.js`, `music.js`, `world.js`, `render.js`, `ui.js`
+  - then `src/artifacts.js`, `econ.js`, `save.js`, `samples.js`, `audio.js`, `music.js`, `world.js`, `render.js`, `ui.js`
   - then `src/tail.html`
   - The JS files share one scope inside the page, so later files use earlier files' top-level names.
   - `tests/harness32.js` repeats this list. Keep the two lists in step with `tools/build.js`.
+- **`src/artifacts.js`** (`ARTS`) holds artifacts, pure with no DOM. It comes first in the concat order because `econ.js` uses it; under node, `econ.js` `require`s it. Design note: `docs/superpowers/specs/2026-10-21-artifacts-hall-of-ducks-design.md`.
+  - `HALLS`: `{ id, name, blurb }` in display order. Today only `ducks` (Hall of Ducks).
+  - `ARTIFACTS`: `{ id, hall, name, description, cost: [{ kind, qty }], bonus: { type, value } }`.
+    - `kind` is an inventory key: a pearl id now, a forge material later. Only normal stacks count, so a shiny Rose (`pearl:s`) is not a Rose Pearl for crafting.
+    - The only bonus type is `payout`: every payout × value.
+  - **Pink Duck:** `pink_duck` in hall `ducks`, costs 10,000 `pearl` (Rose), payout × `PINK_DUCK_PAYOUT` (1.25, a placeholder in one constant).
+  - `canCraft(id, inv, owned)`: false if the artifact is unknown, owned or short.
+  - `craft(id, inv, owned, invV)`: spends exactly the cost and the same share of the stack's stored value, marks it owned, and returns true. Otherwise it changes nothing.
+  - `payoutMult(owned)`: the product of the owned payout bonuses.
+  - Owned artifacts are `state.artifacts` (`id: true`). Add an artifact by adding a table entry and, for its card, an icon in `ART_ICON` (`src/ui.js`). Add a hall by adding a `HALLS` entry.
+  - `stats().artMult = payoutMult(st.artifacts)`. `popValue()` and `helperIdle()` multiply by it, so taps, helpers, shinies, frenzy, auto-sell, backpack value and the away bonus all get it.
+  - The payout line under the juice counter (`payoutLine()`) shows the total and its parts, e.g. "Payouts x1.75 (Flavors 2 x1.4, ducks x1.25)".
+- **Keep** (`state.keep`, pearl type id → `true`):
+  - A kept type covers its shiny stack too (`isKept(kind)` in `src/world.js`).
+  - Its pops go to the backpack even with auto-sell on.
+  - Sell all, the Worth total and the Sell all button skip kept stacks. Selling a kept stack by choosing it still works.
+  - The toggles are rows in the backpack's "Keep for crafting" list: one per discovered type, shown even with nothing held. Kept stacks carry a small padlock.
+- **Artifacts panel** (`#arts`, `updateArts()`): a large panel like Pool, with one section per hall and one card per artifact.
+  - A card shows "x of 10,000 Rose Pearls kept" with a bar, and a Craft button, disabled until affordable, then "Owned".
+  - The dock button (`#artBtn`, an inked duck) shows once Rose Pearls popped in total (normal + shiny) reach 100, or once an artifact is owned. While it shows, `#stage.arts` moves the bottom bar right; under 820 px the bar moves up above the dock instead.
 - **`src/econ.js`** holds the pure economy and no DOM:
   - upgrades: `UPG`, buy `ORDER`, `TOOLS`;
   - **tool unique upgrades:** a `TOOLS` entry can carry `unique: { id, name, desc, base, grow, max, effect }`. It is bought on that tool's page in the Tools panel and priced by `uniqueCost(i, lvl)` (`base × COST_SCALE × grow^lvl`). Its level lives at `state.toolUp[i].u`, next to `p` and `s`, and Fresh Batch wipes it like the others. `stats()` merges `effect(level)` in only for the **equipped** tool with level > 0, so the upgrade works only while that tool is in hand.
@@ -49,15 +69,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - **`src/ui.js`** holds the shop, panels, input, save/load, Fresh Batch and the main loop.
 - **Fresh Batch:**
   - Code: the `collapseBtn` handler, `finishCollapse()` and `resetRun()` in `src/ui.js`.
-  - **Wipes:** juice, run juice, all upgrade levels, tools and tool upgrades, the backpack and the board.
-  - **Keeps:** Flavors (`echoes`), `collapses`, `lifetime`, discoveries (`col`), the pool and settings.
+  - **Wipes:** juice, run juice, all upgrade levels, tools and tool upgrades, the backpack stacks that are not kept (`clearUnkept()`), and the board.
+  - **Keeps:** Flavors (`echoes`), `collapses`, `lifetime`, discoveries (`col`), the pool, settings, owned artifacts, the Keep set and kept stacks (normal and shiny). Reset save wipes all of it.
 - **Save storage:**
   - The `localStorage` key is `poppit.v1`. **Never rename it**: every existing player's save lives there. The key name is not the format version.
-  - The JSON inside carries `version`. The current version is `SAVE_VERSION = 3` in `src/save.js`. `serialize()` and `loadState()` live in `src/ui.js`.
+  - The JSON inside carries `version`. The current version is `SAVE_VERSION = 4` in `src/save.js`. `serialize()` and `loadState()` live in `src/ui.js`.
   - The game saves every 5 s, after purchases, on `visibilitychange` to hidden, and on `pagehide` (iOS Safari does not reliably fire `visibilitychange` when a tab is closed).
 - **Versioning rules:**
   - A save without `version` is version 1.
-  - `MIGRATIONS[n]` turns a version n save into version n + 1. `migrateSave` runs every step from the save's version up to `SAVE_VERSION`. The v1 → v2 step grants Blue, marks unlocked and seen types as found, and pools them. The v2 → v3 step refunds Chain Reaction into `sparks` and moves Wide Swing: the refund is the sum of chain's v2 prices for each level below the saved one (base 110, grow 2.5, max 8, COST_SCALE 6, frozen in the step), and `lv.sweep` moves to `toolUp[0].u`. Both `lv.chain` and `lv.sweep` are removed. Run juice and lifetime are not changed.
+  - `MIGRATIONS[n]` turns a version n save into version n + 1. `migrateSave` runs every step from the save's version up to `SAVE_VERSION`. The v1 → v2 step grants Blue, marks unlocked and seen types as found, and pools them. The v2 → v3 step refunds Chain Reaction into `sparks` and moves Wide Swing: the refund is the sum of chain's v2 prices for each level below the saved one (base 110, grow 2.5, max 8, COST_SCALE 6, frozen in the step), and `lv.sweep` moves to `toolUp[0].u`. Both `lv.chain` and `lv.sweep` are removed. Run juice and lifetime are not changed. The v3 → v4 step adds `artifacts: {}` and `keep: {}` (keeping objects that are already there).
   - To change the format: bump `SAVE_VERSION`, add one migration step, and **never edit a step that has shipped**.
   - A save with a version newer than `SAVE_VERSION` is refused with a toast. If it is the stored save, `saveBlocked` stops autosave from overwriting it. Reset save, an import or a restore clears the block.
   - A version that is not an integer ≥ 1, or a save that is not an object, is refused as invalid.
@@ -69,6 +89,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - Booleans must be real booleans. `musicVol` must be finite, otherwise it becomes 0.5.
   - The pool keeps only real, discovered pearl ids, without duplicates, and is never empty (it falls back to `pearl`).
   - `col` entries are rebuilt in their known shape, and unknown keys are ignored.
+  - `artifacts` keeps only known artifact ids set to `true`, and `keep` only known pearl type ids set to `true`. Anything else, including a non-object, is dropped. `serialize()` writes both, so save codes, files, the import backup and Restore carry them.
 - **Save codes:**
   - Format: `POPPIT2:` + base64 of the UTF-8 JSON + `.` + 8 hex digits of FNV-1a over the base64 text. Whitespace is ignored.
   - `decodeSave` returns `null` for a wrong prefix, a bad checksum, bad base64, bad UTF-8, or JSON that is not an object. A truncated code or a single changed character is always caught.
@@ -89,6 +110,8 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - `npm run build`: runs `node tools/build.js`, which concatenates into `build/all.js` (gitignored), syntax-checks it with `vm.Script`, and writes `index.html`. **This is the gate.**
 - `npm test`:
   - `tests/econ32.test.js`: `node:test` unit tests of `ECON` and `fmt`.
+  - `tests/artifacts.test.js`: the artifacts module and the duck's payout bonus.
+  - `tests/artifact_tests.js` (pulled in by the harness): artifacts, Keep and save v4 in the real game.
   - `tests/page.test.js`: checks that the built `index.html` is a standalone page (doctype, charset, viewport, `[hidden]` rule, head/body structure) and was built from the current `head.html` / `tail.html`. **Run `npm run build` before `npm test`.**
   - `tests/harness32.js`: runs the real concatenated game against stubbed DOM APIs and drives it like a player. It prints PASS/FAIL lines and ends with `ALL PASSED`. It pulls in `tests/pearl_tests.js`.
   - `tests/away.test.js`: runs the sim's checkpoints (about 15 s) and checks the away bonus against the measured helper-only hour. It `require`s `tools/sim32.js`, which runs its CLI only when called directly.
@@ -97,12 +120,13 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `--variant=NAME`: plays a tuning option (`scaledFloor`, `moreFlavors`, `moreTuneLevels`).
   - `--compare`: prints a summary of every variant.
   - `--log`: prints a per-mark pacing log.
+  - `--duck` (or `--variant=pinkDuck`): the player owns the Pink Duck from the start. By default no ducks are owned, and the output is then unchanged by artifacts.
   - Variants override levers inside the sim only. The sim's copies of the cost formulas are checked against `src/econ.js` at startup.
 
 ## State: real and verified (2026-10-21)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 31 unit tests, 6 page tests, 129 harness checks and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
+- **Tests:** 31 econ unit tests, 6 artifacts unit tests, 7 page tests, 157 harness checks and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
 - **Unique upgrades, Helpers and auto-sell (2026-10-18), checked in Chrome:**
   - a new game earns juice from pops with an empty backpack;
   - the Tools panel shows Wide Swing on the Steel Pin page and the muted line on the Awl page;
@@ -138,6 +162,13 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **No upgrade group maxed in run 1:** met by group (verb / Pearls & Marbles / tune). Per upgrade, 10 of 18 reach max (6 before).
 - **Away bonus (2026-10-21):** one hour away against half of the measured helper-only hour is 0.89–1.04 at all 21 sim checkpoints. At the first Fresh Batch it pays 7.3M (casual) and 5.7M (engaged); the first version paid 84.2M and 67.3M. In the real game, a Ruby + Black pool with the Steel Pin makes helpers pop only Roses (harness check).
 
+- **Artifacts and Keep (2026-10-21), checked in headless Chrome** (the Chrome extension was not connected) at 1280×800 and 390×844:
+  - a save code with 10,250 kept Rose Pearls was imported through Settings (Load, then Confirm), and the duck button showed;
+  - Craft spent exactly 10,000 (10,251 → 251), and one Rose pop paid 2.04 before and 2.55 after (x1.25);
+  - Fresh Batch kept the duck and the 252 kept Roses;
+  - no text overflows in the Artifacts panel or the backpack, and the backpack fits inside the board;
+  - console: only the favicon 404 and Chrome's autoplay and vibrate notices.
+
 ## Still open
 
 - **Other tools' unique upgrades:** only the Steel Pin has one. The other five show "No special upgrade yet".
@@ -153,7 +184,11 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - The upgrade shelf empties early: `COST_SCALE` 2.5 maxes most tune upgrades in run 1. The `moreTuneLevels` sim variant halves that at about the same pacing.
 - **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: half of what helpers alone would earn, capped at 8 h; see the away bonus rule above).
 - **Save sync between devices:** not built. Moving a save is manual (code or file). Tested only on desktop Chrome so far; iOS Safari `pagehide` and the clipboard on phones are not yet verified on a device.
-- **Phone layout:** not built. The viewport meta now makes phones lay the page out at device width instead of 980 px desktop width. This has not been checked on a real phone; the 390 px checks ran in desktop Chrome. At 390 px the board and the shop share the height tightly, and the only phone rule is one `@media (max-width: 820px)` that stacks the panel under the board.
-- **Artifacts:** not built. A Flavor shop or other spending that lasts across Fresh Batches would also be the natural fix for the empty late-game shelf.
+- **Phone layout:** not built. The viewport meta now makes phones lay the page out at device width instead of 980 px desktop width. This has not been checked on a real phone; the 390 px checks ran in desktop Chrome. At 390 px the board and the shop share the height tightly. The `@media (max-width: 820px)` rules stack the shop under the board, let the open backpack cover the dock, and lift the bottom bar above the dock while the Artifacts button shows. Without that button, the bottom bar at 390 px already overflowed by 13 px before artifacts (the frenzy meter squeezes to 5 px); not fixed.
+- **Artifacts:** only the Hall of Ducks and the Pink Duck exist.
+  - Not built: the forge (crafting materials; `cost.kind` can name a material later), other ducks, other halls, and bonus types other than payout.
+  - The x1.25 is a placeholder (`PINK_DUCK_PAYOUT`).
+  - The sim cannot keep or craft. `--duck` owns the duck from minute 0, which cuts the first Fresh Batch from 12.8 to 8.9 min (casual) and from 6.2 to 4.3 min (engaged). How long collecting 10,000 kept Roses takes, and what it costs in lost auto-sell income, is not modelled.
+  - Spending that lasts across Fresh Batches is still the natural fix for the empty late-game shelf.
 - **Raw numbers:** the Fresh Batch button and the Flavors line print raw integers (`+6666 Flavors`, `x3238.4`). They fit today, but they don't use `fmt`.
 - **Sim limitations** (see the report): no backpack selling, the away bonus is reported but never taken, pool never toggled, fixed cell counts per board tier. During a run, helpers get no frenzy meter credit and hit a random pearl they can break; the game (and the sim's helper hour) take the best payout per hit. Switching the run would move the reference pacing numbers. The nothing-to-want columns read 0.0 everywhere (before this change too), so they carry no signal.
