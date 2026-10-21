@@ -11,10 +11,10 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   const before = [gain('tap', false), gain('tap', true), gain('auto', true)];
   st.artifacts.pink_duck = true; G.recalc();
   const after = [gain('tap', false), gain('tap', true), gain('auto', true)];
-  ok('the Pink Duck pays x1.25 on a backpack pop, an auto-sell pop and a helper pop', after.every((a, i) => Math.abs(a / before[i] - 1.25) < 1e-9), before.map((b, i) => b.toFixed(2) + '->' + after[i].toFixed(2)).join(' '));
-  ok('the payout line shows the duck', G.payoutLine() === 'Payouts x1.25 (ducks x1.25)', G.payoutLine());
+  ok('the Pink Duck pays x1.4 on a backpack pop, an auto-sell pop and a helper pop', after.every((a, i) => Math.abs(a / before[i] - A.PINK_DUCK_PAYOUT) < 1e-9) && A.PINK_DUCK_PAYOUT === 1.4, before.map((b, i) => b.toFixed(2) + '->' + after[i].toFixed(2)).join(' '));
+  ok('the payout line shows the duck', G.payoutLine() === 'Payouts x1.4 (ducks x1.4)', G.payoutLine());
   st.echoes = 2; G.recalc();
-  ok('and the Flavors with it', G.payoutLine() === 'Payouts x1.75 (Flavors 2 x1.4, ducks x1.25)', G.payoutLine());
+  ok('and the Flavors with it', G.payoutLine() === 'Payouts x1.96 (Flavors 2 x1.4, ducks x1.4)', G.payoutLine());
   st.echoes = 0; delete st.artifacts.pink_duck; G.recalc();
   ok('without a duck the line is back to Flavors only, or hidden', G.payoutLine() === '');
 
@@ -36,14 +36,14 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   st.inv.pearl = 10500; st.invV.pearl = 21000;
   const card = G.artView()[0].items[0];
   ok('the card shows the hall, the cost progress and that Rose is kept', G.artView()[0].name === 'Hall of Ducks' && card.cost[0].have === 10500 && card.cost[0].qty === 10000 && card.cost[0].kept && card.cost[0].label === 'Rose Pearls' && card.can);
-  ok('crafting spends exactly 10,000 kept Rose Pearls', G.craftArtifact('pink_duck') === true && st.inv.pearl === 500 && Math.abs(st.invV.pearl - 1000) < 1e-9 && st.artifacts.pink_duck === true && G.getS().artMult === 1.25);
+  ok('crafting spends exactly 10,000 kept Rose Pearls', G.craftArtifact('pink_duck') === true && st.inv.pearl === 500 && Math.abs(st.invV.pearl - 1000) < 1e-9 && st.artifacts.pink_duck === true && G.getS().artMult === A.PINK_DUCK_PAYOUT);
   ok('and cannot be crafted twice', G.craftArtifact('pink_duck') === false && st.inv.pearl === 500 && G.artView()[0].items[0].owned);
 
   // Fresh Batch keeps kept stacks and owned artifacts
   st.inv.pearl = 7000; st.invV.pearl = 7000; st.inv.blue = 4; st.invV.blue = 40; st.inv['pearl:s'] = 2;
   st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; const echo0 = st.echoes; G.updateShelf();
   els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
-  ok('Fresh Batch keeps the kept Rose stacks and the duck, and wipes the rest', !G.getCollapse() && st.echoes > echo0 && st.inv.pearl === 7000 && st.inv['pearl:s'] === 2 && st.inv.blue === 0 && st.artifacts.pink_duck === true && st.keep.pearl === true && G.getS().artMult === 1.25, 'pearl ' + st.inv.pearl + ', blue ' + st.inv.blue);
+  ok('Fresh Batch keeps the kept Rose stacks and the duck, and wipes the rest', !G.getCollapse() && st.echoes > echo0 && st.inv.pearl === 7000 && st.inv['pearl:s'] === 2 && st.inv.blue === 0 && st.artifacts.pink_duck === true && st.keep.pearl === true && G.getS().artMult === A.PINK_DUCK_PAYOUT, 'pearl ' + st.inv.pearl + ', blue ' + st.inv.blue);
 
   // the dock button
   const pop0 = st.col.pearl.popped, sp0 = st.col.pearl.sPopped;
@@ -76,6 +76,6 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   G.save(); const raw = store['poppit.v1'];
   const other = G.encodeSave(Object.assign(G.serialize(), { artifacts: {}, keep: {}, sparks: 5 }));
   ok('importing another code replaces them and backs up the old save with them', G.checkImport(other) === 'ok' && G.applyImport() === true && JSON.stringify(st.artifacts) === '{}' && store['poppit.backup'] === raw && JSON.parse(raw).artifacts.pink_duck === true);
-  ok('restoring the backup brings the duck and the Keep set back', G.restoreBackup() === 'ok' && st.artifacts.pink_duck === true && st.keep.pearl === true && G.getS().artMult === 1.25);
+  ok('restoring the backup brings the duck and the Keep set back', G.restoreBackup() === 'ok' && st.artifacts.pink_duck === true && st.keep.pearl === true && G.getS().artMult === A.PINK_DUCK_PAYOUT);
   ok('Reset save forgets artifacts and Keep', (els.resetBtn.fire('click', {}), els.resetBtn.fire('click', {}), JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && G.getS().artMult === 1));
 };

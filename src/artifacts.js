@@ -1,6 +1,6 @@
 /* ---------- Artifacts: permanent items crafted from kept pearls, grouped in halls. Pure, no DOM. ---------- */
 const ARTS = (() => {
-  const PINK_DUCK_PAYOUT = 1.25; // placeholder value, Ian may change it
+  const PINK_DUCK_PAYOUT = 1.4; // Ian's value (was 1.25); may change again
   // halls in display order; the Artifacts panel draws one section per hall
   const HALLS = [{ id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make every pop pay more.' }];
   // cost: inventory keys and quantities (a pearl id now; forge materials later). bonus: { type: 'payout', value } multiplies every payout.

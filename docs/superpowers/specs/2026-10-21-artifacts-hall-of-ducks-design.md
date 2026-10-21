@@ -12,7 +12,7 @@ Add permanent items (artifacts) that the player crafts by spending kept pearls. 
 - `ARTIFACTS`: `[{ id, hall, name, description, cost, bonus }]`.
   - `cost` is a list of `{ kind, qty }`. `kind` is an inventory key: a pearl id (`pearl` = Rose Pearl), or later a forge material id. Only normal stacks count; a shiny Rose (`pearl:s`) is not a Rose Pearl for crafting.
   - `bonus` is `{ type, value }`. Only `type: 'payout'` exists: every payout is multiplied by `value`.
-- Pink Duck: `{ id: 'pink_duck', hall: 'ducks', cost: [{ kind: 'pearl', qty: 10000 }], bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } }`, with `PINK_DUCK_PAYOUT = 1.25`, a placeholder in one named constant.
+- Pink Duck: `{ id: 'pink_duck', hall: 'ducks', cost: [{ kind: 'pearl', qty: 10000 }], bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } }`, with `PINK_DUCK_PAYOUT` in one named constant: 1.25 when this note was written, 1.4 since the forge session.
 - `canCraft(id, inv, owned)`: false if the artifact is unknown, already owned, or any cost line is short.
 - `craft(id, inv, owned, invV)`: if `canCraft`, it removes exactly the cost from `inv`, lowers `invV` (the stored sale value) in proportion, sets `owned[id] = true`, and returns true. Otherwise it changes nothing and returns false.
 - `payoutMult(owned)`: the product of every owned payout bonus (1 with none).
@@ -22,7 +22,7 @@ Add permanent items (artifacts) that the player crafts by spending kept pearls. 
 
 - `ECON.stats()` adds `artMult = payoutMult(st.artifacts)`, and `popValue()` multiplies by it. That covers every pop: taps, sweeps, helpers, shinies, frenzy, auto-sold or stored in the backpack (the stored value includes it).
 - The away bonus (`helperIdle`) multiplies by it too, since it prices helper pops.
-- Display: the HUD line under the juice counter shows the total payout multiplier and its parts when either is above 1, e.g. "Payouts x1.75 (Flavors x1.4, ducks x1.25)". The Fresh Batch toast uses the total.
+- Display: the HUD line under the juice counter shows the total payout multiplier and its parts when either is above 1, e.g. "Payouts x1.96 (Flavors 2 x1.4, ducks x1.4)". The Fresh Batch toast uses the total.
 - `tools/sim32.js` plays with no ducks by default; `--duck` (or the `pinkDuck` variant) owns the Pink Duck from the start.
 
 ## Keep

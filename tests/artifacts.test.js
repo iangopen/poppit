@@ -3,10 +3,10 @@ const test = require('node:test'), assert = require('node:assert');
 const A = require('../src/artifacts.js'), E = require('../src/econ.js');
 const inv0 = (n) => ({ pearl: n, 'pearl:s': 40, blue: 7 });
 
-test('the Pink Duck: hall ducks, costs 10,000 Rose Pearls, pays x1.25 from one constant', () => {
+test('the Pink Duck: hall ducks, costs 10,000 Rose Pearls, pays x1.4 from one constant', () => {
   const d = A.byId('pink_duck');
-  assert.deepStrictEqual([d.hall, d.name, d.cost, d.bonus], ['ducks', 'Pink Duck', [{ kind: 'pearl', qty: 10000 }], { type: 'payout', value: 1.25 }]);
-  assert.strictEqual(A.PINK_DUCK_PAYOUT, 1.25); assert.strictEqual(d.bonus.value, A.PINK_DUCK_PAYOUT);
+  assert.deepStrictEqual([d.hall, d.name, d.cost, d.bonus], ['ducks', 'Pink Duck', [{ kind: 'pearl', qty: 10000 }], { type: 'payout', value: 1.4 }]);
+  assert.strictEqual(A.PINK_DUCK_PAYOUT, 1.4); assert.strictEqual(d.bonus.value, A.PINK_DUCK_PAYOUT);
   assert.deepStrictEqual(A.HALLS.map((h) => h.id), ['ducks']);
   for (const a of A.ARTIFACTS) { assert.ok(a.id && a.hall && a.name && a.description && a.cost.length && a.bonus, a.id); assert.ok(A.HALLS.some((h) => h.id === a.hall), a.id + ' has a hall'); }
 });
@@ -36,13 +36,13 @@ test('cannot craft short, and shiny Roses do not count', () => {
 });
 test('payoutMult multiplies owned payout bonuses', () => {
   assert.strictEqual(A.payoutMult(undefined), 1); assert.strictEqual(A.payoutMult({}), 1);
-  assert.strictEqual(A.payoutMult({ pink_duck: true }), 1.25); assert.strictEqual(A.payoutMult({ pink_duck: 'yes', other: true }), 1);
+  assert.strictEqual(A.payoutMult({ pink_duck: true }), A.PINK_DUCK_PAYOUT); assert.strictEqual(A.payoutMult({ pink_duck: 'yes', other: true }), 1);
 });
 test('the duck multiplies every pop value and the away bonus', () => {
   const st = { lv: Object.assign(E.zeroLevels(), { auto: 3, lucky: 2 }), echoes: 4, equip: -1, toolUp: {} };
   const S0 = E.stats(st), S1 = E.stats(Object.assign({}, st, { artifacts: { pink_duck: true } }));
-  assert.strictEqual(S0.artMult, 1); assert.strictEqual(S1.artMult, 1.25);
-  for (const [combo, fr, kind] of [[0, false, 'pearl'], [12, false, 'blue'], [0, true, 'black']]) assert.ok(Math.abs(E.popValue(S1, combo, fr, kind) / E.popValue(S0, combo, fr, kind) - 1.25) < 1e-12, kind);
+  assert.strictEqual(S0.artMult, 1); assert.strictEqual(S1.artMult, A.PINK_DUCK_PAYOUT);
+  for (const [combo, fr, kind] of [[0, false, 'pearl'], [12, false, 'blue'], [0, true, 'black']]) assert.ok(Math.abs(E.popValue(S1, combo, fr, kind) / E.popValue(S0, combo, fr, kind) - A.PINK_DUCK_PAYOUT) < 1e-12, kind);
   const pool = E.PEARLS.map((t) => t.id);
-  assert.ok(Math.abs(E.idleRate(S1, pool, st.lv) / E.idleRate(S0, pool, st.lv) - 1.25) < 1e-12);
+  assert.ok(Math.abs(E.idleRate(S1, pool, st.lv) / E.idleRate(S0, pool, st.lv) - A.PINK_DUCK_PAYOUT) < 1e-12);
 });
