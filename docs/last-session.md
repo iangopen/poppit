@@ -105,7 +105,8 @@ Commits (pushed to main)
 - CLAUDE.md and this file.
 
 Still open
-- Next session: the forge panel, the Strike tap and the forge dock button. No UI calls the forge yet.
+- Next session: the forge panel, the Strike tap and the forge dock button.
+  No UI calls the forge yet.
 - Recipe numbers and forge prices are untested in play. No sim models the forge.
 - Nothing uses materials yet.
 - Still open from earlier sessions:
