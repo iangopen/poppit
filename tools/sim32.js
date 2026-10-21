@@ -16,12 +16,15 @@ function mulberry32(a) {
 }
 
 // Tuning options for docs/balance-report.md. Each overrides only the levers it names; the sim never edits src/econ.js.
-// minRun may depend on Flavors (echoes); gain replaces collapseGain(run); base and max override an upgrade's base cost or max level.
+// minRun may depend on Flavors (echoes); gain replaces collapseGain(run); base and max override an upgrade's base cost or max level;
+// flavorBonus replaces FLAVOR_BONUS (what each Flavor adds to every payout).
 const VARIANTS = {
   baseline: {},
   scaledFloor: { minRun: (e) => E.COLLAPSE_MIN_RUN * (1 + 0.2 * e) }, // the floor rises with the Flavor payout multiplier
   moreFlavors: { gain: (run) => Math.floor(Math.sqrt(run / 312500)) }, // 4 Flavors at the floor instead of 2
   moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12 } },
+  flavor10: { flavorBonus: 0.1 }, // each Flavor adds 10% instead of 20%
+  flavor5: { flavorBonus: 0.05 },
 };
 
 // The economy the sim plays: ECON itself, with a variant's levers swapped in.
@@ -36,7 +39,9 @@ function econ(v) {
   const collapseGain = v.gain || E.collapseGain;
   const minRun = (echoes) => (typeof v.minRun === 'function' ? v.minRun(echoes) : v.minRun || E.COLLAPSE_MIN_RUN);
   const collapseReady = (run, echoes) => run >= minRun(echoes) && collapseGain(run) >= 2;
-  return Object.assign({}, E, { UPG, cost, toolUpCost, toolPrice, uniqueCost, collapseGain, collapseReady, minRun });
+  const FLAVOR_BONUS = v.flavorBonus != null ? v.flavorBonus : E.FLAVOR_BONUS;
+  const stats = (st) => Object.assign(E.stats(st), { echoMult: 1 + FLAVOR_BONUS * st.echoes });
+  return Object.assign({}, E, { UPG, cost, toolUpCost, toolPrice, uniqueCost, collapseGain, collapseReady, minRun, FLAVOR_BONUS, stats });
 }
 function checkCopies() {
   const X = econ({});
@@ -47,6 +52,7 @@ function checkCopies() {
     for (let l = 0; l < E.TOOL_UP_MAX; l++) for (const k of ['power', 'speed']) if (X.toolUpCost(i, k, l) !== E.toolUpCost(i, k, l)) throw new Error('sim toolUpCost copy drifted');
   }
   for (const r of [0, 5e4, 1.2e6, 3e7]) if (X.collapseReady(r, 0) !== E.collapseReady(r)) throw new Error('sim collapseReady copy drifted');
+  const st = { lv: E.zeroLevels(), echoes: 7, equip: -1, toolUp: {} }; if (X.stats(st).echoMult !== E.stats(st).echoMult) throw new Error('sim echoMult copy drifted');
 }
 
 // Fresh Batch, as finishCollapse/resetRun/resetTools/zeroInv in src/ui.js do it: run juice, every upgrade level
@@ -56,11 +62,53 @@ function freshRun(st) {
   st.lv = E.zeroLevels(); st.owned = [true, false, false, false, false, false]; st.equip = -1; st.toolUp = {};
 }
 
+// One hour of helpers alone on a copy of the board, nobody tapping: stepAuto and trySpawn from src/world.js.
+// Helpers take the best payout per remaining hit among pearls they can break in three hits (ECON.helperScore),
+// a hit lands 0.22 s after the pearl is claimed, cracks heal after 2.2 s without a hit, a helper pop adds HELPER_METER
+// to the frenzy meter. Returns the juice earned. Its own seed, so it never moves the main run's random stream.
+function helperHour(X, st, board, cells, seed) {
+  const rng = mulberry32(seed), S = X.stats(st), ids = X.PEARLS.map((p) => p.id), dt = 0.05;
+  const pearls = board.map((p) => ({ kind: p.kind, dmg: 0, hp: p.hp, sh: p.sh, last: -9, claimed: false })), ghosts = [];
+  let t = 0, spawnT = 0, acc = 0, meter = 0, frenzy = 0, juice = 0;
+  while (t < 3600) {
+    t += dt; frenzy = Math.max(0, frenzy - dt);
+    const every = S.spawnEvery / (frenzy > 0 ? 4 : 1); spawnT += dt;
+    while (spawnT >= every) {
+      spawnT -= every;
+      if (pearls.length >= cells) continue;
+      const ch = X.poolChances(ids, st.lv, frenzy > 0); let kind = 'pearl', r = rng();
+      for (const id in ch) { r -= ch[id]; if (r < 0) { kind = id; break; } }
+      if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind).length >= CAP[kind]) kind = 'pearl';
+      pearls.push({ kind, dmg: 0, hp: X.KIND[kind].hp, sh: rng() < X.shinyChance(st.lv), last: -9, claimed: false });
+    }
+    for (const p of pearls) if (p.dmg > 0 && t - p.last > 2.2) p.dmg = Math.max(0, p.dmg - dt * 1.1);
+    acc += dt * S.autoRate;
+    while (acc >= 1) {
+      acc -= 1; let best = null, bs = -1;
+      for (const p of pearls) { if (p.claimed || !X.helperCanHit(p.kind, S.power)) continue; const sc = X.helperScore(p.kind, p.hp - p.dmg, S.power) + rng() * 0.2; if (sc > bs) { bs = sc; best = p; } }
+      if (best) { best.claimed = true; ghosts.push({ p: best, t: 0 }); }
+    }
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+      const g = ghosts[i]; g.t += dt; if (g.t < 0.22) continue;
+      ghosts.splice(i, 1); const p = g.p; p.claimed = false; p.dmg += S.power; p.last = t;
+      if (p.dmg < p.hp) continue;
+      pearls.splice(pearls.indexOf(p), 1);
+      juice += X.popValue(S, 0, frenzy > 0, p.kind) * (p.sh ? X.SHINY_MULT : 1);
+      meter += X.HELPER_METER; if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = X.FRENZY_SECS; }
+    }
+  }
+  return juice;
+}
+
+// one helper hour is noisy (a few rare pops swing it), so checkpoints average four seeded hours
+const helperHours = (X, st, board, cells, seed) => [0, 1, 2, 3].reduce((a, k) => a + helperHour(X, st, board, cells, seed + 100 * k), 0) / 4;
+
 // One run from a fresh board until Fresh Batch is ready. st.echoes carries over between calls.
 // A variant's waitMin makes the player keep going until that minute even when Fresh Batch is ready earlier.
-function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
+function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
   freshRun(st);
-  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0;
+  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0, idleHelper = null, idleReady = null;
+  const black = { at: null, spawnsAfter: 0, expected: 0, spawned: 0, capped: 0, byTap: 0, byHelper: 0, hitsAtUnlock: null, hitsAtEnd: null, powerAtEnd: null };
   const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200];
   const fill = () => CELLS[st.lv.board];
   for (let i = 0; i < Math.max(3, Math.round(fill() * 0.3)); i++) pearls.push({ kind: 'pearl', dmg: 0, hp: X.KIND.pearl.hp, sh: false });
@@ -92,7 +140,9 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
       if (pearls.length < fill()) {
         const ch = X.poolChances(X.PEARLS.map((p) => p.id), st.lv, frenzy > 0); let kind = 'pearl', r = rng();
         for (const id in ch) { r -= ch[id]; if (r < 0) { kind = id; break; } }
-        if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind).length >= CAP[kind]) kind = 'pearl'; // per-type cap, as trySpawn in src/world.js
+        if (black.at != null) { black.spawnsAfter++; black.expected += ch.black || 0; }
+        if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind).length >= CAP[kind]) { if (kind === 'black') black.capped++; kind = 'pearl'; } // per-type cap, as trySpawn in src/world.js
+        if (kind === 'black') black.spawned++;
         pearls.push({ kind, dmg: 0, hp: X.KIND[kind].hp, sh: rng() < X.shinyChance(st.lv) });
       }
     }
@@ -103,6 +153,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
       pearls.splice(i, 1);
       const val = X.popValue(S, manual ? combo : 0, frenzy > 0, p.kind) * (p.sh ? X.SHINY_MULT : 1);
       gain += val; income[p.kind] += val; if (val > top.pop) top.pop = val;
+      if (p.kind === 'black') black[manual ? 'byTap' : 'byHelper']++;
       if (manual) meter += 1;
     };
     tapAcc += dt * tapsPerSec * S.toolSpeed * (S.sweep ? 2 : 1);
@@ -115,7 +166,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
     }
     autoAcc += dt * S.autoRate;
     while (autoAcc >= 1 && pearls.length) { autoAcc -= 1; const c = pearls.filter((p) => p.hp <= S.power * 3); if (c.length) hit(c[Math.floor(rng() * c.length)], S.power, false); }
-    if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = 7; }
+    if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = X.FRENZY_SECS; }
     sparks += gain; runEarned += gain; earnedWin += gain;
     if (gain > 0) win.push([t, gain]);
     while (win.length && win[0][0] <= t - 60) win.shift();
@@ -130,25 +181,27 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
     for (const c of left) if (c.c > top.cost) top.cost = c.c;
     // awayBonus() in src/ui.js for a 1 hour absence: idle rate at the pool's expected payout, half rate
     const away1h = () => X.idleRate(X.stats(st), X.PEARLS.map((p) => p.id), st.lv) * 3600 * 0.5;
-    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); }
+    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
+    if (black.at == null && st.lv.black > 0) { black.at = t / 60; black.hitsAtUnlock = X.hitsNeeded('black', X.stats(st).power); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
-    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); }
+    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
   }
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
   const gainF = ready == null ? 0 : X.collapseGain(runEarned);
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
-  return { furthest, helperAt, awayHelper, awayReady, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + 0.2 * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
+  return { furthest, helperAt, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + X.FLAVOR_BONUS * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
-function play(v, profile, verbose) {
+function play(v, profile, verbose, measure) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
   const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {} };
   const out = [];
-  for (let c = 0; c < CYCLES; c++) { const r = cycle(X, st, rng, taps, skill, verbose, v.waitMin); out.push(r); if (r.ready == null) break; }
+  for (let c = 0; c < CYCLES; c++) { const r = cycle(X, st, rng, taps, skill, verbose, v.waitMin, measure ? 1000 * seed + 10 * c : 0); out.push(r); if (r.ready == null) break; }
   return out;
 }
 
@@ -157,7 +210,7 @@ const big = (x) => (x >= 1e6 ? (x / 1e6).toFixed(x >= 1e8 ? 0 : 1) + 'M' : x >= 
 function report(name, v, verbose) {
   console.log('# variant: ' + name + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready'));
   for (const p of PROFILES) {
-    const rs = play(v, p, verbose), cols = rs.map((_, i) => 'C' + (i + 1));
+    const rs = play(v, p, verbose, !v.waitMin), cols = rs.map((_, i) => 'C' + (i + 1));
     console.log('\n## ' + p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + ', seed ' + p[3] + ')\n');
     console.log('| cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |');
     console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
@@ -171,6 +224,16 @@ function report(name, v, verbose) {
     console.log('\nTools bought: ' + rs.map((r, i) => 'C' + (i + 1) + ' ' + r.bought.join(', ')).join(' / '));
     const top = rs.reduce((a, r) => ({ sparks: Math.max(a.sparks, r.top.sparks), pop: Math.max(a.pop, r.top.pop), rate: Math.max(a.rate, r.top.rate), cost: Math.max(a.cost, r.top.cost), run: Math.max(a.run, r.runEarned) }), { sparks: 0, pop: 0, rate: 0, cost: 0, run: 0 });
     console.log('Largest values (whole cycles, all ' + rs.length + '): juice held ' + top.sparks.toFixed(0) + ', run juice ' + top.run.toFixed(0) + ', single pop ' + top.pop.toFixed(0) + ', income/s ' + top.rate.toFixed(0) + ', cost on offer ' + top.cost);
+    if (!v.waitMin) {
+      // away bonus calibration: awayBonus(3600) against half of what helpers alone earned in one simulated hour
+      console.log('\nAway bonus calibration: helpers alone for 1 h from that moment\'s board (helperHour, mean of 4 seeds), against awayBonus(3600):\n');
+      console.log('| checkpoint | helper-only juice, 1 h | half of it | away bonus, 1 h | away / half |'); console.log('|---|---|---|---|---|');
+      const row = (name, idle, away) => console.log('| ' + name + ' | ' + big(idle) + ' | ' + big(idle / 2) + ' | ' + big(away) + ' | ' + (idle > 0 ? (away / (idle / 2)).toFixed(2) : '-') + ' |');
+      rs.forEach((r, i) => { if (r.idleHelper != null) row('C' + (i + 1) + ' first helper (' + f1(r.helperAt) + ' min)', r.idleHelper, r.awayHelper); if (r.idleReady != null) row('C' + (i + 1) + ' Fresh Batch ready (' + f1(r.ready / 60) + ' min)', r.idleReady, r.awayReady); });
+      console.log('\nBlack Pearls per cycle:\n');
+      console.log('| cycle | unlocked (min) | run length (min) | spawns after unlock | Blacks expected | spawned | spawns turned Rose by the cap | popped by taps | popped by helpers | hits at unlock | hits at end (power) |'); console.log('|---|---|---|---|---|---|---|---|---|---|---|');
+      rs.forEach((r, i) => { const b = r.black; console.log('| ' + (i + 1) + ' | ' + f1(b.at) + ' | ' + f1(r.minutes) + ' | ' + b.spawnsAfter + ' | ' + b.expected.toFixed(2) + ' | ' + b.spawned + ' | ' + b.capped + ' | ' + b.byTap + ' | ' + b.byHelper + ' | ' + (b.hitsAtUnlock == null ? '-' : b.hitsAtUnlock) + ' | ' + b.hitsAtEnd + ' (' + b.powerAtEnd + ') |'); });
+    }
     if (verbose) rs.forEach((r, i) => { console.log('\ncycle ' + (i + 1) + ' log:'); r.log.forEach((l) => console.log(l)); });
   }
 }
@@ -185,6 +248,9 @@ function compare() {
 }
 
 checkCopies();
-const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
-if (arg('compare')) compare();
-else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}), !!arg('log')); }
+module.exports = { play, PROFILES, VARIANTS, econ, helperHour }; // tests/away.test.js
+if (require.main === module) {
+  const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
+  if (arg('compare')) compare();
+  else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}), !!arg('log')); }
+}

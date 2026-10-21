@@ -1,2 +1,2 @@
 { "name": "poppit", "version": "0.1.0", "private": true,
-  "scripts": { "build": "node tools/build.js", "test": "node tests/econ32.test.js && node tests/page.test.js && node tests/harness32.js", "sim": "node tools/sim32.js" } }
+  "scripts": { "build": "node tools/build.js", "test": "node tests/econ32.test.js && node tests/page.test.js && node tests/harness32.js && node tests/away.test.js", "sim": "node tools/sim32.js" } }
