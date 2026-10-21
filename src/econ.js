@@ -33,6 +33,9 @@ const ECON = (() => {
     { name: 'Steel Hammer', power: 6, speed: 1.4 }, { name: 'Sledgehammer', power: 10, speed: 1.6 }, { name: 'Diamond Hammer', power: 18, speed: 2 },
   ];
   // The roster. `pearl` is the base type (shown as Rose). cap = most of that type alive on the board at once.
+  // `mult` here is the base payout; the live payout is base × PAYOUT_STEEPNESS^rank (Rose is rank 0), rounded to two significant figures.
+  const PAYOUT_STEEPNESS = 1.5;
+  const sig2 = (x) => Number(x.toPrecision(2));
   const PEARLS = [
     { id: 'pearl',  name: 'Rose Pearl',   hp: 1, mult: 1,   cap: 99 },
     { id: 'blue',   name: 'Blue Pearl',   hp: 3, mult: 5,   cap: 8 },
@@ -45,6 +48,7 @@ const ECON = (() => {
     { id: 'ruby',   name: 'Ruby Pearl',   hp: 200, mult: 2000, cap: 2 },
     { id: 'black',  name: 'Black Pearl',  hp: 320, mult: 5000, cap: 1 },
   ];
+  PEARLS.forEach((t, i) => { t.baseMult = t.mult; t.mult = sig2(t.mult * Math.pow(PAYOUT_STEEPNESS, i)); });
   const KIND = {}; PEARLS.forEach((t) => { KIND[t.id] = { hp: t.hp, mult: t.mult }; });
   const SHINY_MULT = 5;
   // spawn weight of a type, relative to a base pearl weight of 100 (0 = locked)
@@ -77,7 +81,8 @@ const ECON = (() => {
   }
   const shinyChance = (L) => 0.005 + 0.0025 * (L.shiny || 0);
   const COST_SCALE = 6; // global dial: how long each upgrade takes to afford
-  const COLLAPSE_MIN_RUN = 1200000;
+  const COLLAPSE_MIN_RUN = 1200000; // run juice needed before a Fresh Batch
+  const COLLAPSE_GAIN_DIV = 12500; // Flavors = floor(sqrt(run / this))
 
   const zeroLevels = () => { const o = {}; for (const k in UPG) o[k] = 0; return o; };
   const cost = (id, lvl) => Math.ceil(UPG[id].base * COST_SCALE * Math.pow(UPG[id].grow, lvl));
@@ -107,7 +112,7 @@ const ECON = (() => {
       sweep: false, brush: 0, // only the equipped tool's unique upgrade turns these on
       autoRate: L.auto / autoCd,
       autoCd,
-      frenzyNeed: 50 - 6 * L.fuel,
+      frenzyNeed: 200 - 24 * L.fuel,
       tier: L.board,
     }, ul > 0 ? TOOLS[eq].unique.effect(ul) : {});
   }
@@ -117,11 +122,13 @@ const ECON = (() => {
     return S.popBase * S.echoMult * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
-  const collapseGain = (run) => Math.floor(Math.sqrt(run / 12500));
+  const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
   const collapseReady = (run) => run >= COLLAPSE_MIN_RUN && collapseGain(run) >= 2;
-  const idleRate = (S) => S.autoRate * S.popBase * S.echoMult * 1.2;
+  // expected payout multiplier of one pop under the current pool chances
+  const popEV = (pool, L) => { const ch = poolChances(pool, L); let ev = 0; for (const id in ch) ev += ch[id] * KIND[id].mult; return ev; };
+  const idleRate = (S, pool, L) => S.autoRate * S.popBase * S.echoMult * popEV(pool, L);
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, SHINY_MULT, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, popEV, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 
@@ -136,5 +143,11 @@ function fmt(n) {
   let d = n >= 100 ? 0 : n >= 10 ? 1 : 2;
   if (+n.toFixed(d) >= [1000, 100, 10][d]) { if (d > 0) d--; else if (i < SUFFIX.length - 1) { n /= 1000; i++; d = 2; } }
   return n.toFixed(d) + SUFFIX[i];
+}
+// a payout multiplier: whole numbers up to 9,999 (7.5 keeps its half), then fmt without trailing zeros (14K, not 14.0K)
+function fmtX(n) {
+  if (n < 10000) return (Math.round(n * 10) / 10).toLocaleString('en-US');
+  const s = fmt(n), m = s.match(/^([\d.]+)(\D*)$/);
+  return m && m[1].includes('.') ? m[1].replace(/\.?0+$/, '') + m[2] : s;
 }
 function fmtV(n) { return n < 10 ? String(Math.round(n * 10) / 10) : fmt(n); }

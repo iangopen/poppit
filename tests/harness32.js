@@ -36,7 +36,7 @@ const globals = {
   matchMedia: win.matchMedia, requestAnimationFrame: (f) => { rafCb = f; }, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
 };
 const names = Object.keys(globals);
-const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,upTool,viewTool:(i)=>{toolView=i;updateToolPanel()},loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
+const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,bookEntryHTML,awayBonus,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,upTool,viewTool:(i)=>{toolView=i;updateToolPanel()},loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
 new Function(...names, src + '\n' + hook)(...names.map((n) => globals[n]));
 const G = globalThis.__g;
 const W = () => G.state.sparks + Object.values(G.state.invV).reduce((a, b) => a + b, 0);
@@ -72,7 +72,7 @@ ok('rapid pops climb the combo ladder', G.getCombo() === 3, G.getCombo());
 const S0 = G.getS();
 
 
-// tools and hardness: a blue pearl (3 hp) cracks twice with the fingertip, then bursts for 4x
+// tools and hardness: a blue pearl (3 hp) cracks twice with the fingertip, then bursts for 7.5x
 {
   G.cells.forEach((c) => { if (c.p) { c.p.st = 'dead'; c.p = null; } }); G.pearls.length = 0;
   const cell = G.cells[10]; const b = G.spawnAt(cell, 'blue'); b.born = 1;
@@ -83,7 +83,7 @@ const S0 = G.getS();
   ok('second hit cracks more, still no payout', b.st === 'live' && b.dmg === 2 && W() === s0 && !!b.cr, 'dmg ' + b.dmg);
   ev('pointerdown', cell.x, cell.y); ev('pointerup', cell.x, cell.y);
   const gain = W() - s0, Sx = G.getS();
-  ok('third hit bursts it and pays about 4x a regular pearl', b.st === 'dead' && gain > Sx.popBase * 3.5 && gain < Sx.popBase * 4 * 1.6, gain.toFixed(2));
+  ok('third hit bursts it and pays about 7.5x a regular pearl', b.st === 'dead' && gain > Sx.popBase * 7.5 && gain < Sx.popBase * 7.5 * 1.6, gain.toFixed(2));
   // cracks heal if you stop
   const c2 = G.cells[12]; const b2 = G.spawnAt(c2, 'blue'); b2.born = 1; G.hitPearl(b2, 2, 'tap');
   frames(400);
@@ -99,7 +99,7 @@ const S0 = G.getS();
   G.state.sparks = 1e9; G.buy('tool'); Object.assign(G.state.lv, { lucky: 1, mint: 1, golden: 1, violet: 1, coral: 1 }); G.buy('marble');
   const mb = G.spawnAt(G.cells[18], 'marble'); mb.born = 1; const e0 = W(); let hits = 0;
   while (mb.st === 'live' && hits < 200) { G.hitPearl(mb, G.getS().power, 'tap'); hits++; }
-  ok('marble takes 14 steel-hammer hits and pays 350x base', mb.st === 'dead' && hits === 14 && W() - e0 > G.getS().popBase * 300, hits + ' hits, ' + (W() - e0).toFixed(1));
+  ok('marble takes 14 steel-hammer hits and pays 4000x base', mb.st === 'dead' && hits === 14 && W() - e0 > G.getS().popBase * 4000, hits + ' hits, ' + (W() - e0).toFixed(1));
   G.state.lv.tool = 0; G.state.lv.marble = 0; G.state.sparks = 0; G.state.lv.auto = 0;
   frames(2);
 }
@@ -125,11 +125,11 @@ const mid = G.cells[Math.floor(G.cells.length / 2)].p;
 ok('a pop no longer queues its neighbours', G.queue.length === 0, G.queue.length + ' queued');
 
 
-// golden pays 30x a normal pearl at the same plumpness
+// golden pays 100x a normal pearl at the same plumpness
 G.queue.length = 0; G.state.lv.auto = 0; // isolate for this check
 const Sx = E.stats(G.state);
 const g1 = E.popValue(Sx, 0, false, 'golden'), n1 = E.popValue(Sx, 0, false, 'pearl');
-ok('golden pays 30x', Math.abs(g1 / n1 - 30) < 1e-9, (g1 / n1).toFixed(2));
+ok('golden pays 100x', Math.abs(g1 / n1 - 100) < 1e-9, (g1 / n1).toFixed(2));
 
 // frenzy meter
 G.setMeter(G.getS().frenzyNeed - 1);
@@ -170,7 +170,7 @@ ok('Bigger Board makes a denser grid', dimsAfter !== dimsBefore && G.dims()[0] *
 ok('new board is prefilled', live().length >= 3, live().length);
 
 // fresh batch
-G.state.runEarned = 4000000; G.state.sparks = 5000; G.updateShelf();
+G.state.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.state.sparks = 5000; G.updateShelf();
 els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {});
 ok('fresh batch armed then started', !!G.getCollapse(), els.collapseBtn.textContent);
 frames(160);

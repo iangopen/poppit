@@ -5,9 +5,9 @@ function typeDesc(id, locked) {
   const t = ECON.PEARLS.find((q) => q.id === id);
   if (!ECON.isUnlocked(id, state.lv)) return locked;
   const c = ECON.poolChances(state.pool, state.lv)[id];
-  return (c ? (c * 100).toFixed(1) + '% of pearls' : 'Not in your pool') + ', ' + t.mult + 'x payout, ' + t.hp + ' hits';
+  return (c ? (c * 100).toFixed(1) + '% of pearls' : 'Not in your pool') + ', x' + fmtX(t.mult) + ' payout, ' + t.hp + ' hits';
 }
-const blurb = (id, lead) => { const t = ECON.PEARLS.find((x) => x.id === id); return lead + ': ' + t.mult + 'x payout, ' + t.hp + ' hits.'; };
+const blurb = (id, lead) => { const t = ECON.PEARLS.find((x) => x.id === id); return lead + ': x' + fmtX(t.mult) + ' payout, ' + t.hp + ' hits.'; };
 const META = {
   auto:   { name: 'Helpers', desc: () => state.lv.auto ? S.autoRate.toFixed(2) + ' automatic hits per second' : 'Helpers hit pearls for you.' },
   golden: { name: 'Golden Pearls', desc: () => typeDesc('golden', blurb('golden', 'Rare gold pearls')) },
@@ -25,7 +25,7 @@ const META = {
   opal:   { name: 'Opal Pearls', desc: () => typeDesc('opal', blurb('opal', 'Unlocks opal pearls')) },
   ruby:   { name: 'Ruby Pearls', desc: () => typeDesc('ruby', blurb('ruby', 'Unlocks ruby pearls')) },
   black:  { name: 'Black Pearls', desc: () => typeDesc('black', blurb('black', 'Unlocks black pearls')) },
-  shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv) * 100).toFixed(2) + '% per pearl, shinies pay 5x' },
+  shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
 };
 const rows = {};
 let toastTimer = 0;
@@ -249,7 +249,7 @@ function poolView() {
   return {
     rows: ECON.PEARLS.filter((t) => state.col[t.id].found).map((t) => {
       const i = ECON.PEARLS.indexOf(t), nx = ECON.PEARLS[i + 1], locked = !ECON.canToggleOff(t.id, state.lv);
-      return { id: t.id, name: t.name, unlocked: ECON.isUnlocked(t.id, state.lv), inPool: eff.includes(t.id), locked, need: locked ? META[ECON.unlockUpg(nx.id)].name : '', p: ch[t.id] || 0 };
+      return { id: t.id, name: t.name, unlocked: ECON.isUnlocked(t.id, state.lv), inPool: eff.includes(t.id), locked, need: locked ? META[ECON.unlockUpg(nx.id)].name : '', p: ch[t.id] || 0, pay: 'x' + fmtX(t.mult) + ' payout' };
     }),
     shinyOn: state.shinyOn, shiny: ECON.shinyChance(state.lv),
   };
@@ -271,12 +271,12 @@ function updatePool() {
   const v = poolView(), sig = JSON.stringify(v) + spr.ps;
   if (sig === poolSig) return; poolSig = sig;
   $('poolList').innerHTML = v.rows.map((r) =>
-    '<div class="prow' + (r.inPool ? '' : ' off') + (r.locked ? ' lk' : '') + '"><canvas width="128" height="128" data-art="' + r.id + '"></canvas><span class="nm">' + r.name + '</span>' +
+    '<div class="prow' + (r.inPool ? '' : ' off') + (r.locked ? ' lk' : '') + '"><canvas width="128" height="128" data-art="' + r.id + '"></canvas><span class="nm">' + r.name + '</span><small class="pay">' + r.pay + '</small>' +
     '<b class="pc">' + (r.p > 0 ? pctText(r.p) : '&nbsp;') + '</b>' +
     '<button type="button" class="chip tgl" data-id="' + r.id + '">' + (r.locked ? 'Locked in' : r.inPool ? 'In pool' : 'Add') + '</button>' +
     '<small class="why">' + (r.locked ? 'Max out ' + r.need + ' to switch off' : !r.unlocked ? 'Buy its unlock again to spawn it' : '&nbsp;') + '</small></div>').join('');
   document.querySelectorAll('#poolList canvas').forEach((cv) => { cv.getContext('2d').drawImage(bigSprite(cv.dataset.art), -10, -10, 148, 148); });
-  setLbl('shinyBtn', v.shinyOn ? 'On' : 'Off'); $('shinyBtn').classList.toggle('on', v.shinyOn); setLbl('shinyPct', pctText(v.shiny) + ' per pearl, pays 5x');
+  setLbl('shinyBtn', v.shinyOn ? 'On' : 'Off'); $('shinyBtn').classList.toggle('on', v.shinyOn); setLbl('shinyPct', pctText(v.shiny) + ' per pearl, pays ' + ECON.SHINY_MULT + 'x');
 }
 $('poolList').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-id]'); if (b) { Snd.click(); togglePool(b.dataset.id); } });
 $('shinyBtn').addEventListener('click', () => { Snd.click(); setShiny(!state.shinyOn); });
@@ -298,7 +298,7 @@ function bookView(i) {
 function bookEntryHTML(e) {
   const tag = e.shiny ? 'Shiny' : 'Normal';
   return '<div class="ent' + (e.found ? '' : ' sil') + (e.shiny ? ' shn' : '') + '"><span class="tag2">' + tag + '</span><canvas width="264" height="264" data-art="' + e.id + (e.shiny ? ':s' : '') + '"></canvas><h4>' + e.name + '</h4>' +
-    (e.found ? '<p>Hits to pop: <b>' + e.hp + '</b></p><p>Payout: <b>x' + fmt(e.mult) + '</b></p><p>Popped: <b>' + fmt(e.popped) + '</b></p>' : '<p class="dim">Not discovered yet</p>') + '</div>';
+    (e.found ? '<p>Hits to pop: <b>' + e.hp + '</b></p><p>Payout: <b>x' + fmtX(e.mult) + '</b></p><p>Popped: <b>' + fmt(e.popped) + '</b></p>' : '<p class="dim">Not discovered yet</p>') + '</div>';
 }
 function updateBook() {
   if ($('book').hidden) return;
@@ -586,7 +586,7 @@ function loadState(raw) {
 function awayBonus(secs) {
   recalc();
   if (S.autoRate <= 0 || !(secs >= 20)) return; // also refuses NaN from a broken save time
-  const gain = ECON.idleRate(S) * Math.min(secs, 28800) * 0.5;
+  const gain = ECON.idleRate(S, state.pool, state.lv) * Math.min(secs, 28800) * 0.5; // pays at the pool's expected payout per pop
   state.sparks += gain; state.runEarned += gain; state.lifetime += gain;
   toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice while you were away');
 }

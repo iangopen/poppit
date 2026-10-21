@@ -130,9 +130,9 @@ module.exports.task7 = ({ G, ok, frames, E }) => {
   ok('collection counts start at 1 of 20', JSON.stringify(G.bookCount()) === JSON.stringify({ found: 1, total: 20 }), JSON.stringify(G.bookCount()));
   G.discover('ruby', false);
   v = G.bookView(ruby);
-  ok('discovering a type reveals its page', v.left.found && v.left.name === 'Ruby Pearl' && v.left.hp === 200 && v.left.mult === 2000);
+  ok('discovering a type reveals its page', v.left.found && v.left.name === 'Ruby Pearl' && v.left.hp === 200 && v.left.mult === 51000);
   G.discover('ruby', true); v = G.bookView(ruby);
-  ok('shiny entry counts separately and shows 5x payout', v.right.found && v.right.mult === 10000 && G.bookCount().found === 3, JSON.stringify(G.bookCount()));
+  ok('shiny entry counts separately and shows 5x payout', v.right.found && v.right.mult === 255000 && G.bookCount().found === 3, JSON.stringify(G.bookCount()));
   ok('a book page exists for every type', E.PEARLS.every((t, i) => G.bookView(i).left.id === t.id && G.bookView(i).right.id === t.id));
   ok('out-of-range pages are clamped', G.bookView(-4).left.id === 'pearl' && G.bookView(99).left.id === 'black');
 };
@@ -145,5 +145,25 @@ module.exports.final = ({ G, ok, E }) => {
   ok('re-bought golden is live in the chances', (E.poolChances(st.pool, st.lv).golden || 0) > 0);
   G.loadState({ version: 2, lv: E.zeroLevels() }); G.recalc(); st.col.blue.found = st.col.golden.found = true; st.pool = ['blue', 'golden'];
   const v = G.poolView();
-  ok('rose cannot be dropped from an early pool, so it still fills the board', v.rows.find((r) => r.id === 'pearl').inPool && v.rows.find((r) => r.id === 'pearl').p === 1, JSON.stringify(v.rows.map((r) => [r.id, r.p])));
+  // the largest payouts: Black Pearl in the book (shiny 950K) and on its pool card (190K)
+  E.PEARLS.forEach((t) => { st.col[t.id].found = true; st.col[t.id].sFound = true; });
+  const bk = G.bookView(9), pay = (html) => (html.match(/Payout: <b>([^<]*)<\/b>/) || [])[1];
+  ok('book shows the largest payouts short: x190K and x950K', pay(G.bookEntryHTML(bk.left)) === 'x190K' && pay(G.bookEntryHTML(bk.right)) === 'x950K', pay(G.bookEntryHTML(bk.right)));
+  const blackRow = G.poolView().rows.find((r) => r.id === 'black');
+  ok('pool card shows the black payout as x190K', blackRow && blackRow.pay === 'x190K payout', blackRow && blackRow.pay);
+  ok('every pool and book payout fits in 13 / 6 characters', G.poolView().rows.every((r) => r.pay.length <= 13) && E.PEARLS.every((t, i) => pay(G.bookEntryHTML(G.bookView(i).right)).length <= 6),
+    G.poolView().rows.map((r) => r.pay).join(' | '));
+  ok('shop text formats the payout', /: x190K payout, 320 hits/.test(G.META.black.desc()), G.META.black.desc());
+  // away bonus: idle rate x half, at the pool's expected payout per pop
+  const lvA = Object.assign(E.zeroLevels(), { auto: 4, sharp: 3, lucky: 3, mint: 2, golden: 1 }); G.setLv(lvA); st.pool = ['pearl', 'blue', 'mint', 'golden'];
+  const away = () => { const b = st.sparks; G.awayBonus(3600); return st.sparks - b; };
+  const g1 = away(), want = E.idleRate(G.getS(), st.pool, st.lv) * 1800;
+  ok('away bonus for 1 h = idle rate at pool EV x 50%', Math.abs(g1 - want) < 1e-6 * want && g1 > E.stats(st).autoRate * E.stats(st).popBase * 1800, g1.toFixed(0));
+  lvA.golden = 5; G.setLv(lvA); const g2 = away();
+  ok('away bonus grows with the golden chance', g2 > g1, g1.toFixed(0) + ' -> ' + g2.toFixed(0));
+  const g8 = away.call(null), cap = (() => { const b = st.sparks; G.awayBonus(86400); return st.sparks - b; })();
+  ok('away bonus still caps at 8 h', Math.abs(cap - g8 * 8) < 1e-6 * cap, (cap / g8).toFixed(2));
+  G.loadState({ version: 2, lv: E.zeroLevels() }); G.recalc(); st.col.blue.found = st.col.golden.found = true; st.pool = ['blue', 'golden'];
+  const v2 = G.poolView();
+  ok('rose cannot be dropped from an early pool, so it still fills the board', v2.rows.find((r) => r.id === 'pearl').inPool && v2.rows.find((r) => r.id === 'pearl').p === 1, JSON.stringify(v2.rows.map((r) => [r.id, r.p])));
 };

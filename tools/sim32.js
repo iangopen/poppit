@@ -16,25 +16,19 @@ function mulberry32(a) {
 }
 
 // Tuning options for docs/balance-report.md. Each overrides only the levers it names; the sim never edits src/econ.js.
-// minRun may depend on Flavors (echoes); gain replaces collapseGain(run).
-const logGain = (run) => Math.floor(10 * Math.log10(run / 1e5));
+// minRun may depend on Flavors (echoes); gain replaces collapseGain(run); base and max override an upgrade's base cost or max level.
 const VARIANTS = {
   baseline: {},
-  A_floor4M: { minRun: 4e6 },
-  B_logGain: { gain: logGain },
-  C_scaledFloorLog: { minRun: (e) => 3e6 * Math.pow(1 + 0.2 * e, 2), gain: logGain },
-  // also tried, see the report
-  C_plusCost12: { minRun: (e) => 3e6 * Math.pow(1 + 0.2 * e, 2), gain: logGain, costScale: 12 },
-  cost12: { costScale: 12 },
-  scaledFloorOnly: { minRun: (e) => 1.2e6 * Math.pow(1 + 0.2 * e, 2) },
+  scaledFloor: { minRun: (e) => E.COLLAPSE_MIN_RUN * (1 + 0.2 * e) }, // the floor rises with the Flavor payout multiplier
+  moreFlavors: { gain: (run) => Math.floor(Math.sqrt(run / 312500)) }, // 4 Flavors at the floor instead of 2
   moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12 } },
 };
 
 // The economy the sim plays: ECON itself, with a variant's levers swapped in.
 // The cost formulas are copies of src/econ.js; checkCopies() fails loudly if they drift.
 function econ(v) {
-  const scale = v.costScale || 6;
-  const UPG = {}; for (const id in E.UPG) UPG[id] = Object.assign({}, E.UPG[id], v.max && v.max[id] != null ? { max: v.max[id] } : {});
+  const scale = v.costScale || E.COST_SCALE;
+  const UPG = {}; for (const id in E.UPG) UPG[id] = Object.assign({}, E.UPG[id], v.max && v.max[id] != null ? { max: v.max[id] } : {}, v.base && v.base[id] != null ? { base: v.base[id] } : {});
   const cost = (id, lvl) => Math.ceil(UPG[id].base * scale * Math.pow(UPG[id].grow, lvl));
   const toolUpCost = (i, kind, lvl) => Math.ceil(Math.max(400, cost('tool', i) * 0.5) * Math.pow(2.2, lvl) * (kind === 'speed' ? 0.8 : 1));
   const toolPrice = (idx) => (idx <= 0 ? 0 : cost('tool', idx - 1));
@@ -66,7 +60,7 @@ function freshRun(st) {
 // A variant's waitMin makes the player keep going until that minute even when Fresh Batch is ready earlier.
 function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
   freshRun(st);
-  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null;
+  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0;
   const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200];
   const fill = () => CELLS[st.lv.board];
   for (let i = 0; i < Math.max(3, Math.round(fill() * 0.3)); i++) pearls.push({ kind: 'pearl', dmg: 0, hp: X.KIND.pearl.hp, sh: false });
@@ -134,18 +128,20 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin) {
     const left = candidates(); if (left.every((c) => c.c <= sparks)) satiated += dt;
     if (left.every((c) => c.n === 'sharp' || c.c <= sparks)) satiatedX += dt;
     for (const c of left) if (c.c > top.cost) top.cost = c.c;
-    if (helperAt == null && st.lv.auto > 0) helperAt = t / 60;
+    // awayBonus() in src/ui.js for a 1 hour absence: idle rate at the pool's expected payout, half rate
+    const away1h = () => X.idleRate(X.stats(st), X.PEARLS.map((p) => p.id), st.lv) * 3600 * 0.5;
+    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
-    if (ready == null && X.collapseReady(runEarned, st.echoes)) ready = t;
+    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); }
   }
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
   const gainF = ready == null ? 0 : X.collapseGain(runEarned);
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
-  return { furthest, helperAt, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + 0.2 * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { furthest, helperAt, awayHelper, awayReady, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: 1 + 0.2 * st.echoes, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose) {
@@ -163,9 +159,9 @@ function report(name, v, verbose) {
   for (const p of PROFILES) {
     const rs = play(v, p, verbose), cols = rs.map((_, i) => 'C' + (i + 1));
     console.log('\n## ' + p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + ', seed ' + p[3] + ')\n');
-    console.log('| cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl |');
-    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|');
-    rs.forEach((r, i) => console.log('| ' + (i + 1) + ' | ' + (r.ready == null ? 'not by ' + MAX_CYCLE_MIN : f1(r.ready / 60)) + ' | ' + f1(r.helperAt) + ' | ' + f1(r.minutes) + ' | ' + big(r.runEarned) + ' | +' + r.gain + ' | ' + r.echoes + ' | ' + r.mult.toFixed(1) + ' | ' + f1(r.satiated) + ' | ' + f1(r.satiatedX) + ' | ' + big(r.rate) + ' | ' + r.furthest + ' |'));
+    console.log('| cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |');
+    console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+    rs.forEach((r, i) => console.log('| ' + (i + 1) + ' | ' + (r.ready == null ? 'not by ' + MAX_CYCLE_MIN : f1(r.ready / 60)) + ' | ' + f1(r.helperAt) + ' | ' + f1(r.minutes) + ' | ' + big(r.runEarned) + ' | +' + r.gain + ' | ' + r.echoes + ' | ' + r.mult.toFixed(1) + ' | ' + f1(r.satiated) + ' | ' + f1(r.satiatedX) + ' | ' + big(r.rate) + ' | ' + r.furthest + ' | ' + big(r.awayHelper) + ' | ' + big(r.awayReady) + ' |'));
     console.log('\nMinute each upgrade reaches max level (- = not maxed before Fresh Batch):\n');
     console.log('| upgrade (max) | ' + cols.join(' | ') + ' |'); console.log('|---|' + cols.map(() => '---|').join(''));
     for (const id of ['tool'].concat(E.ORDER)) console.log('| ' + id + ' (' + econ(v).UPG[id].max + ') | ' + rs.map((r) => f1(r.maxAt[id])).join(' | ') + ' |');
