@@ -165,6 +165,38 @@ body {
 .prow canvas { width: 84px; height: 84px; }
 .prow .nm { flex: none; font: 800 14px var(--font-ui); }
 .prow .pay { color: var(--muted); font-weight: 700; white-space: nowrap; }
+/* backpack Keep list */
+.keepHd { margin: 2px 2px 0; font: 400 20px/1.1 var(--font-brand); color: var(--fg); display: flex; flex-direction: column; }
+.keepHd small { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+.keepList { display: grid; gap: 2px; max-height: 150px; overflow-y: auto; padding-right: 2px; }
+.krow { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 4px; border-radius: 10px; font: 700 13px var(--font-ui); color: var(--fg); }
+.krow.on { background: rgba(240, 40, 108, 0.07); }
+.krow canvas { width: 28px; height: 28px; flex: none; }
+.krow .kn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.krow .kc { color: var(--muted); font-variant-numeric: tabular-nums; }
+.keepT { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12.5px; min-width: 70px; justify-content: center; }
+.keepT .lock { display: none; }
+.keepT.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.keepT.on .lock { display: block; }
+.slot .lk { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; display: grid; place-items: center; color: #fff; background: rgba(34, 26, 14, 0.86); border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.55); pointer-events: none; }
+.slot .lk .lock { display: block; }
+/* Artifacts panel: one section per hall, a grid of cards in each */
+#arts { left: 6px; right: 6px; top: 6px; bottom: 6px; width: auto; transform-origin: center; }
+#artHalls { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 2px 4px 4px 2px; }
+.hall h4 { margin: 0 0 2px; font: 400 26px/1.1 var(--font-brand); color: var(--fg); }
+.hallGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
+.acard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 12px 12px; text-align: center; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.acard.own { box-shadow: 0 0 0 2.5px var(--gold) inset; }
+.aicon svg { display: block; width: 96px; height: 96px; }
+.acard h5 { margin: 0; font: 400 26px/1 var(--font-brand); color: var(--fg); }
+.acard .ad { margin: 0; font: 700 13px/1.3 var(--font-ui); color: var(--fg); }
+.acost { display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 100%; font: 700 12.5px/1.3 var(--font-ui); color: var(--muted); font-variant-numeric: tabular-nums; }
+.abar { display: block; height: 12px; background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 255px 8px 225px 8px / 8px 225px 8px 255px; overflow: hidden; }
+.abar i { display: block; height: 100%; width: 100%; background: repeating-linear-gradient(-55deg, #f0286c 0 4px, #ff86ae 4px 7px); transform-origin: left center; }
+.anote { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+.acard .craft { min-width: 120px; }
+.acard .craft:disabled { opacity: 0.55; cursor: default; }
+.acard.own .craft:disabled { opacity: 1; background: var(--gold); color: #3a2e1c; border-color: #3a2e1c; }
 .prow .pc { font: 400 34px/1 var(--font-brand); min-width: 0; text-align: center; }
 .prow .why { min-height: 14px; }
 .prow .tgl { min-width: 96px; }
@@ -212,7 +244,9 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .panel[hidden] { display: none; }
 @keyframes panelIn { from { opacity: 0; transform: scale(0.94, 0.9); } to { opacity: 1; transform: none; } }
-#pack { right: auto; left: 6px; top: auto; bottom: 80px; transform-origin: bottom left; }
+#pack { right: auto; left: 6px; top: auto; bottom: 80px; transform-origin: bottom left; max-height: calc(100% - 92px); }
+#pack > * { flex-shrink: 0; }
+#pack > .keepList { flex-shrink: 1; min-height: 64px; } /* on a short board the Keep list scrolls instead of the panel growing past the top */
 .panel.jolt { animation: jolt 520ms cubic-bezier(.2, 1.2, .4, 1); }
 @keyframes jolt { 0% { transform: scale(1); } 18% { transform: scale(1.05, 0.9); } 40% { transform: scale(0.97, 1.05); } 65% { transform: scale(1.01, 0.99); } 100% { transform: scale(1); } }
 .panel header { display: flex; align-items: center; justify-content: space-between; }
@@ -242,6 +276,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 .dock { position: absolute; bottom: 10px; width: 56px; height: 58px; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; transform-origin: center bottom; transition: transform 120ms ease; filter: drop-shadow(0 6px 6px rgba(100, 80, 40, 0.3)); }
 .dock svg { display: block; margin: 2px auto 0; }
 #bookBtn { left: 146px; } #bookBtn svg { transform: rotate(4deg); }
+#artBtn { left: 202px; } #artBtn svg { transform: rotate(-3deg); }
+#stage.arts #bottom { left: 262px; } /* room for the Artifacts button while it shows */
 .dock:hover { transform: scale(1.07) rotate(-2deg); }
 .dock:active { transform: scale(1.06, 0.92); }
 .dock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 16px; }
@@ -309,6 +345,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 42%); }
   #hint { bottom: 44px; font-size: 17px; }
   #meterLbl { display: none; }
+  #pack { bottom: 6px; max-height: calc(100% - 12px); } /* a short phone board: the open backpack may cover the dock */
+  #stage.arts #bottom { left: 8px; bottom: 76px; } /* four dock buttons leave no room beside them: the bar sits above the dock */
 }
 @media (prefers-reduced-motion: reduce) {
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
@@ -349,7 +387,9 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <div class="qty"><button type="button" id="qMinus" aria-label="Sell one fewer">&minus;</button><input id="qIn" type="number" min="1" inputmode="numeric" aria-label="Quantity to sell"><button type="button" id="qPlus" aria-label="Sell one more">+</button><button type="button" id="qMax">Max</button></div>
         <button class="sellSel" id="sellSel" type="button">Sell</button>
       </div>
-      <div class="packTotal"><span>Worth</span><b id="packTotal">0</b></div>
+      <h4 class="keepHd">Keep for crafting<small>Kept pearls skip auto-sell and Sell all</small></h4>
+      <div class="keepList" id="keepList"></div>
+      <div class="packTotal"><span>Worth (not kept)</span><b id="packTotal">0</b></div>
       <div class="packFoot">
         <button class="sell" id="sellBtn" type="button" disabled>Sell all</button>
         <label class="auto"><input type="checkbox" id="autoSell"><span>Auto-sell</span></label>
@@ -405,6 +445,20 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <path d="M22 42 L44 42 M22 47 L38 47" stroke="#f2d38a" stroke-width="2.4"/>
       </svg>
     </button>
+    <button id="artBtn" class="dock" type="button" aria-expanded="false" aria-controls="arts" aria-label="Artifacts" hidden>
+      <svg viewBox="0 0 64 64" width="54" height="54" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 52 C16 49.5 26 54 34 51.5 C42 49 50 53.5 58 51" stroke="#8fc7e8" stroke-width="2.4"/>
+        <path d="M9 35 C8.5 30.5 10.5 28 13.5 29.5 C17 32 22 33.5 27 33 C29 32.5 30 31 29 28.5 C26 23.5 27.5 15 35.5 13.5 C43 12.5 47 18.5 45.5 24.5 C45 27 43.5 29 42.5 30.5 C49 31 54.5 34 54 40.5 C53.5 47.5 46 51.5 33 51.5 C20 51.5 9.5 46 9 35 Z" fill="#ff9ec4"/>
+        <path d="M45 20.5 C49.5 19.5 54.5 20.5 55.5 23 C55 25.5 50 26.5 45.5 25.5" fill="#f5b020"/>
+        <path d="M21 40.5 C26 37 34 37.5 38.5 42.5"/><circle cx="39.5" cy="19.5" r="1.7" fill="#3a2e1c" stroke="none"/>
+        <path d="M33 17.5 q2 -2.5 4.5 -2.5" stroke="#fff" stroke-width="2" opacity="0.85"/>
+      </svg>
+    </button>
+    <section class="panel" id="arts" hidden aria-label="Artifacts">
+      <header><h3>Artifacts</h3><button class="x" type="button" data-close="arts" aria-label="Close artifacts">&#10005;</button></header>
+      <p class="hint2">Craft artifacts from pearls you keep. They are yours for good, through every Fresh Batch.</p>
+      <div id="artHalls"></div>
+    </section>
     <section class="panel" id="tools" hidden aria-label="Tools">
       <header><h3>Tools</h3><button class="x" type="button" data-close="tools" aria-label="Close tools">&#10005;</button></header>
       <div class="tcar">

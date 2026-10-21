@@ -1,6 +1,7 @@
 'use strict';
 /* ---------- Economy: pure functions, no DOM. Tested headlessly in node. ---------- */
 const ECON = (() => {
+  const ART = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js'); // the page concatenates src/artifacts.js first
   // base cost, growth per level, max level, optional requirement on current levels
   const UPG = {
     tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
@@ -107,6 +108,7 @@ const ECON = (() => {
     const ul = uniqueLevel(eq, up);
     return Object.assign({
       echoMult,
+      artMult: ART.payoutMult(st.artifacts), // owned artifacts' payout bonus (the Pink Duck)
       toolIdx: eq, toolName: TOOLS[eq].name, power: toolPower(eq, up.p), toolSpeed: toolSpeed(eq, up.s),
       popBase: 2 + L.sharp,
       spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)),
@@ -121,7 +123,7 @@ const ECON = (() => {
 
   const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
   function popValue(S, combo, frenzy, kind) {
-    return S.popBase * S.echoMult * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
+    return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
   const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
@@ -143,7 +145,7 @@ const ECON = (() => {
       let ev = 0, hits = 0;
       for (const id in mix) { ev += mix[id] * KIND[id].mult; hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
       const pops = S.autoRate > 0 ? Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery) : 0;
-      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * ev * shiny * (frenzy ? 2 : 1) };
+      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
     const normal = phase(false), fr = phase(true);
     // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds

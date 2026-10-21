@@ -9,7 +9,9 @@ const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const INV_IDS = ECON.PEARLS.flatMap((t) => [t.id, t.id + ':s']); // normal and shiny stacks
 const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); return o; };
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() };
+const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} };
+// Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
+const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
 function syncDiscoveries() { for (const t of ECON.PEARLS) if (ECON.isUnlocked(t.id, state.lv)) discover(t.id, false); }
 // first sight of a type (or its shiny) fills a collection entry; a new normal type joins the pool once
@@ -161,10 +163,10 @@ function radiusOf(p) { return PR * 0.74 * (isBig(p.kind) ? 1.1 : 1); }
 function award(val, x, y, col, big, kind) {
   // popped pearls go into the backpack; juice only arrives when they are sold
   kind = kind || 'pearl'; state.seen[kind] = true;
-  if (state.autoSell) { state.sparks += val; state.runEarned += val; state.lifetime += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
-  else { state.inv[kind] = (state.inv[kind] || 0) + 1; state.invV[kind] = (state.invV[kind] || 0) + val; }
+  if (state.autoSell && !isKept(kind)) { state.sparks += val; state.runEarned += val; state.lifetime += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
+  else { state.inv[kind] = (state.inv[kind] || 0) + 1; state.invV[kind] = (state.invV[kind] || 0) + val; } // auto-sell off, or a kept type: into the backpack
   floatText(x, y - PR * 0.9, '+' + fmtV(val), 'hsl(' + col[0] + ',' + Math.min(95, col[1]) + '%,' + Math.max(28, col[2] - 12) + '%)', big ? 24 : clamp(PR * 0.55, 13, 19));
-  motes(x, y, clamp(Math.round(2 + Math.log2(val + 1)), 2, 6) + (big ? 3 : 0), col, !state.autoSell);
+  motes(x, y, clamp(Math.round(2 + Math.log2(val + 1)), 2, 6) + (big ? 3 : 0), col, !state.autoSell || isKept(kind));
 }
 
 function popPearl(p, src, opts) {

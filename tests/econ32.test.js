@@ -143,7 +143,7 @@ test('only per-type upgrades sit in the Pearls & Marbles group', () => {
   for (const id in E.UPG) assert.strictEqual(E.UPG[id].group === 'marble', types.has(id), id);
 });
 // ---- number display: fmt lives in econ.js but is not exported, so load it the way the page does ----
-const { fmt, fmtX } = new Function(require('fs').readFileSync(require('path').join(__dirname, '../src/econ.js'), 'utf8') + '\nreturn { fmt, fmtX };')();
+const { fmt, fmtX } = new Function('require', require('fs').readFileSync(require('path').join(__dirname, '../src/econ.js'), 'utf8') + '\nreturn { fmt, fmtX };')((p) => require(require('path').join(__dirname, '../src', p)));
 test('fmtX prints payouts with no stray zeros', () => {
   assert.deepStrictEqual(E.PEARLS.map((t) => fmtX(t.mult)), ['1', '7.5', '27', '100', '350', '1,100', '4,000', '14K', '51K', '190K']);
   assert.deepStrictEqual(E.PEARLS.map((t) => fmtX(t.mult * E.SHINY_MULT)), ['5', '37.5', '135', '500', '1,750', '5,500', '20K', '70K', '255K', '950K']);

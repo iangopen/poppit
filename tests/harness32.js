@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const dir = __dirname;
-const src = ['econ.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'].map((f) => fs.readFileSync(path.join(dir, '..', 'src', f), 'utf8')).join('\n');
+const src = ['artifacts.js', 'econ.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'].map((f) => fs.readFileSync(path.join(dir, '..', 'src', f), 'utf8')).join('\n');
 
 const els = {};
 function mkEl(id) {
@@ -16,7 +16,7 @@ function mkEl(id) {
     appendChild(c) { this.children.push(c); return c; },
     querySelector() { return mkEl('q'); },
     getBoundingClientRect() { return { left: 0, top: 0, width: 900, height: 700 }; },
-    setPointerCapture() {}, focus() {}, select() {}, offsetWidth: 1, disabled: false,
+    setPointerCapture() {}, focus() {}, select() {}, setAttribute(k, v) { this['attr:' + k] = String(v); }, lastElementChild: { textContent: '' }, offsetWidth: 1, disabled: false,
     getContext() { const gr = { addColorStop() {} }; return new Proxy({}, { get: (_, k) => (k === 'measureText' ? () => ({ width: 40 }) : k === 'createRadialGradient' || k === 'createLinearGradient' ? () => gr : () => {}), set: () => true }); },
     width: 0, height: 0,
   };
@@ -36,7 +36,7 @@ const globals = {
   matchMedia: win.matchMedia, requestAnimationFrame: (f) => { rafCb = f; }, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
 };
 const names = Object.keys(globals);
-const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,bookEntryHTML,awayBonus,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,upTool,viewTool:(i)=>{toolView=i;updateToolPanel()},loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
+const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,bookEntryHTML,awayBonus,craftArtifact,setKeep,isKept,artView,payoutLine,syncArtBtn,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,upTool,viewTool:(i)=>{toolView=i;updateToolPanel()},loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
 new Function(...names, src + '\n' + hook)(...names.map((n) => globals[n]));
 const G = globalThis.__g;
 const W = () => G.state.sparks + Object.values(G.state.invV).reduce((a, b) => a + b, 0);
@@ -222,7 +222,7 @@ let bad = 0;
   G.loadState({ version: 2, musicOn: false, musicVol: 0.2 }); ok('music settings load', G.state.musicOn === false && G.state.musicVol === 0.2);
   G.loadState({ version: 2 }); ok('older saves default music on at half volume', G.state.musicOn === true && G.state.musicVol === 0.5);
 }
-const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E, store, els }); PT.task3({ G, ok, frames, live, E }); PT.task4({ G, ok, frames, E }); PT.task5({ G, ok, frames, E }); PT.task6({ G, ok, frames, E }); PT.task7({ G, ok, frames, E }); PT.final({ G, ok, E, frames });
+const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E, store, els }); PT.task3({ G, ok, frames, live, E }); PT.task4({ G, ok, frames, E }); PT.task5({ G, ok, frames, E }); PT.task6({ G, ok, frames, E }); PT.task7({ G, ok, frames, E }); PT.final({ G, ok, E, frames }); require('./artifact_tests.js')({ G, ok, frames, E, store, els });
 // ---- save codes, versions and hardened loading ----
 {
   // compare saves without the timestamp; a {p:0,s:0} tool entry is what toolUp() creates on first read, the same as none
@@ -284,7 +284,7 @@ const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E
   const v2c = { version: 2, sparks: 100, lv: Object.assign(E.zeroLevels(), { chain: 3, sweep: 2, lucky: 2 }), toolUp: { 0: { p: 1, s: 2 } }, autoSell: false };
   const mig = G.migrateSave(v2c).save, oldChain = [0, 1, 2].reduce((a, l) => a + Math.ceil(110 * 6 * Math.pow(2.5, l)), 0);
   ok('a save with chain level 3 and sweep level 2 migrates with the exact refund, toolUp[0].u 2, and no lv.chain or lv.sweep',
-    oldChain === 6435 && mig.version === 3 && mig.sparks === 100 + 6435 && !('chain' in mig.lv) && !('sweep' in mig.lv) && mig.toolUp[0].u === 2 && mig.toolUp[0].p === 1 &&
+    oldChain === 6435 && mig.version === G.SAVE_VERSION && mig.sparks === 100 + 6435 && !('chain' in mig.lv) && !('sweep' in mig.lv) && mig.toolUp[0].u === 2 && mig.toolUp[0].p === 1 &&
     G.loadState(v2c) === 'ok' && st.sparks === 6535 && st.toolUp[0].u === 2 && st.toolUp[0].s === 2 && !('chain' in st.lv) && !('sweep' in st.lv) && !('chain' in G.serialize().lv), 'sparks ' + st.sparks);
   ok('the migration does not change the stored v2 object', v2c.lv.chain === 3 && v2c.sparks === 100);
   ok('a chain refund is capped at the old max level 8', G.migrateSave({ version: 2, sparks: 0, lv: { chain: 99 } }).save.sparks === 670950);

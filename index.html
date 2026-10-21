@@ -165,6 +165,38 @@ body {
 .prow canvas { width: 84px; height: 84px; }
 .prow .nm { flex: none; font: 800 14px var(--font-ui); }
 .prow .pay { color: var(--muted); font-weight: 700; white-space: nowrap; }
+/* backpack Keep list */
+.keepHd { margin: 2px 2px 0; font: 400 20px/1.1 var(--font-brand); color: var(--fg); display: flex; flex-direction: column; }
+.keepHd small { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+.keepList { display: grid; gap: 2px; max-height: 150px; overflow-y: auto; padding-right: 2px; }
+.krow { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 4px; border-radius: 10px; font: 700 13px var(--font-ui); color: var(--fg); }
+.krow.on { background: rgba(240, 40, 108, 0.07); }
+.krow canvas { width: 28px; height: 28px; flex: none; }
+.krow .kn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.krow .kc { color: var(--muted); font-variant-numeric: tabular-nums; }
+.keepT { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12.5px; min-width: 70px; justify-content: center; }
+.keepT .lock { display: none; }
+.keepT.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.keepT.on .lock { display: block; }
+.slot .lk { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; display: grid; place-items: center; color: #fff; background: rgba(34, 26, 14, 0.86); border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.55); pointer-events: none; }
+.slot .lk .lock { display: block; }
+/* Artifacts panel: one section per hall, a grid of cards in each */
+#arts { left: 6px; right: 6px; top: 6px; bottom: 6px; width: auto; transform-origin: center; }
+#artHalls { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 2px 4px 4px 2px; }
+.hall h4 { margin: 0 0 2px; font: 400 26px/1.1 var(--font-brand); color: var(--fg); }
+.hallGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
+.acard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 12px 12px; text-align: center; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.acard.own { box-shadow: 0 0 0 2.5px var(--gold) inset; }
+.aicon svg { display: block; width: 96px; height: 96px; }
+.acard h5 { margin: 0; font: 400 26px/1 var(--font-brand); color: var(--fg); }
+.acard .ad { margin: 0; font: 700 13px/1.3 var(--font-ui); color: var(--fg); }
+.acost { display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 100%; font: 700 12.5px/1.3 var(--font-ui); color: var(--muted); font-variant-numeric: tabular-nums; }
+.abar { display: block; height: 12px; background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 255px 8px 225px 8px / 8px 225px 8px 255px; overflow: hidden; }
+.abar i { display: block; height: 100%; width: 100%; background: repeating-linear-gradient(-55deg, #f0286c 0 4px, #ff86ae 4px 7px); transform-origin: left center; }
+.anote { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+.acard .craft { min-width: 120px; }
+.acard .craft:disabled { opacity: 0.55; cursor: default; }
+.acard.own .craft:disabled { opacity: 1; background: var(--gold); color: #3a2e1c; border-color: #3a2e1c; }
 .prow .pc { font: 400 34px/1 var(--font-brand); min-width: 0; text-align: center; }
 .prow .why { min-height: 14px; }
 .prow .tgl { min-width: 96px; }
@@ -212,7 +244,9 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .panel[hidden] { display: none; }
 @keyframes panelIn { from { opacity: 0; transform: scale(0.94, 0.9); } to { opacity: 1; transform: none; } }
-#pack { right: auto; left: 6px; top: auto; bottom: 80px; transform-origin: bottom left; }
+#pack { right: auto; left: 6px; top: auto; bottom: 80px; transform-origin: bottom left; max-height: calc(100% - 92px); }
+#pack > * { flex-shrink: 0; }
+#pack > .keepList { flex-shrink: 1; min-height: 64px; } /* on a short board the Keep list scrolls instead of the panel growing past the top */
 .panel.jolt { animation: jolt 520ms cubic-bezier(.2, 1.2, .4, 1); }
 @keyframes jolt { 0% { transform: scale(1); } 18% { transform: scale(1.05, 0.9); } 40% { transform: scale(0.97, 1.05); } 65% { transform: scale(1.01, 0.99); } 100% { transform: scale(1); } }
 .panel header { display: flex; align-items: center; justify-content: space-between; }
@@ -242,6 +276,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 .dock { position: absolute; bottom: 10px; width: 56px; height: 58px; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; transform-origin: center bottom; transition: transform 120ms ease; filter: drop-shadow(0 6px 6px rgba(100, 80, 40, 0.3)); }
 .dock svg { display: block; margin: 2px auto 0; }
 #bookBtn { left: 146px; } #bookBtn svg { transform: rotate(4deg); }
+#artBtn { left: 202px; } #artBtn svg { transform: rotate(-3deg); }
+#stage.arts #bottom { left: 262px; } /* room for the Artifacts button while it shows */
 .dock:hover { transform: scale(1.07) rotate(-2deg); }
 .dock:active { transform: scale(1.06, 0.92); }
 .dock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 16px; }
@@ -309,6 +345,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 42%); }
   #hint { bottom: 44px; font-size: 17px; }
   #meterLbl { display: none; }
+  #pack { bottom: 6px; max-height: calc(100% - 12px); } /* a short phone board: the open backpack may cover the dock */
+  #stage.arts #bottom { left: 8px; bottom: 76px; } /* four dock buttons leave no room beside them: the bar sits above the dock */
 }
 @media (prefers-reduced-motion: reduce) {
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
@@ -349,7 +387,9 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <div class="qty"><button type="button" id="qMinus" aria-label="Sell one fewer">&minus;</button><input id="qIn" type="number" min="1" inputmode="numeric" aria-label="Quantity to sell"><button type="button" id="qPlus" aria-label="Sell one more">+</button><button type="button" id="qMax">Max</button></div>
         <button class="sellSel" id="sellSel" type="button">Sell</button>
       </div>
-      <div class="packTotal"><span>Worth</span><b id="packTotal">0</b></div>
+      <h4 class="keepHd">Keep for crafting<small>Kept pearls skip auto-sell and Sell all</small></h4>
+      <div class="keepList" id="keepList"></div>
+      <div class="packTotal"><span>Worth (not kept)</span><b id="packTotal">0</b></div>
       <div class="packFoot">
         <button class="sell" id="sellBtn" type="button" disabled>Sell all</button>
         <label class="auto"><input type="checkbox" id="autoSell"><span>Auto-sell</span></label>
@@ -405,6 +445,20 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <path d="M22 42 L44 42 M22 47 L38 47" stroke="#f2d38a" stroke-width="2.4"/>
       </svg>
     </button>
+    <button id="artBtn" class="dock" type="button" aria-expanded="false" aria-controls="arts" aria-label="Artifacts" hidden>
+      <svg viewBox="0 0 64 64" width="54" height="54" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 52 C16 49.5 26 54 34 51.5 C42 49 50 53.5 58 51" stroke="#8fc7e8" stroke-width="2.4"/>
+        <path d="M9 35 C8.5 30.5 10.5 28 13.5 29.5 C17 32 22 33.5 27 33 C29 32.5 30 31 29 28.5 C26 23.5 27.5 15 35.5 13.5 C43 12.5 47 18.5 45.5 24.5 C45 27 43.5 29 42.5 30.5 C49 31 54.5 34 54 40.5 C53.5 47.5 46 51.5 33 51.5 C20 51.5 9.5 46 9 35 Z" fill="#ff9ec4"/>
+        <path d="M45 20.5 C49.5 19.5 54.5 20.5 55.5 23 C55 25.5 50 26.5 45.5 25.5" fill="#f5b020"/>
+        <path d="M21 40.5 C26 37 34 37.5 38.5 42.5"/><circle cx="39.5" cy="19.5" r="1.7" fill="#3a2e1c" stroke="none"/>
+        <path d="M33 17.5 q2 -2.5 4.5 -2.5" stroke="#fff" stroke-width="2" opacity="0.85"/>
+      </svg>
+    </button>
+    <section class="panel" id="arts" hidden aria-label="Artifacts">
+      <header><h3>Artifacts</h3><button class="x" type="button" data-close="arts" aria-label="Close artifacts">&#10005;</button></header>
+      <p class="hint2">Craft artifacts from pearls you keep. They are yours for good, through every Fresh Batch.</p>
+      <div id="artHalls"></div>
+    </section>
     <section class="panel" id="tools" hidden aria-label="Tools">
       <header><h3>Tools</h3><button class="x" type="button" data-close="tools" aria-label="Close tools">&#10005;</button></header>
       <div class="tcar">
@@ -448,9 +502,44 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 
 <script>
 
+/* ---------- Artifacts: permanent items crafted from kept pearls, grouped in halls. Pure, no DOM. ---------- */
+const ARTS = (() => {
+  const PINK_DUCK_PAYOUT = 1.25; // placeholder value, Ian may change it
+  // halls in display order; the Artifacts panel draws one section per hall
+  const HALLS = [{ id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make every pop pay more.' }];
+  // cost: inventory keys and quantities (a pearl id now; forge materials later). bonus: { type: 'payout', value } multiplies every payout.
+  const ARTIFACTS = [
+    { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
+  ];
+  const byId = (id) => ARTIFACTS.find((a) => a.id === id) || null;
+  function canCraft(id, inv, owned) {
+    const a = byId(id);
+    if (!a || (owned && owned[id] === true)) return false;
+    return a.cost.every((c) => ((inv && inv[c.kind]) || 0) >= c.qty);
+  }
+  // consumes exactly the cost (and the matching share of each stack's stored value) and marks it owned
+  function craft(id, inv, owned, invV) {
+    if (!canCraft(id, inv, owned)) return false;
+    for (const c of byId(id).cost) {
+      const have = inv[c.kind];
+      if (invV && invV[c.kind] != null) invV[c.kind] = have - c.qty > 0 ? invV[c.kind] * (have - c.qty) / have : 0;
+      inv[c.kind] = have - c.qty;
+    }
+    owned[id] = true;
+    return true;
+  }
+  function payoutMult(owned) {
+    let m = 1;
+    if (owned) for (const a of ARTIFACTS) if (owned[a.id] === true && a.bonus.type === 'payout') m *= a.bonus.value;
+    return m;
+  }
+  return { PINK_DUCK_PAYOUT, HALLS, ARTIFACTS, byId, canCraft, craft, payoutMult };
+})();
+if (typeof module !== 'undefined') module.exports = ARTS;
 'use strict';
 /* ---------- Economy: pure functions, no DOM. Tested headlessly in node. ---------- */
 const ECON = (() => {
+  const ART = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js'); // the page concatenates src/artifacts.js first
   // base cost, growth per level, max level, optional requirement on current levels
   const UPG = {
     tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
@@ -557,6 +646,7 @@ const ECON = (() => {
     const ul = uniqueLevel(eq, up);
     return Object.assign({
       echoMult,
+      artMult: ART.payoutMult(st.artifacts), // owned artifacts' payout bonus (the Pink Duck)
       toolIdx: eq, toolName: TOOLS[eq].name, power: toolPower(eq, up.p), toolSpeed: toolSpeed(eq, up.s),
       popBase: 2 + L.sharp,
       spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)),
@@ -571,7 +661,7 @@ const ECON = (() => {
 
   const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
   function popValue(S, combo, frenzy, kind) {
-    return S.popBase * S.echoMult * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
+    return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
   const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
@@ -593,7 +683,7 @@ const ECON = (() => {
       let ev = 0, hits = 0;
       for (const id in mix) { ev += mix[id] * KIND[id].mult; hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
       const pops = S.autoRate > 0 ? Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery) : 0;
-      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * ev * shiny * (frenzy ? 2 : 1) };
+      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
     const normal = phase(false), fr = phase(true);
     // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds
@@ -657,7 +747,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -683,6 +773,8 @@ const MIGRATIONS = {
     delete lv.chain; delete lv.sweep;
     return Object.assign({}, d, { version: 3, lv, toolUp, sparks });
   },
+  // v3 had no artifacts and no Keep: none owned, nothing kept
+  3: (d) => Object.assign({}, d, { version: 4, artifacts: isObj(d.artifacts) ? d.artifacts : {}, keep: isObj(d.keep) ? d.keep : {} }),
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
@@ -935,7 +1027,9 @@ const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const INV_IDS = ECON.PEARLS.flatMap((t) => [t.id, t.id + ':s']); // normal and shiny stacks
 const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); return o; };
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() };
+const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} };
+// Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
+const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
 function syncDiscoveries() { for (const t of ECON.PEARLS) if (ECON.isUnlocked(t.id, state.lv)) discover(t.id, false); }
 // first sight of a type (or its shiny) fills a collection entry; a new normal type joins the pool once
@@ -1087,10 +1181,10 @@ function radiusOf(p) { return PR * 0.74 * (isBig(p.kind) ? 1.1 : 1); }
 function award(val, x, y, col, big, kind) {
   // popped pearls go into the backpack; juice only arrives when they are sold
   kind = kind || 'pearl'; state.seen[kind] = true;
-  if (state.autoSell) { state.sparks += val; state.runEarned += val; state.lifetime += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
-  else { state.inv[kind] = (state.inv[kind] || 0) + 1; state.invV[kind] = (state.invV[kind] || 0) + val; }
+  if (state.autoSell && !isKept(kind)) { state.sparks += val; state.runEarned += val; state.lifetime += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
+  else { state.inv[kind] = (state.inv[kind] || 0) + 1; state.invV[kind] = (state.invV[kind] || 0) + val; } // auto-sell off, or a kept type: into the backpack
   floatText(x, y - PR * 0.9, '+' + fmtV(val), 'hsl(' + col[0] + ',' + Math.min(95, col[1]) + '%,' + Math.max(28, col[2] - 12) + '%)', big ? 24 : clamp(PR * 0.55, 13, 19));
-  motes(x, y, clamp(Math.round(2 + Math.log2(val + 1)), 2, 6) + (big ? 3 : 0), col, !state.autoSell);
+  motes(x, y, clamp(Math.round(2 + Math.log2(val + 1)), 2, 6) + (big ? 3 : 0), col, !state.autoSell || isKept(kind));
 }
 
 function popPearl(p, src, opts) {
@@ -1727,7 +1821,8 @@ function updateHud(dt) {
   $('rate').classList.toggle('live', state.autoSell);
   updatePack();
   const ec = $('echoes');
-  if (state.echoes > 0) { ec.hidden = false; ec.textContent = 'Flavors ' + state.echoes + ' (payouts x' + S.echoMult.toFixed(1) + ')'; } else ec.hidden = true;
+  setLbl('echoes', payoutLine()); ec.hidden = !payoutLine();
+  syncArtBtn();
   setLbl('toolLbl', S.toolName + ' · ' + S.power + (S.power === 1 ? ' hit power' : ' hit power'));
   const cb = $('combo');
   cb.classList.toggle('on', combo > 1);
@@ -1750,8 +1845,8 @@ let selling = false, sellTimer = 0, selKind = null, selQty = 1;
 function buildPack() {
   for (let n = 0; n < SLOT_COUNT; n++) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'slot empty'; b.hidden = true;
-    b.innerHTML = '<canvas width="128" height="128"></canvas><span class="cnt"></span>';
-    const slot = { el: b, cv: b.querySelector('canvas'), cnt: b.querySelector('.cnt'), kind: null, art: 0, shown: -1 };
+    b.innerHTML = '<canvas width="128" height="128"></canvas><span class="cnt"></span><span class="lk" hidden>' + LOCK_SVG + '</span>';
+    const slot = { el: b, cv: b.querySelector('canvas'), cnt: b.querySelector('.cnt'), lk: b.querySelector('.lk'), kind: null, art: 0, shown: -1 };
     b.addEventListener('click', () => { if (slot.kind) { Snd.click(); pickSlot(slot.kind); } });
     $('slots').appendChild(b); slotEls.push(slot);
   }
@@ -1760,9 +1855,43 @@ function buildPack() {
   $('qMax').addEventListener('click', () => { Snd.click(); setQty(1e9); });
   $('qIn').addEventListener('input', (e) => setQty(parseInt(e.target.value, 10) || 1));
   $('sellSel').addEventListener('click', () => { Snd.resume(); sellSome(selKind, selQty); });
+  // Keep rows: one per pearl type, shown once the type is discovered, even with nothing held
+  ECON.PEARLS.forEach((t) => {
+    const r = document.createElement('div'); r.className = 'krow'; r.hidden = true;
+    r.innerHTML = '<canvas width="64" height="64"></canvas><span class="kn">' + t.name + '</span><span class="kc"></span><button type="button" class="chip keepT" data-keep="' + t.id + '" aria-pressed="false">' + LOCK_SVG + '<span>Keep</span></button>';
+    $('keepList').appendChild(r);
+    keepRows[t.id] = { el: r, cv: r.querySelector('canvas'), kc: r.querySelector('.kc'), btn: r.querySelector('.keepT'), art: 0, sig: '' };
+  });
+  $('keepList').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-keep]'); if (b) { Snd.click(); setKeep(b.dataset.keep, !state.keep[b.dataset.keep]); } });
+}
+// a small hand-drawn padlock, shown on kept stacks and on an active Keep toggle
+const LOCK_SVG = '<svg class="lock" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.2 7.3 C4.9 3.9 5.9 2.3 8.1 2.3 C10.3 2.3 11.2 3.8 10.9 7.2"/><path d="M3.3 7.6 C6.4 7 9.7 7.1 12.8 7.5 L12.5 13.5 C9.6 14 6.3 14 3.6 13.4 Z" fill="currentColor" fill-opacity="0.18"/><path d="M8 9.9 L8 11.4"/></svg>';
+const keepRows = {};
+function setKeep(id, on) {
+  if (!ECON.PEARLS.some((t) => t.id === id)) return false;
+  if (on) state.keep[id] = true; else delete state.keep[id];
+  toast(on ? 'Keeping ' + ECON.PEARLS.find((t) => t.id === id).name + 's: their pops go to your backpack, and Sell all skips them' : 'Stopped keeping ' + ECON.PEARLS.find((t) => t.id === id).name + 's');
+  updatePack(); updateArts(); save(); return true;
+}
+function updateKeep() {
+  if ($('pack').hidden) return;
+  for (const t of ECON.PEARLS) {
+    const k = keepRows[t.id], on = state.keep[t.id] === true, held = (state.inv[t.id] || 0) + (state.inv[t.id + ':s'] || 0);
+    k.el.hidden = !state.col[t.id].found;
+    if (k.el.hidden) continue;
+    if (k.art !== spr.ps && spr.pearl[t.id]) { const x = k.cv.getContext('2d'); x.clearRect(0, 0, 64, 64); x.drawImage(bigSprite(t.id), -5, -5, 74, 74); k.art = spr.ps; }
+    const sig = on + ':' + held;
+    if (k.sig === sig) continue; k.sig = sig;
+    k.kc.textContent = held > 0 ? fmt(held) : '';
+    k.el.classList.toggle('on', on); k.btn.classList.toggle('on', on); k.btn.setAttribute('aria-pressed', String(on));
+    k.btn.lastElementChild.textContent = on ? 'Kept' : 'Keep';
+  }
 }
 const packCount = () => KINDS.reduce((a, k) => a + (state.inv[k[0]] || 0), 0);
-const packValue = () => KINDS.reduce((a, k) => a + (state.invV[k[0]] || 0), 0);
+// what Sell all sells: every stack except kept types
+const sellable = () => KINDS.filter((k) => !isKept(k[0]));
+const sellCount = () => sellable().reduce((a, k) => a + (state.inv[k[0]] || 0), 0);
+const packValue = () => sellable().reduce((a, k) => a + (state.invV[k[0]] || 0), 0);
 function pickSlot(kind) {
   if (!(state.inv[kind] > 0)) { selKind = null; } else { selKind = selKind === kind ? null : kind; selQty = Math.min(selQty, state.inv[kind]) || 1; }
   Snd.tick(); updatePack();
@@ -1775,10 +1904,11 @@ function drawIcon(s) {
 function updatePack() {
   const n = packCount(), v = packValue();
   setLbl('packN', String(n));
+  updateKeep();
   if (packBump > 0) { packBump = 0; const b = $('packBtn'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
   if (selling || $('pack').hidden) return;
   if (selKind && !(state.inv[selKind] > 0)) selKind = null;
-  setLbl('packNote', state.autoSell ? 'Auto-sell is on, so pops turn into juice right away. Switch it off to collect pearls here and sell them yourself.' : 'Pops land here. Sell them for juice, or switch auto-sell on.');
+  setLbl('packNote', state.autoSell ? 'Auto-sell is on, so pops turn into juice right away. Kept types still land here.' : 'Pops land here. Sell them for juice, or switch auto-sell on.');
   const owned = KINDS.filter((k) => (state.inv[k[0]] || 0) > 0);
   slotEls.forEach((s, i) => {
     const kind = owned[i] ? owned[i][0] : null;
@@ -1786,7 +1916,7 @@ function updatePack() {
     const q = kind ? state.inv[kind] : 0;
     s.el.hidden = !kind;
     if (q > 0) drawIcon(s);
-    s.el.classList.toggle('empty', q === 0); s.el.classList.toggle('sel', s.kind === selKind && q > 0);
+    s.el.classList.toggle('empty', q === 0); s.el.classList.toggle('sel', s.kind === selKind && q > 0); s.lk.hidden = !(q > 0 && isKept(s.kind));
     if (s.shown !== q) { s.shown = q; s.cnt.textContent = q > 0 ? fmt(q) : ''; s.el.title = q > 0 ? KINDS.find((k) => k[0] === s.kind)[1] + ' x' + q + ' (worth ' + fmt(state.invV[s.kind]) + ')' : ''; }
   });
   const row = $('sellRow'); row.hidden = !selKind;
@@ -1801,7 +1931,7 @@ function updatePack() {
     setLbl('sellSel', 'Sell ' + q + ' for ' + fmt(worth));
   }
   setLbl('packTotal', fmt(v));
-  $('sellBtn').disabled = n === 0;
+  $('sellBtn').disabled = sellCount() === 0;
 }
 // pay for items, shared by "sell all" and "sell some"
 function cashIn(total) {
@@ -1824,14 +1954,14 @@ function sellSome(kind, q) {
   s.shown = -1; updatePack(); save();
 }
 function sellAll() {
-  const n = packCount(), total = packValue();
+  const n = sellCount(), total = packValue();
   if (n === 0 || collapse) return;
   const rect = $('sellBtn').getBoundingClientRect(), sr = stage.getBoundingClientRect();
-  KINDS.forEach(([id]) => { state.inv[id] = 0; state.invV[id] = 0; });
+  sellable().forEach(([id]) => { state.inv[id] = 0; state.invV[id] = 0; });
   cashIn(total); selKind = null;
   // the big sell: every stack squishes, the button squishes, the panel jolts, juice flies to the score
   selling = true; clearTimeout(sellTimer);
-  slotEls.forEach((s, i) => { if (s.kind && !s.el.classList.contains('empty')) { s.el.style.animationDelay = (i * 45) + 'ms'; s.el.classList.add('sold'); } });
+  slotEls.forEach((s, i) => { if (s.kind && !isKept(s.kind) && !s.el.classList.contains('empty')) { s.el.style.animationDelay = (i * 45) + 'ms'; s.el.classList.add('sold'); } });
   const btn = $('sellBtn'); btn.classList.remove('squish'); void btn.offsetWidth; btn.classList.add('squish');
   const pk = $('pack'); pk.classList.remove('jolt'); void pk.offsetWidth; pk.classList.add('jolt');
   const cx = rect.left - sr.left + rect.width / 2, cy = rect.top - sr.top + rect.height / 2;
@@ -1847,24 +1977,74 @@ function sellAll() {
 }
 $('sellBtn').addEventListener('click', () => { Snd.resume(); sellAll(); });
 $('autoSell').addEventListener('change', (e) => { state.autoSell = e.target.checked; Snd.resume(); Snd.click(); toast(state.autoSell ? 'Auto-sell on. New pops sell the moment they pop, your backpack stays as it is' : 'Auto-sell off. New pops go to your backpack'); updateHud(0.016); save(); });
-const PANEL_BTN = { pack: 'packBtn', settings: 'setBtn', tools: 'toolBtn', pool: 'poolBtn', book: 'bookBtn' };
+const PANEL_BTN = { pack: 'packBtn', settings: 'setBtn', tools: 'toolBtn', pool: 'poolBtn', book: 'bookBtn', arts: 'artBtn' };
 function openPanel(id) {
   Snd.click();
   Object.keys(PANEL_BTN).forEach((p) => {
     const show = p === id && $(p).hidden;
     $(p).hidden = !show; $(PANEL_BTN[p]).setAttribute('aria-expanded', String(show));
   });
-  updatePack(); updatePool(); if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
+  updatePack(); updatePool(); artSig = ''; updateArts(); if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
 }
 $('packBtn').addEventListener('click', () => openPanel('pack'));
 $('setBtn').addEventListener('click', () => openPanel('settings'));
 $('toolBtn').addEventListener('click', () => openPanel('tools'));
 $('poolBtn').addEventListener('click', () => openPanel('pool'));
 $('bookBtn').addEventListener('click', () => openPanel('book'));
+$('artBtn').addEventListener('click', () => openPanel('arts'));
+
+/* ----- artifacts: permanent items crafted from kept pearls, one section per hall ----- */
+const ART_DOCK_ROSES = 100; // the Artifacts button shows once this many Rose Pearls were popped in total
+function syncArtBtn() {
+  const c = state.col.pearl, show = c.popped + c.sPopped >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => state.artifacts[a.id]);
+  if ($('artBtn').hidden === show) { $('artBtn').hidden = !show; $('stage').classList.toggle('arts', show); }
+}
+const pearlName = (kind) => (ECON.PEARLS.find((t) => t.id === kind) || { name: kind }).name;
+const DUCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M6 50 C16 47.5 26 52 34 49.5 C42 47 50 51.5 58 49" stroke="#8fc7e8" stroke-width="2.4"/>' +
+  '<path d="M9 33 C8.5 28.5 10.5 26 13.5 27.5 C17 30 22 31.5 27 31 C29 30.5 30 29 29 26.5 C26 21.5 27.5 13 35.5 11.5 C43 10.5 47 16.5 45.5 22.5 C45 25 43.5 27 42.5 28.5 C49 29 54.5 32 54 38.5 C53.5 45.5 46 49.5 33 49.5 C20 49.5 9.5 44 9 33 Z" fill="#ff9ec4"/>' +
+  '<path d="M45 18.5 C49.5 17.5 54.5 18.5 55.5 21 C55 23.5 50 24.5 45.5 23.5" fill="#f5b020"/>' +
+  '<path d="M21 38.5 C26 35 34 35.5 38.5 40.5"/><circle cx="39.5" cy="17.5" r="1.7" fill="#3a2e1c" stroke="none"/>' +
+  '<path d="M33 15.5 q2 -2.5 4.5 -2.5" stroke="#fff" stroke-width="2" opacity="0.85"/></svg>';
+const ART_ICON = { pink_duck: DUCK_SVG };
+let artSig = '';
+function artView() {
+  return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
+    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts),
+    cost: a.cost.map((c) => ({ kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's' })),
+  })) }));
+}
+const whole2 = (n) => Math.floor(n).toLocaleString('en-US');
+function updateArts() {
+  if ($('arts').hidden) return;
+  const v = artView(), sig = JSON.stringify(v);
+  if (sig === artSig) return; artSig = sig;
+  $('artHalls').innerHTML = v.map((h) => '<section class="hall"><h4>' + h.name + '</h4><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map((a) =>
+    '<div class="acard' + (a.owned ? ' own' : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div><h5>' + a.name + '</h5><p class="ad">' + a.desc + '</p>' +
+    a.cost.map((c) => '<div class="acost"><span>' + whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' kept</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
+      (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
+    (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
+    '</div>').join('') + '</div></section>').join('');
+}
+function craftArtifact(id) {
+  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV)) return false;
+  recalc(); const a = ARTS.byId(id);
+  toast(a.name + ' crafted! ' + a.description); Snd.golden(); addShake(1.5);
+  artSig = ''; updateArts(); updatePack(); updateHud(0.016); save(); return true;
+}
+$('artHalls').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); } });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { Snd.click(); $(b.dataset.close).hidden = true; $(PANEL_BTN[b.dataset.close]).setAttribute('aria-expanded', 'false'); }));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
 const resetTools = () => { state.owned = [true, false, false, false, false, false]; state.equip = -1; state.toolUp = {}; toolView = 0; };
 const zeroInv = () => { INV_IDS.forEach((id) => { state.inv[id] = 0; state.invV[id] = 0; }); };
+const clearUnkept = () => { INV_IDS.forEach((id) => { if (!isKept(id)) { state.inv[id] = 0; state.invV[id] = 0; } }); }; // Fresh Batch
+const multTxt = (m) => 'x' + +m.toFixed(2);
+// the payout multiplier line under the juice counter: Flavors and owned artifacts
+function payoutLine() {
+  const e = state.echoes, a = S.artMult;
+  if (a <= 1) return e > 0 ? 'Flavors ' + e + ' (payouts ' + multTxt(S.echoMult) + ')' : '';
+  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'ducks ' + multTxt(a) + ')';
+}
 
 
 /* ----- pool menu: choose which discovered pearl types spawn, with the resulting chances shown live ----- */
@@ -2107,9 +2287,9 @@ function resetRun() {
 }
 function finishCollapse() {
   const gain = collapse.gain; collapse = null;
-  state.echoes += gain; state.collapses += 1; state.sparks = 0; state.runEarned = 0; state.lv = ECON.zeroLevels(); zeroInv(); resetTools();
+  state.echoes += gain; state.collapses += 1; state.sparks = 0; state.runEarned = 0; state.lv = ECON.zeroLevels(); clearUnkept(); resetTools(); // kept stacks and artifacts survive
   resetRun();
-  toast('Yum! Flavors +' + gain + '. Everything pays x' + S.echoMult.toFixed(1) + ' now'); updateShelf(); save();
+  toast('Yum! Flavors +' + gain + '. Everything pays ' + multTxt(S.echoMult * S.artMult) + ' now'); updateShelf(); save();
 }
 
 /* ----- input ----- */
@@ -2159,7 +2339,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, keep: state.keep, t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -2205,6 +2385,9 @@ function loadState(raw) {
   const ids = ECON.PEARLS.map((t) => t.id), ok = (k) => ids.includes(k) && state.col[k].found;
   state.pool = Array.isArray(d.pool) ? [...new Set(d.pool)].filter(ok) : ids.filter(ok); // locked types are ignored by poolChances, so a re-buy after a Fresh Batch spawns them again
   if (!state.pool.length) state.pool = ['pearl'];
+  const da = objOf(d.artifacts), dk = objOf(d.keep); // only known ids set to true; anything else is dropped
+  state.artifacts = {}; for (const a of ARTS.ARTIFACTS) if (da[a.id] === true) state.artifacts[a.id] = true;
+  state.keep = {}; for (const t of ECON.PEARLS) if (dk[t.id] === true) state.keep[t.id] = true;
   syncTop();
   return 'ok';
 }
@@ -2238,7 +2421,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol() }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {} }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
 });
 
@@ -2354,7 +2537,7 @@ function frame(ts) {
   if (hitStop > 0) hitStop -= dt;
   else { acc += dt; while (acc >= DT) { step(DT); acc -= DT; } }
   hudT += dt; saveT += dt;
-  if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); hudT = 0; }
+  if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); hudT = 0; }
   if (saveT > 5) { save(); saveT = 0; }
   render();
   if (!$('tools').hidden) drawPedestal(ts);
