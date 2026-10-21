@@ -70,6 +70,11 @@ test('idle rate pays the pool expected payout and grows with richer pools', () =
   st.lv.lucky = E.UPG.lucky.max; // Rose may now leave the pool
   assert.ok(E.idleRate(S, ['blue', 'mint', 'golden'], st.lv) > E.idleRate(S, pool, st.lv), 'dropping Rose from the pool raises the idle rate');
 });
+test('global dials', () => {
+  assert.strictEqual(E.COST_SCALE, 2.5); assert.strictEqual(E.COLLAPSE_MIN_RUN, 5e6); assert.strictEqual(E.UPG.auto.base, 45000);
+  assert.strictEqual(E.collapseGain(5e6), 2); assert.strictEqual(E.collapseGain(11.25e6), 3);
+  assert.strictEqual(E.collapseReady(5e6 - 1), false); assert.strictEqual(E.collapseReady(5e6), true);
+});
 // ---- pool lock: a type can only be switched off once the next type up has its unlock maxed ----
 const maxed = () => { const lv = E.zeroLevels(); for (const id of ['lucky', 'golden', 'mint', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black']) lv[id] = E.UPG[id].max; return lv; };
 test('canToggleOff needs the next type maxed', () => {
@@ -131,9 +136,9 @@ test('no code path references chain', () => {
   }
   assert.deepStrictEqual(hits, []);
 });
-test('only the Steel Pin has a unique upgrade, priced like the old Wide Swing', () => {
+test('only the Steel Pin has a unique upgrade, priced like the old Wide Swing at today\'s COST_SCALE', () => {
   assert.deepStrictEqual(E.TOOLS.map((t) => !!t.unique), [true, false, false, false, false, false]);
   const u = E.TOOLS[0].unique; assert.strictEqual(u.name, 'Wide Swing'); assert.strictEqual(u.max, 5);
-  assert.deepStrictEqual([0, 1, 2, 3, 4].map((l) => E.uniqueCost(0, l)), [210, 714, 2428, 8254, 28064]);
+  assert.deepStrictEqual([0, 1, 2, 3, 4].map((l) => E.uniqueCost(0, l)), [88, 298, 1012, 3440, 11693]);
   assert.strictEqual(E.TOOLS[0].unique.effect(1).brush, 0.045); assert.ok(Math.abs(E.TOOLS[0].unique.effect(3).brush - 0.085) < 1e-12);
 });
