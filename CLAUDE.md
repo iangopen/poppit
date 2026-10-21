@@ -2,6 +2,10 @@
 
 Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh Batch (prestige) for Flavors. Hosted on GitHub Pages straight from `index.html` on `main`.
 
+## Reporting to Ian
+
+- **Final summaries are plain bulleted text:** no tables (Markdown or box-drawing), and every line under 100 columns. Ian pastes them into a chat, where tables break. Put tables in files such as `docs/balance-report.md`, not in the summary.
+
 ## Architecture contract
 
 - **`index.html` is a build output.** Never edit it by hand; edit `src/` and rebuild. It is committed because Pages serves it.
@@ -28,8 +32,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - the pearl roster: `PEARLS`, with hp, payout and spawn `cap`. **Payouts are derived:** each entry's table value is kept as `baseMult`, and `mult` = `baseMult × PAYOUT_STEEPNESS^rank` rounded to two significant figures (`PAYOUT_STEEPNESS = 1.5`, Rose is rank 0). This gives 1, 7.5, 27, 100, 350, 1,100, 4,000, 14K, 51K and 190K. Change the curve with the constant, not the table;
   - spawn weights (`NEW_BASE`, `typeWeight`);
   - **the global dials**, the only levers the last rebalance moved: `COST_SCALE = 2.5`, Helpers base 45000, `COLLAPSE_MIN_RUN = 5e6`, and `collapseGain = floor(sqrt(run / COLLAPSE_GAIN_DIV))` with `COLLAPSE_GAIN_DIV = 1.25e6` (exactly 2 Flavors at the floor). `collapseReady` is unchanged;
-  - frenzy: `stats().frenzyNeed = 200 - 24 × Fuel` (4x the old 50 - 6 × Fuel). Duration 7 s, +1 per tap, +0.25 per helper pop;
-  - `idleRate(S, pool, L)` = autoRate × popBase × echoMult × `popEV(pool, L)` (sum of chance × payout over the pool). `awayBonus()` pays 50% of it, capped at 8 h;
+  - frenzy: `stats().frenzyNeed = 200 - 24 × Fuel` (4x the old 50 - 6 × Fuel). It lasts `FRENZY_SECS` (7 s). A tap adds 1 to the meter, a helper pop `HELPER_METER` (0.25). `src/world.js`, `src/ui.js` and the sim read these constants;
+  - `FLAVOR_BONUS = 0.2`: what each Flavor adds to every payout (`echoMult = 1 + FLAVOR_BONUS × echoes`);
+  - **helpers:** `helperCanHit(kind, power)` (hp ≤ 3 × power) and `helperScore(kind, hpLeft, power)` (payout per remaining hit) are the helper's targeting rules. `stepAuto` in `src/world.js` and the sim both call them;
+  - **away bonus rule:** `awayBonus()` pays 50% of `idleRate(S, pool, L, shinyOn)`, capped at 8 h. `idleRate` is `helperIdle(...).rate`, the steady state of helpers alone:
+    - a type helpers cannot hit fills its cap, and `trySpawn` turns its share into Rose;
+    - pops/s = helper hits ÷ mean hits per pop, or the spawn rate if lower;
+    - value = mix × payout × the shiny bonus;
+    - frenzy from helper meter credit is blended in.
+    - It must stay within 15% of half of the sim's measured helper-only hour (`helperHour` in `tools/sim32.js`) at the first helper, the first Fresh Batch and the cycle 6 Fresh Batch. `tests/away.test.js` enforces this. If the formula drifts from the measurement, fix the formula, not the target;
   - `stats()` and `popValue()`.
   - It is also `require`d by node tests and the sim, so **every economy number lives here**. The number formatters `fmt` / `fmtV` / `fmtX` sit at the bottom of it, outside the `ECON` export. `fmtX` prints payouts (`7.5`, `4,000`, `14K`, `1.5M`); the shop text, the Collection book and the pool cards use it.
 - **`src/save.js`** holds pure save helpers with no DOM: `encodeSave` / `decodeSave`, plus `SAVE_VERSION`, `MIGRATIONS` and `migrateSave`.
@@ -80,6 +91,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `tests/econ32.test.js`: `node:test` unit tests of `ECON` and `fmt`.
   - `tests/page.test.js`: checks that the built `index.html` is a standalone page (doctype, charset, viewport, `[hidden]` rule, head/body structure) and was built from the current `head.html` / `tail.html`. **Run `npm run build` before `npm test`.**
   - `tests/harness32.js`: runs the real concatenated game against stubbed DOM APIs and drives it like a player. It prints PASS/FAIL lines and ends with `ALL PASSED`. It pulls in `tests/pearl_tests.js`.
+  - `tests/away.test.js`: runs the sim's checkpoints (about 15 s) and checks the away bonus against the measured helper-only hour. It `require`s `tools/sim32.js`, which runs its CLI only when called directly.
 - `npm run sim`: runs `tools/sim32.js`, the seeded pacing sim. It plays 6 Fresh Batch cycles for a casual and an engaged profile, and the output is identical run to run.
   - `--wait=25`: the player keeps going to minute 25 before pressing Fresh Batch.
   - `--variant=NAME`: plays a tuning option (`scaledFloor`, `moreFlavors`, `moreTuneLevels`).
@@ -90,7 +102,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 ## State: real and verified (2026-10-21)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 29 unit tests, 6 page tests and 127 harness checks pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus against pool chances, and the book and pool payout strings.
+- **Tests:** 31 unit tests, 6 page tests, 129 harness checks and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
 - **Unique upgrades, Helpers and auto-sell (2026-10-18), checked in Chrome:**
   - a new game earns juice from pops with an empty backpack;
   - the Tools panel shows Wide Swing on the Steel Pin page and the muted line on the Awl page;
@@ -124,6 +136,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **First helper:** target 70–90% of the way to it. Sim: 11.4 min (**89%**) casual, 4.8 min (**77%**) engaged.
   - **Cycles 2–6:** target shorter each time but never under 4 min. Sim: casual 10.8 / 7.7 / 6.6 / 5.9 / 5.8 (met). Engaged 3.5 / 3.1 / 3.1 / 2.1 / 2.4 (**missed**: see below).
   - **No upgrade group maxed in run 1:** met by group (verb / Pearls & Marbles / tune). Per upgrade, 10 of 18 reach max (6 before).
+- **Away bonus (2026-10-21):** one hour away against half of the measured helper-only hour is 0.89–1.04 at all 21 sim checkpoints. At the first Fresh Batch it pays 7.3M (casual) and 5.7M (engaged); the first version paid 84.2M and 67.3M. In the real game, a Ruby + Black pool with the Steel Pin makes helpers pop only Roses (harness check).
 
 ## Still open
 
@@ -131,15 +144,16 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - **Balance:**
   - **Engaged later cycles drop under 4 min.** At the minimum 2 Flavors per batch (x1.4), engaged C2 is already 3.5 min, and a Flavor-scaled floor does not fix it (`scaledFloor` variant). It needs a lever outside the four global dials: a smaller multiplier per Flavor, or Fresh Batch costs that scale with Flavors.
   - **First-run times are seed-sensitive.** Over seeds 1–8: casual 12.7 min (10.3–14.5), engaged 5.6 min (3.8–6.9). Casual runs about 2.3x engaged at every dial setting tried, wider than the 13 / 6 the bands allow; that comes from tap rate and skill.
-  - **Away bonus is large.** One hour away at the end of run 1 pays 67–84M against a 5M floor. `popEV` assumes helpers pop the average pooled pearl, but they only break pearls with hp ≤ 3 × power. Candidate fixes are in the report; none applied.
-  - **One type dominates income** (over 60%) in casual C3–C6 and engaged C6 (Opal, Ruby or Marble). Black earns 0%. Spawn weights were not retuned.
+  - **Per-Flavor bonus: Ian to choose** 20% (now), 10% or 5%. The report's table has the numbers. 5% keeps engaged cycles at or over 4 min through C5, but Fresh Batch is then worth only x1.6–1.8 after six batches.
+  - **One type dominates income** (over 60%) in casual C3–C6 and engaged C6 (Opal, Ruby or Marble). Spawn weights were not retuned.
+  - **Black earns 0% when Fresh Batch is taken at once.** It unlocks 0.1–1.2 min before the floor (it costs 150K), and its 0.10% spawn share gives 0.02–0.29 expected Blacks per cycle. Played to minute 25, it earns 45–61%. Helpers can never hit it (it needs power 107; the best tool reaches 38). Options in the report, none applied: (A) a cheaper Black unlock, (B) a larger `NEW_BASE.black`.
   - The sim always holds its best tool, so it uses Wide Swing only until it buys the Awl (about 1.7 min). A real player may switch back to the Steel Pin to sweep; nothing models that.
   - Fresh Batch cycles still shrink when Fresh Batch is taken at once.
   - Flavors still explode when the player waits: x366 casual, x714 engaged after six 25-minute runs.
   - The upgrade shelf empties early: `COST_SCALE` 2.5 maxes most tune upgrades in run 1. The `moreTuneLevels` sim variant halves that at about the same pacing.
-- **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: idle rate at the pool's expected payout × 50%, capped at 8 h).
+- **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: half of what helpers alone would earn, capped at 8 h; see the away bonus rule above).
 - **Save sync between devices:** not built. Moving a save is manual (code or file). Tested only on desktop Chrome so far; iOS Safari `pagehide` and the clipboard on phones are not yet verified on a device.
 - **Phone layout:** not built. The viewport meta now makes phones lay the page out at device width instead of 980 px desktop width. This has not been checked on a real phone; the 390 px checks ran in desktop Chrome. At 390 px the board and the shop share the height tightly, and the only phone rule is one `@media (max-width: 820px)` that stacks the panel under the board.
 - **Artifacts:** not built. A Flavor shop or other spending that lasts across Fresh Batches would also be the natural fix for the empty late-game shelf.
 - **Raw numbers:** the Fresh Batch button and the Flavors line print raw integers (`+6666 Flavors`, `x3238.4`). They fit today, but they don't use `fmt`.
-- **Sim limitations** (see the report): no backpack selling, the away bonus is reported but never taken, pool never toggled, fixed cell counts per board tier, no helper credit to the frenzy meter. The nothing-to-want columns read 0.0 everywhere (before this change too), so they carry no signal.
+- **Sim limitations** (see the report): no backpack selling, the away bonus is reported but never taken, pool never toggled, fixed cell counts per board tier. During a run, helpers get no frenzy meter credit and hit a random pearl they can break; the game (and the sim's helper hour) take the best payout per hit. Switching the run would move the reference pacing numbers. The nothing-to-want columns read 0.0 everywhere (before this change too), so they carry no signal.
