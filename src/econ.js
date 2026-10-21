@@ -80,6 +80,8 @@ const ECON = (() => {
     return w;
   }
   const shinyChance = (L) => 0.005 + 0.0025 * (L.shiny || 0);
+  const FRENZY_SECS = 7, HELPER_METER = 0.25; // frenzy length; a helper pop fills the meter this much (a tap fills 1)
+  const FLAVOR_BONUS = 0.2; // each Flavor adds this much to every payout
   const COST_SCALE = 2.5; // global dial: how long each upgrade takes to afford
   const COLLAPSE_MIN_RUN = 5000000; // run juice needed before a Fresh Batch
   const COLLAPSE_GAIN_DIV = 1250000; // Flavors = floor(sqrt(run / this)): exactly 2 at the floor, so cycles shrink slowly
@@ -98,7 +100,7 @@ const ECON = (() => {
 
   function stats(st) {
     const L = st.lv;
-    const echoMult = 1 + 0.2 * st.echoes;
+    const echoMult = 1 + FLAVOR_BONUS * st.echoes;
     const autoCd = 2.4 * Math.pow(0.9, L.tempo);
     const eq = (st.equip == null || st.equip < 0) ? L.tool : st.equip; // the tool in hand, not necessarily the best one owned
     const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0, u: 0 };
@@ -124,11 +126,33 @@ const ECON = (() => {
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
   const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
   const collapseReady = (run) => run >= COLLAPSE_MIN_RUN && collapseGain(run) >= 2;
-  // expected payout multiplier of one pop under the current pool chances
-  const popEV = (pool, L) => { const ch = poolChances(pool, L); let ev = 0; for (const id in ch) ev += ch[id] * KIND[id].mult; return ev; };
-  const idleRate = (S, pool, L) => S.autoRate * S.popBase * S.echoMult * popEV(pool, L);
+  // Helpers (stepAuto in src/world.js, and the sim) only hit pearls they can break in three hits,
+  // and pick the one with the best payout per remaining hit; -1 means "never".
+  const helperCanHit = (kind, power) => KIND[kind].hp <= power * 3;
+  const helperScore = (kind, hpLeft, power) => (helperCanHit(kind, power) ? KIND[kind].mult / Math.ceil(hpLeft / power) : -1);
+  // Helpers alone, nobody playing (the away bonus). Steady state of stepAuto + trySpawn:
+  // - a type helpers cannot hit fills its cap and is never popped, so trySpawn turns its share into Rose;
+  // - helpers take the best payout per hit first, so every hittable arrival is popped (none waits forever);
+  // - so pops/s = helper hits / mean hits per pop, unless the board runs dry: then pops/s = the spawn rate;
+  // - helper pops fill the frenzy meter, so a share of the time is frenzy: double pay, rare types twice as likely, 4x spawns.
+  function helperIdle(S, pool, L, shinyOn) {
+    const shiny = shinyOn === false ? 1 : 1 + shinyChance(L) * (SHINY_MULT - 1);
+    const phase = (frenzy) => {
+      const ch = poolChances(pool, L, frenzy), mix = {};
+      for (const id in ch) { const k = helperCanHit(id, S.power) ? id : 'pearl'; mix[k] = (mix[k] || 0) + ch[id]; }
+      let ev = 0, hits = 0;
+      for (const id in mix) { ev += mix[id] * KIND[id].mult; hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
+      const pops = S.autoRate > 0 ? Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery) : 0;
+      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * ev * shiny * (frenzy ? 2 : 1) };
+    };
+    const normal = phase(false), fr = phase(true);
+    // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds
+    const frenzyShare = normal.pops > 0 ? Math.min(1, FRENZY_SECS * normal.pops * HELPER_METER / S.frenzyNeed) : 0;
+    return Object.assign({}, normal, { frenzy: fr, frenzyShare, rate: (1 - frenzyShare) * normal.rate + frenzyShare * fr.rate });
+  }
+  const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, popEV, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 

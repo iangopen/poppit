@@ -222,7 +222,7 @@ let bad = 0;
   G.loadState({ version: 2, musicOn: false, musicVol: 0.2 }); ok('music settings load', G.state.musicOn === false && G.state.musicVol === 0.2);
   G.loadState({ version: 2 }); ok('older saves default music on at half volume', G.state.musicOn === true && G.state.musicVol === 0.5);
 }
-const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E, store, els }); PT.task3({ G, ok, frames, live, E }); PT.task4({ G, ok, frames, E }); PT.task5({ G, ok, frames, E }); PT.task6({ G, ok, frames, E }); PT.task7({ G, ok, frames, E }); PT.final({ G, ok, E });
+const PT = require('./pearl_tests.js'); G.els = els; PT({ G, ok, frames, live, E, store, els }); PT.task3({ G, ok, frames, live, E }); PT.task4({ G, ok, frames, E }); PT.task5({ G, ok, frames, E }); PT.task6({ G, ok, frames, E }); PT.task7({ G, ok, frames, E }); PT.final({ G, ok, E, frames });
 // ---- save codes, versions and hardened loading ----
 {
   // compare saves without the timestamp; a {p:0,s:0} tool entry is what toolUp() creates on first read, the same as none

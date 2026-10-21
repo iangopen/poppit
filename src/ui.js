@@ -113,7 +113,7 @@ function updateHud(dt) {
   }
   const mt = $('meter'), fr = frenzyT > 0;
   mt.classList.toggle('hot', fr);
-  mt.firstElementChild.style.transform = 'scaleX(' + (fr ? frenzyT / 7 : clamp(meter / S.frenzyNeed, 0, 1)).toFixed(3) + ')';
+  mt.firstElementChild.style.transform = 'scaleX(' + (fr ? frenzyT / ECON.FRENZY_SECS : clamp(meter / S.frenzyNeed, 0, 1)).toFixed(3) + ')';
   $('meterLbl').textContent = fr ? 'Frenzy!' : 'Frenzy meter';
 }
 
@@ -586,7 +586,7 @@ function loadState(raw) {
 function awayBonus(secs) {
   recalc();
   if (S.autoRate <= 0 || !(secs >= 20)) return; // also refuses NaN from a broken save time
-  const gain = ECON.idleRate(S, state.pool, state.lv) * Math.min(secs, 28800) * 0.5; // pays at the pool's expected payout per pop
+  const gain = ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5; // what helpers alone would earn, halved
   state.sparks += gain; state.runEarned += gain; state.lifetime += gain;
   toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice while you were away');
 }

@@ -137,7 +137,7 @@ module.exports.task7 = ({ G, ok, frames, E }) => {
   ok('out-of-range pages are clamped', G.bookView(-4).left.id === 'pearl' && G.bookView(99).left.id === 'black');
 };
 
-module.exports.final = ({ G, ok, E }) => {
+module.exports.final = ({ G, ok, E, frames }) => {
   const st = G.state;
   G.loadState({ sparks: 10, lv: Object.assign(E.zeroLevels(), { tool: 1 }), inv: {}, invV: {}, seen: { pearl: true, blue: true, golden: true, marble: true }, t: 0 });
   ok('v1 save after a Fresh Batch pools every seen type so a re-buy spawns it', st.pool.includes('golden') && st.pool.includes('marble'), st.pool.join());
@@ -154,13 +154,23 @@ module.exports.final = ({ G, ok, E }) => {
   ok('every pool and book payout fits in 13 / 6 characters', G.poolView().rows.every((r) => r.pay.length <= 13) && E.PEARLS.every((t, i) => pay(G.bookEntryHTML(G.bookView(i).right)).length <= 6),
     G.poolView().rows.map((r) => r.pay).join(' | '));
   ok('shop text formats the payout', /: x190K payout, 320 hits/.test(G.META.black.desc()), G.META.black.desc());
-  // away bonus: idle rate x half, at the pool's expected payout per pop
-  const lvA = Object.assign(E.zeroLevels(), { auto: 4, sharp: 3, lucky: 3, mint: 2, golden: 1 }); G.setLv(lvA); st.pool = ['pearl', 'blue', 'mint', 'golden'];
+  // away bonus: half of what helpers alone earn (ECON.helperIdle), counting only pearls helpers can break
+  const lvA = Object.assign(E.zeroLevels(), { auto: 4, sharp: 3, lucky: 3, mint: 2, golden: 1, tool: 5 }); st.equip = 5; G.setLv(lvA); st.pool = ['pearl', 'blue', 'mint', 'golden'];
   const away = () => { const b = st.sparks; G.awayBonus(3600); return st.sparks - b; };
   const g1 = away(), want = E.idleRate(G.getS(), st.pool, st.lv) * 1800;
-  ok('away bonus for 1 h = idle rate at pool EV x 50%', Math.abs(g1 - want) < 1e-6 * want && g1 > E.stats(st).autoRate * E.stats(st).popBase * 1800, g1.toFixed(0));
+  ok('away bonus for 1 h = helper idle rate x 50%', Math.abs(g1 - want) < 1e-6 * want && g1 > E.stats(st).autoRate * E.stats(st).popBase * 1800, g1.toFixed(0));
+  const byPower = [0, 2, 5].map((tl) => { st.equip = tl; G.setLv(Object.assign({}, lvA, { tool: tl })); const S = G.getS(); return [S.power, away(), E.idleRate(S, st.pool, st.lv, st.shinyOn) * 1800]; });
+  ok('away bonus matches the hittable expected value at powers 1, 3 and 18', byPower.every(([, g, w]) => Math.abs(g - w) < 1e-6 * w) && byPower[0][1] < byPower[1][1] && byPower[1][1] < byPower[2][1], byPower.map(([p, g]) => p + ':' + g.toFixed(0)).join(' '));
+  G.setLv(lvA);
   lvA.golden = 5; G.setLv(lvA); const g2 = away();
   ok('away bonus grows with the golden chance', g2 > g1, g1.toFixed(0) + ' -> ' + g2.toFixed(0));
+  // the real game, helpers only, pool of types they cannot break: the caps fill, then the board is Roses
+  const lvU = Object.assign(E.zeroLevels(), { auto: 6 }); ['lucky', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black'].forEach((id) => { lvU[id] = E.UPG[id].max; });
+  st.equip = 0; G.setLv(lvU); st.pool = ['ruby', 'black']; G.clearBoard(); const c0 = E.PEARLS.map((t) => st.col[t.id].popped + st.col[t.id].sPopped), j0 = st.runEarned;
+  frames(3600);
+  const popped = E.PEARLS.map((t, i) => st.col[t.id].popped + st.col[t.id].sPopped - c0[i]), alive = (k) => G.pearls.filter((p) => p.kind === k && p.st === 'live').length;
+  ok('helpers on a ruby + black pool pop only Roses, and those pay', popped[0] > 50 && popped.slice(1).every((n) => n === 0) && alive('ruby') <= 2 && alive('black') <= 1 && st.runEarned > j0, 'roses ' + popped[0] + ', others ' + popped.slice(1).join(','));
+  st.equip = 5; G.setLv(lvA); st.pool = ['pearl', 'blue', 'mint', 'golden'];
   const g8 = away.call(null), cap = (() => { const b = st.sparks; G.awayBonus(86400); return st.sparks - b; })();
   ok('away bonus still caps at 8 h', Math.abs(cap - g8 * 8) < 1e-6 * cap, (cap / g8).toFixed(2));
   G.loadState({ version: 2, lv: E.zeroLevels() }); G.recalc(); st.col.blue.found = st.col.golden.found = true; st.pool = ['blue', 'golden'];

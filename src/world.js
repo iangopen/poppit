@@ -183,7 +183,7 @@ function popPearl(p, src, opts) {
     const val = ECON.popValue(S, manual ? combo : (src === 'auto' ? 0 : combo), frenzyT > 0, p.kind) * (p.shiny ? ECON.SHINY_MULT : 1);
     award(val, x, y, col, (isBig(p.kind) && !isHeavy(p.kind)) || p.shiny, p.kind + (p.shiny ? ':s' : ''));
     if (p.shiny) { state.col[p.kind].sPopped++; discover(p.kind, true); Snd.shimmer(); sparkle(x, y); } else { state.col[p.kind].popped++; discover(p.kind, false); }
-    meter += manual ? 1 : 0.25;
+    meter += manual ? 1 : ECON.HELPER_METER;
     if (meter >= S.frenzyNeed && frenzyT <= 0) startFrenzy();
   }
   // juice: droplets, a stain on the board, and a quick membrane ring
@@ -246,7 +246,7 @@ function hitPearl(p, dmg, src, opts) {
 }
 function swing() { tool.sw = 0.04; tool.heat = Math.min(6, tool.heat + 1); } // every player hit restarts the swing; the more recent hits, the faster it plays
 function startFrenzy() {
-  meter = 0; frenzyT = 7; Snd.frenzy(); addShake(3);
+  meter = 0; frenzyT = ECON.FRENZY_SECS; Snd.frenzy(); addShake(3);
   toast('Frenzy! Pearls pop in 4x faster and pay double');
   $('surge').classList.add('on');
 }
@@ -259,8 +259,8 @@ function stepAuto(dt) {
     autoAcc -= 1;
     let best = null, bs = -1;
     for (const p of pearls) {
-      if (p.st !== 'live' || p.claimed || p.hpMax > S.power * 3) continue;
-      const sc = ECON.KIND[p.kind].mult / Math.ceil((p.hpMax - p.dmg) / S.power) + Math.random() * 0.2;
+      if (p.st !== 'live' || p.claimed || !ECON.helperCanHit(p.kind, S.power)) continue;
+      const sc = ECON.helperScore(p.kind, p.hpMax - p.dmg, S.power) + Math.random() * 0.2;
       if (sc > bs) { bs = sc; best = p; }
     }
     if (best) { best.claimed = true; ghosts.push({ p: best, t: 0, dur: 0.22 }); }

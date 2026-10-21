@@ -58,17 +58,48 @@ test('frenzy needs 200 pops, 24 fewer per Fuel level', () => {
   const st = fresh(); assert.strictEqual(E.stats(st).frenzyNeed, 200);
   st.lv.fuel = 5; assert.strictEqual(E.stats(st).frenzyNeed, 80); assert.strictEqual(E.UPG.fuel.max, 5);
 });
-test('idle rate pays the pool expected payout and grows with richer pools', () => {
-  const st = fresh(); st.lv.auto = 4; st.lv.sharp = 3; st.echoes = 5; const S = E.stats(st);
-  assert.strictEqual(E.idleRate(S, ['pearl'], st.lv), S.autoRate * S.popBase * S.echoMult, 'rose only: payout x1');
-  st.lv.lucky = 3; st.lv.mint = 2; st.lv.golden = 1;
-  const pool = ['pearl', 'blue', 'mint', 'golden'], ch = E.poolChances(pool, st.lv);
-  const ev = Object.keys(ch).reduce((a, id) => a + ch[id] * E.KIND[id].mult, 0);
-  assert.ok(Math.abs(E.popEV(pool, st.lv) - ev) < 1e-9 && ev > 1);
-  assert.ok(Math.abs(E.idleRate(S, pool, st.lv) - S.autoRate * S.popBase * S.echoMult * ev) < 1e-6);
-  st.lv.golden = 4; assert.ok(E.idleRate(S, pool, st.lv) > E.idleRate(S, pool, Object.assign({}, st.lv, { golden: 1 })), 'a higher golden chance pays more');
-  st.lv.lucky = E.UPG.lucky.max; // Rose may now leave the pool
-  assert.ok(E.idleRate(S, ['blue', 'mint', 'golden'], st.lv) > E.idleRate(S, pool, st.lv), 'dropping Rose from the pool raises the idle rate');
+// ---- away bonus: what helpers alone earn (stepAuto + trySpawn in src/world.js), see helperIdle ----
+const gates = () => { const lv = E.zeroLevels(); for (const id of ['lucky', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black']) lv[id] = E.UPG[id].max; return lv; };
+// written out again here, from the game's rules, so a change to helperIdle has to agree with it
+function hittableRate(S, pool, L) {
+  const one = (frenzy) => {
+    const ch = E.poolChances(pool, L, frenzy), mix = {};
+    for (const id in ch) { const k = E.KIND[id].hp <= 3 * S.power ? id : 'pearl'; mix[k] = (mix[k] || 0) + ch[id]; } // a type helpers skip sits at its cap; trySpawn makes Rose instead
+    let ev = 0, hits = 0; for (const id in mix) { ev += mix[id] * E.KIND[id].mult; hits += mix[id] * Math.ceil(E.KIND[id].hp / S.power); }
+    const pops = Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery);
+    return { mix, pops, rate: pops * S.popBase * S.echoMult * ev * (1 + E.shinyChance(L) * (E.SHINY_MULT - 1)) * (frenzy ? 2 : 1) };
+  };
+  const n = one(false), f = one(true), share = Math.min(1, 7 * n.pops * 0.25 / S.frenzyNeed);
+  return { mix: n.mix, rate: (1 - share) * n.rate + share * f.rate };
+}
+test('away bonus equals the helper-hittable expected value at three tool powers', () => {
+  const lv = Object.assign(E.zeroLevels(), { lucky: 3, mint: 2, golden: 2, violet: 1, coral: 1, auto: 4, sharp: 3, fuel: 2 }), pool = E.PEARLS.map((t) => t.id);
+  const want = { 0: ['blue', 'pearl'], 2: ['blue', 'mint', 'pearl'], 5: ['blue', 'coral', 'golden', 'mint', 'pearl', 'violet'] };
+  for (const eq of [0, 2, 5]) {
+    const S = E.stats({ lv, echoes: 5, equip: eq, toolUp: {} }), got = E.helperIdle(S, pool, lv), ref = hittableRate(S, pool, lv);
+    assert.strictEqual(S.power, [1, 2, 3, 6, 10, 18][eq]);
+    assert.deepStrictEqual(Object.keys(got.mix).sort(), want[eq], 'power ' + S.power + ' hits only these');
+    assert.deepStrictEqual(Object.keys(ref.mix).sort(), want[eq]);
+    assert.ok(Math.abs(got.rate - ref.rate) < 1e-9 * ref.rate && got.rate > 0, 'power ' + S.power + ': ' + got.rate + ' vs ' + ref.rate);
+    assert.strictEqual(E.idleRate(S, pool, lv), got.rate);
+  }
+  const S = E.stats({ lv, echoes: 5, equip: 5, toolUp: {} });
+  assert.ok(E.idleRate(S, pool, lv, false) < E.idleRate(S, pool, lv), 'shinies off pays a little less');
+  assert.strictEqual(E.FRENZY_SECS, 7); assert.strictEqual(E.HELPER_METER, 0.25);
+});
+test('a pool of only unhittable types pays nothing for them: only the Roses the caps turn them into', () => {
+  const lv = Object.assign(gates(), { auto: 4 }), S = E.stats({ lv, echoes: 0, equip: 0, toolUp: {} }); // Steel Pin, power 1
+  assert.deepStrictEqual(E.effectivePool(['ruby', 'black'], lv), ['ruby', 'black']);
+  const h = E.helperIdle(S, ['ruby', 'black'], lv);
+  assert.deepStrictEqual(h.mix, { pearl: 1 }, 'no ruby or black payout is counted');
+  assert.strictEqual(h.rate, E.idleRate(S, ['pearl'], lv), 'same as a Rose-only pool');
+  assert.ok(h.rate <= S.autoRate * S.popBase * 1.5, 'Rose pays x1 (frenzy and shinies add a little)');
+  const none = E.stats({ lv: Object.assign(gates(), { auto: 0 }), echoes: 0, equip: 0, toolUp: {} });
+  assert.strictEqual(E.idleRate(none, ['ruby', 'black'], lv), 0, 'and with no helpers it is 0');
+});
+test('idle rate grows with a richer hittable pool', () => {
+  const lv = Object.assign(E.zeroLevels(), { auto: 4, lucky: 3, mint: 2, golden: 1, tool: 5 }), S = E.stats({ lv, echoes: 0, equip: -1, toolUp: {} }), pool = E.PEARLS.map((t) => t.id);
+  assert.ok(E.idleRate(S, pool, Object.assign({}, lv, { golden: 4 })) > E.idleRate(S, pool, lv), 'a higher golden chance pays more once golden is hittable');
 });
 test('global dials', () => {
   assert.strictEqual(E.COST_SCALE, 2.5); assert.strictEqual(E.COLLAPSE_MIN_RUN, 5e6); assert.strictEqual(E.UPG.auto.base, 45000);
