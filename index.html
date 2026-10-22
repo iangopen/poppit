@@ -580,32 +580,33 @@ const ARTS = (() => {
     { id: 'relics', name: RELIC_HALL_NAME, blurb: 'Relics assembled from forge alloys. They help the game run, not the payouts.' },
   ];
   // cost lines: { kind: <pearl id>, qty } spends normal pearls from the backpack; { kind: 'material', id, qty } spends forge
-  // materials (dusts or alloys) from the forge stock. Each craft costs ceil(qty x costGrowth^copies owned); costGrowth 1 = flat.
+  // materials (dusts or alloys) from the forge stock. The first craft costs qty; every later one costs
+  // ceil(qty x repeatFactor x costGrowth^(copies owned - 1)). repeatFactor 1 and costGrowth 1 = flat.
   // bonus: { type, value }, value is a multiplier. Payout bonuses multiply together; every other stat adds (value - 1).
   // Bonus types (and perk stats): payout, shiny (shiny chance), frenzy (frenzy length), away (away bonus rate),
   // forge (forge speed), spawn (spawn rate), meter (how fast the frenzy meter fills).
   const ARTIFACTS = [
-    { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], costGrowth: 1, bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
-    { id: 'rose_lantern', hall: 'relics', name: 'Rose Lantern', description: 'The frenzy meter fills 25% faster.', cost: [{ kind: 'material', id: 'rosegold', qty: 2 }], costGrowth: 1, bonus: { type: 'meter', value: 1.25 } },
-    { id: 'blue_compass', hall: 'relics', name: 'Blue Compass', description: 'Forge speed x1.3.', cost: [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }], costGrowth: 1, bonus: { type: 'forge', value: 1.3 } },
-    { id: 'mint_clock', hall: 'relics', name: 'Mint Clock', description: 'Away bonus x1.2.', cost: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }], costGrowth: 1, bonus: { type: 'away', value: 1.2 } },
+    { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], repeatFactor: 0.25, costGrowth: 1, bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
+    { id: 'rose_lantern', hall: 'relics', name: 'Rose Lantern', description: 'The frenzy meter fills 25% faster.', cost: [{ kind: 'material', id: 'rosegold', qty: 2 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'meter', value: 1.25 } },
+    { id: 'blue_compass', hall: 'relics', name: 'Blue Compass', description: 'Forge speed x1.3.', cost: [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'forge', value: 1.3 } },
+    { id: 'mint_clock', hall: 'relics', name: 'Mint Clock', description: 'Away bonus x1.2.', cost: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'away', value: 1.2 } },
   ];
   // each craft rolls a rarity by weight; perks = how many distinct perks it gets, range = what their rolled values are multiplied by
   const RARITIES = [
-    { id: 'common', name: 'Common', weight: 70, perks: 0, range: 1 },
-    { id: 'rare', name: 'Rare', weight: 22, perks: 1, range: 1 },
-    { id: 'epic', name: 'Epic', weight: 7, perks: 2, range: 1.25 },
-    { id: 'mythic', name: 'Mythic', weight: 1, perks: 3, range: 1.6 },
+    { id: 'common', name: 'Common', weight: 55, perks: 0, range: 1 },
+    { id: 'rare', name: 'Rare', weight: 30, perks: 1, range: 1 },
+    { id: 'epic', name: 'Epic', weight: 12, perks: 2, range: 1.5 },
+    { id: 'mythic', name: 'Mythic', weight: 3, perks: 3, range: 2.5 },
   ];
   // the perk pool: value = an added fraction (0.05 = +5%), rolled in min..max, times the rarity's range, never above cap.
   // A payout perk multiplies payouts by (1 + value); the others add to their stat's other bonuses.
   const PERKS = [
-    { stat: 'payout', name: 'Payouts', min: 0.02, max: 0.06, cap: 0.1 },
-    { stat: 'shiny', name: 'Shiny chance', min: 0.05, max: 0.15, cap: 0.25 },
-    { stat: 'frenzy', name: 'Frenzy length', min: 0.05, max: 0.15, cap: 0.25 },
-    { stat: 'away', name: 'Away bonus', min: 0.05, max: 0.15, cap: 0.25 },
-    { stat: 'forge', name: 'Forge speed', min: 0.05, max: 0.15, cap: 0.25 },
-    { stat: 'spawn', name: 'Spawn rate', min: 0.03, max: 0.08, cap: 0.12 },
+    { stat: 'payout', name: 'Payouts', min: 0.02, max: 0.06, cap: 0.2 },
+    { stat: 'shiny', name: 'Shiny chance', min: 0.05, max: 0.15, cap: 0.4 },
+    { stat: 'frenzy', name: 'Frenzy length', min: 0.05, max: 0.15, cap: 0.4 },
+    { stat: 'away', name: 'Away bonus', min: 0.05, max: 0.15, cap: 0.4 },
+    { stat: 'forge', name: 'Forge speed', min: 0.05, max: 0.15, cap: 0.4 },
+    { stat: 'spawn', name: 'Spawn rate', min: 0.03, max: 0.08, cap: 0.2 },
   ];
   const STATS = ['payout', 'shiny', 'frenzy', 'away', 'forge', 'spawn', 'meter'];
   const byId = (id) => ARTIFACTS.find((a) => a.id === id) || null;
@@ -617,10 +618,10 @@ const ARTS = (() => {
   const activeCopy = (arts, id) => { const e = entry(arts, id); return (e && e.copies.find((c) => c.id === e.active)) || null; };
   // how many of a cost line's item the player has: pearls from inv, materials from the forge stock
   const have = (c, inv, stock) => (isMat(c) ? (stock && stock[c.id]) || 0 : (inv && inv[c.kind]) || 0);
-  // the cost of the next craft, which grows with the copies already owned
+  // the cost of the next craft: the base cost for the first copy, then base x repeatFactor x costGrowth^(copies - 1)
   function craftCost(id, arts) {
     const a = byId(id); if (!a) return [];
-    const g = Math.pow(a.costGrowth == null ? 1 : a.costGrowth, count(arts, id));
+    const n = count(arts, id), g = n ? (a.repeatFactor == null ? 1 : a.repeatFactor) * Math.pow(a.costGrowth == null ? 1 : a.costGrowth, n - 1) : 1;
     return a.cost.map((c) => Object.assign({}, c, { qty: Math.ceil(+(c.qty * g).toPrecision(12)) })); // toPrecision: 10000 x 1.1^2 is 12,100, not 12,101
   }
   const canCraft = (id, inv, arts, stock) => !!byId(id) && craftCost(id, arts).every((c) => have(c, inv, stock) >= c.qty);

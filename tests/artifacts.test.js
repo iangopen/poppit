@@ -8,9 +8,10 @@ function mulberry32(a) { return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.i
 const seq = (...xs) => { let i = 0; return () => xs[i++ % xs.length]; }; // a scripted rng
 const near = (a, b) => Math.abs(a - b) < 1e-12;
 
-test('the Pink Duck: hall ducks, costs 10,000 Rose Pearls flat, pays x1.4 from one constant', () => {
+test('the Pink Duck: hall ducks, costs 10,000 Rose Pearls then a quarter of that, pays x1.4 from one constant', () => {
   const d = A.byId('pink_duck');
-  assert.deepStrictEqual([d.hall, d.name, d.cost, d.costGrowth, d.bonus], ['ducks', 'Pink Duck', [{ kind: 'pearl', qty: 10000 }], 1, { type: 'payout', value: 1.4 }]);
+  assert.deepStrictEqual([d.hall, d.name, d.cost, d.repeatFactor, d.costGrowth, d.bonus], ['ducks', 'Pink Duck', [{ kind: 'pearl', qty: 10000 }], 0.25, 1, { type: 'payout', value: 1.4 }]);
+  for (const a of A.ARTIFACTS.filter((x) => x.hall === 'relics')) assert.strictEqual(a.repeatFactor, 1, a.id + ' repeats at full price');
   assert.strictEqual(A.PINK_DUCK_PAYOUT, 1.4); assert.strictEqual(d.bonus.value, A.PINK_DUCK_PAYOUT);
   for (const a of A.ARTIFACTS) {
     assert.ok(a.id && a.hall && a.name && a.description && a.cost.length && a.bonus, a.id); assert.ok(A.HALLS.some((h) => h.id === a.hall), a.id + ' has a hall');
@@ -44,9 +45,9 @@ test('an owned artifact crafts again; later copies never replace the active one'
   const inv = inv0(35000), arts = {};
   const a = A.craft('pink_duck', inv, arts, null, null, () => 0), b = A.craft('pink_duck', inv, arts, null, null, () => 0.999), c = A.craft('pink_duck', inv, arts, null, null, () => 0.5);
   assert.deepStrictEqual([a.id, b.id, c.id], [1, 2, 3]); assert.strictEqual(b.rarity, 'mythic');
-  assert.strictEqual(inv.pearl, 5000, 'flat 10,000 each (costGrowth 1)');
+  assert.strictEqual(inv.pearl, 20000, '10,000 for the first, then 2,500 each (repeatFactor 0.25, costGrowth 1)');
   assert.strictEqual(A.count(arts, 'pink_duck'), 3); assert.strictEqual(arts.pink_duck.active, 1); assert.strictEqual(A.activeCopy(arts, 'pink_duck'), a);
-  assert.strictEqual(A.craft('pink_duck', inv, arts), null, 'short: nothing spent'); assert.strictEqual(inv.pearl, 5000);
+  inv.pearl = 2499; assert.strictEqual(A.craft('pink_duck', inv, arts), null, 'short: nothing spent'); assert.strictEqual(inv.pearl, 2499);
 });
 test('cannot craft short, and shiny Roses do not count', () => {
   const inv = { pearl: 9999, 'pearl:s': 5000 }, arts = {};
@@ -55,18 +56,22 @@ test('cannot craft short, and shiny Roses do not count', () => {
   assert.deepStrictEqual([inv, arts], [{ pearl: 9999, 'pearl:s': 5000 }, {}]);
   assert.strictEqual(A.canCraft('pink_duck', {}, {}), false); assert.strictEqual(A.canCraft('no_such_duck', inv0(1e6), {}), false);
 });
-test('costGrowth: each craft costs base x growth^copies owned, rounded up', () => {
-  const d = A.byId('pink_duck'), g0 = d.costGrowth;
-  d.costGrowth = 1.5;
+test('repeat crafts: the first costs the base, later ones base x repeatFactor x costGrowth^(copies - 1), rounded up', () => {
+  const d = A.byId('pink_duck'), g0 = d.costGrowth, r0 = d.repeatFactor;
   try {
     const arts = {}, inv = { pearl: 1e6 };
     assert.deepStrictEqual(A.craftCost('pink_duck', arts), [{ kind: 'pearl', qty: 10000 }]);
-    A.craft('pink_duck', inv, arts); assert.deepStrictEqual(A.craftCost('pink_duck', arts), [{ kind: 'pearl', qty: 15000 }]);
-    A.craft('pink_duck', inv, arts); assert.strictEqual(inv.pearl, 1e6 - 25000);
-    assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, 22500);
-    d.costGrowth = 1.1; assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, Math.ceil(10000 * 1.21));
-    delete d.costGrowth; assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, 10000, 'no field = 1');
-  } finally { d.costGrowth = g0; }
+    A.craft('pink_duck', inv, arts); assert.deepStrictEqual(A.craftCost('pink_duck', arts), [{ kind: 'pearl', qty: 2500 }], 'repeatFactor 0.25');
+    d.costGrowth = 1.5;
+    assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, 2500, 'growth^0 for the second copy');
+    A.craft('pink_duck', inv, arts); assert.strictEqual(inv.pearl, 1e6 - 12500);
+    assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, 3750);
+    A.craft('pink_duck', inv, arts); assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, 5625);
+    d.costGrowth = 1.1; assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, Math.ceil(2500 * 1.21), 'no float overcharge');
+    delete d.costGrowth; delete d.repeatFactor; assert.strictEqual(A.craftCost('pink_duck', arts)[0].qty, 10000, 'no fields = 1');
+    const stock = { rosegold: 4 }, ra = {}; A.craft('rose_lantern', {}, ra, null, stock);
+    assert.deepStrictEqual(A.craftCost('rose_lantern', ra), [{ kind: 'material', id: 'rosegold', qty: 2 }], 'relics repeat at full price');
+  } finally { d.costGrowth = g0; d.repeatFactor = r0; }
   assert.strictEqual(A.byId('pink_duck').cost[0].qty, 10000, 'the table itself never changes');
 });
 test('a relic crafts from alloys and leaves the rest of the stock alone', () => {
@@ -79,10 +84,10 @@ test('a relic crafts from alloys and leaves the rest of the stock alone', () => 
   const l = A.craft('rose_lantern', inv, arts, null, stock, () => 0);
   assert.ok(l); assert.deepStrictEqual(stock, { rose_dust: 9, mintsilver: 1 });
 });
-test('rarity distribution over 200,000 seeded rolls is 70 / 22 / 7 / 1 within tolerance', () => {
+test('rarity distribution over 200,000 seeded rolls is 55 / 30 / 12 / 3 within tolerance', () => {
   const rng = mulberry32(12345), n = 200000, got = { common: 0, rare: 0, epic: 0, mythic: 0 };
   for (let i = 0; i < n; i++) { const r = A.roll(rng); got[r.rarity]++; assert.strictEqual(r.perks.length, A.rarityById(r.rarity).perks); }
-  assert.deepStrictEqual(A.RARITIES.map((r) => [r.id, r.weight, r.perks]), [['common', 70, 0], ['rare', 22, 1], ['epic', 7, 2], ['mythic', 1, 3]]);
+  assert.deepStrictEqual(A.RARITIES.map((r) => [r.id, r.weight, r.perks]), [['common', 55, 0], ['rare', 30, 1], ['epic', 12, 2], ['mythic', 3, 3]]);
   for (const r of A.RARITIES) {
     const p = r.weight / 100, sd = Math.sqrt(p * (1 - p) / n), share = got[r.id] / n;
     assert.ok(Math.abs(share - p) < 5 * sd, r.id + ' ' + share + ' vs ' + p);
@@ -103,7 +108,14 @@ test('perks: six stats with existing hooks; each copy has distinct perks within 
   assert.strictEqual(Object.keys(seen).length, 6, 'every stat comes up');
   const capped = A.roll(seq(0.9999, 0, 0.9999, 0, 0.9999, 0, 0.9999)); // Mythic, every value at its top
   assert.strictEqual(capped.rarity, 'mythic');
-  for (const p of capped.perks) { const d = A.perkById(p.stat); assert.ok(near(p.value, Math.min(d.cap, Math.round(1000 * (d.min + 0.9999 * (d.max - d.min)) * 1.6) / 1000)), p.stat); assert.ok(p.value <= d.cap); }
+  for (const p of capped.perks) { const d = A.perkById(p.stat); assert.ok(near(p.value, Math.min(d.cap, Math.round(1000 * (d.min + 0.9999 * (d.max - d.min)) * 2.5) / 1000)), p.stat); assert.ok(p.value <= d.cap); }
+});
+test('the retune: Rare x1, Epic x1.5, Mythic x2.5 ranges; caps payout 20%, shiny, frenzy, away and forge 40%, spawn 20%', () => {
+  assert.deepStrictEqual(A.RARITIES.map((r) => r.range), [1, 1, 1.5, 2.5]);
+  assert.deepStrictEqual(A.PERKS.map((p) => p.stat + ' ' + p.cap), ['payout 0.2', 'shiny 0.4', 'frenzy 0.4', 'away 0.4', 'forge 0.4', 'spawn 0.2']);
+  for (const p of A.PERKS) assert.ok(p.max * 2.5 <= p.cap + 1e-12, p.stat + ': a top Mythic roll never needs clamping');
+  const old = { pink_duck: { active: 1, copies: [{ id: 1, rarity: 'mythic', perks: [{ stat: 'payout', value: 0.1 }, { stat: 'shiny', value: 0.25 }, { stat: 'spawn', value: 0.12 }] }] } };
+  assert.deepStrictEqual(A.fromSave(old).pink_duck.copies[0].perks.map((p) => p.value), [0.1, 0.25, 0.12], 'a save at the old caps loads unchanged');
 });
 test('only the active copy counts, and swapping changes the bonuses', () => {
   const arts = {};

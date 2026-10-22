@@ -24,8 +24,8 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     ok('the first duck is Common, active, and pays x1.4', d1.rarity === 'common' && st.artifacts.pink_duck.active === d1.id && near(pay1 / pay0, 1.4) && st.inv.pearl === 10500);
     const d2 = G.craftArtifact('pink_duck', seq(0.995, 0, 0.5, 0, 0.5, 0, 0.5)); // 0.995: Mythic; then payout, shiny, frenzy at mid values
     const pay2 = rosePay();
-    run.push('Craft 2: Rose Pearls 10,500 -> ' + st.inv.pearl + ', rolled ' + d2.rarity + ' (' + perkTxt(d2) + '), waits off the pedestal; Rose pop still pays ' + pay2.toFixed(2));
-    ok('a second craft of an owned duck spends another 10,000 and rolls Mythic with 3 distinct perks', d2.rarity === 'mythic' && d2.perks.length === 3 && new Set(d2.perks.map((p) => p.stat)).size === 3 && st.inv.pearl === 500 && A.count(st.artifacts, 'pink_duck') === 2);
+    run.push('Craft 2 (a repeat, x0.25): Rose Pearls 10,500 -> ' + st.inv.pearl + ', rolled ' + d2.rarity + ' (' + perkTxt(d2) + '), waits off the pedestal; Rose pop still pays ' + pay2.toFixed(2));
+    ok('a second craft of an owned duck spends 2,500 (repeatFactor 0.25) and rolls Mythic with 3 distinct perks', d2.rarity === 'mythic' && d2.perks.length === 3 && new Set(d2.perks.map((p) => p.stat)).size === 3 && st.inv.pearl === 8000 && A.count(st.artifacts, 'pink_duck') === 2);
     ok('the new copy does not replace the active one', st.artifacts.pink_duck.active === d1.id && near(pay2, pay1));
     const pv = d2.perks.find((p) => p.stat === 'payout').value;
     ok('setActive swaps to the Mythic copy', G.setActiveCopy('pink_duck', d2.id) === true && st.artifacts.pink_duck.active === d2.id);
