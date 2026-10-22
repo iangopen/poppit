@@ -47,6 +47,11 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     const hits = [0, 1, 2, 3, 4, 5].map(() => G.strikeUI(btn));
     ok('Strike from the panel: 5 land in one second, the 6th is refused', hits.join() === 'true,true,true,true,true,false' && G.forgeView().slots[0].left === '25s', hits.join() + ' / ' + G.forgeView().slots[0].left);
     now += 1000; ok('a second later Strike works again', G.strikeUI(btn) === true && G.forgeView().slots[0].left === '23s');
+    // the events one press sends: a mouse or touch press is pointerdown then click (detail 1); a key press is click (detail 0)
+    const fb = Object.assign({}, btn, { closest: () => fb, disabled: false }), endAt = () => st.forge.slots[0].end;
+    const press = (evs) => { now += 1000; const e0 = endAt(); for (const [t, d] of evs) els.fSlots.fire(t, { target: fb, detail: d, preventDefault() {} }); return (e0 - endAt()) / 1000; };
+    const shaved = [press([['pointerdown'], ['click', 1]]), press([['click', 0]])];
+    ok('one mouse press and one key press each take exactly 1 s off (no double strike)', shaved.join() === '1,1', shaved.join());
 
     // a finished job raises the stock with no click; the dot shows while the panel is closed
     els.forge.hidden = true; G.setForgeDot(false);
