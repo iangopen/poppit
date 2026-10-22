@@ -42,7 +42,9 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - The toggles are rows in the backpack's "Keep for crafting" list: one per discovered type, shown even with nothing held. Kept stacks carry a small padlock.
 - **Artifacts panel** (`#arts`, `updateArts()`): a large panel like Pool, with one section per hall and one card per artifact.
   - A card shows "x of 10,000 Rose Pearls kept" with a bar, and a Craft button, disabled until affordable, then "Owned".
-  - The dock button (`#artBtn`, an inked duck) shows once Rose Pearls popped in total (normal + shiny) reach 100, or once an artifact is owned. While it shows, `#stage.arts` moves the bottom bar right; under 820 px the bar moves up above the dock instead.
+  - The dock button (`#artBtn`, an inked duck) shows once Rose Pearls popped in total (normal + shiny) reach 100, or once an artifact is owned.
+  - **Gated dock buttons** use one table, `DOCK_GATES` in `src/ui.js`, keyed by `PANEL_BTN` panel ids (`arts`, `forge`), and `syncDock()` checks them every HUD tick. While a gated button shows, the stage carries its id as a class (`#stage.arts`, `#stage.forge`), which moves the bottom bar right on wide screens.
+  - The dock order is pack, tools, book, Artifacts (202 px), Forge (258 px).
 - **`src/forge.js`** (`FORGE`) is the forge engine: pure, no DOM, every number is data. This session built the engine only; there is no panel yet.
   - `MATERIALS`: one per pearl type, in roster order, `{ id, name, recipe: { kind, qty, secs } }`.
     - Rose Dust (100 Rose, 30 s), Blue Dust (70, 1 min), Mint (45, 2 min), Golden (30, 4 min), Violet (20, 8 min).
@@ -60,7 +62,29 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
     - Forge Speed: base 20,000, grow 2.8, max 10.
     - Extra Slot: base 250,000, grow 10, max 3.
     - `upgCost`, `canBuy` and `buy` (which returns the juice to take) are pure.
-  - Game hooks in `src/ui.js`: `forgeStart`, `forgeStrike`, `forgeBuy`, `forgeCatchUp` and `forgeTick`. No buttons call them yet.
+  - Game hooks in `src/ui.js`: `forgeStart`, `forgeStrike`, `forgeBuy`, `forgeCatchUp` and `forgeTick`. `forgeTick` runs every frame before the HUD update.
+  - `FORGE.costText(have, need, id)` reads "2 of 5 Rose Dust". Artifact cards use it for material cost lines, so a real material artifact needs no UI work.
+- **Forge panel** (`#forge`, `updateForge()`, data from `forgeView()`): a large panel in the Artifacts family.
+  - **Dock button** (`#forgeBtn`, an inked anvil): the same 100-Rose gate as Artifacts, or any forge work in the save.
+    - A dot (`#forgeDot`, `setForgeDot`) lights when a job finishes while the panel is closed, including offline, and clears when the panel opens.
+  - **Speed line**, e.g. "Forge speed x2.5: level 1, frenzy x2". It shows the total rate, and frenzy appears and disappears live.
+  - **Slots:** one row each. Empty, or the material, a bar, time left at the current speed, and a Strike button.
+    - Strike works on `pointerdown` (touch and mouse), plus keyboard clicks.
+    - It names its slot to the engine, which allows 1 s off per press and at most 5 presses per second; refused presses shake the button.
+    - The button is at least 76×52 px and shows a "-1s" float.
+  - **Recipes:** one row per discovered pearl type. Each shows the cost, the time at the current speed, the Roses (or other pearls) in the backpack, the material in stock, a Keep toggle and a Start button that uses the first free slot.
+  - **Start explains itself:** `startReason()` gives the first cause that applies:
+    - "The forge slot is busy" / "All forge slots are busy";
+    - short with auto-sell on and the type not kept: "Turn on Keep for Rose Pearls, or turn off auto-sell";
+    - kept but not spawning: "... are not spawning right now: unlock them in the shop or add them to your pool";
+    - otherwise "Need N more ... in your backpack".
+  - **Keep and auto-sell:** the forge spends normal pearls from the backpack, kept or not.
+    - With auto-sell on, only kept types ever reach the backpack, so Keep is how to feed the forge.
+    - The recipe's Keep toggle calls `setKeep`, the same state as the backpack Keep list.
+    - The panel says that kept Rose Pearls are also what the Pink Duck needs, so the forge and the duck compete for them.
+  - **Materials and Forge upgrades:** the stock line, then Forge Speed and Extra Slot as shop-style `.up` cards (level, effect, price, flash on buy).
+  - The Artifacts panel shows the same stock line (`#artMats`).
+  - **Refreshes in place:** rows are rebuilt only when the structure changes (slot count, running slots, discovered types). Bars, text and buttons update every HUD tick. Finished jobs, purchases, Keep changes, Fresh Batch, loads and imports reset the panel's cache.
   - **Artifact costs** can name materials: `{ kind: 'material', id, qty }` is checked against and spent from `state.forge.stock`. No real artifact uses one yet; tests use a fixture.
 - **`src/econ.js`** holds the pure economy and no DOM:
   - upgrades: `UPG`, buy `ORDER`, `TOOLS`;
@@ -150,7 +174,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 ## State: real and verified (2026-10-21)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 31 econ unit tests, 6 artifacts unit tests, 13 forge unit tests, 7 page tests, 177 harness checks and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
+- **Tests:** 31 econ unit tests, 6 artifacts unit tests, 13 forge unit tests, 8 page tests, 202 harness checks (`tests/forge_ui_tests.js` adds the forge panel checks) and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
 - **Unique upgrades, Helpers and auto-sell (2026-10-18), checked in Chrome:**
   - a new game earns juice from pops with an empty backpack;
   - the Tools panel shows Wide Swing on the Steel Pin page and the muted line on the Awl page;
@@ -193,6 +217,16 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - no text overflows in the Artifacts panel or the backpack, and the backpack fits inside the board;
   - console: only the favicon 404 and Chrome's autoplay and vibrate notices.
 
+- **Forge UI (2026-10-21), checked in headless Chrome at 390×844** (the extension was not connected), from a fresh profile:
+  - with default settings, 100 Rose pops showed the Forge button, and Start read "Turn on Keep for Rose Pearls, or turn off auto-sell";
+  - Keep from the panel turned the backpack row to Kept;
+  - after 150 more pops, Start took 100 (150 → 50);
+  - 7 real Strike presses in one second shaved exactly 5 s;
+  - the job finished into the stock by itself;
+  - Forge Speed cost 20,000 and the speed line read x1.25;
+  - reload and Fresh Batch kept Keep, stock, level and the 50 kept Roses;
+  - no horizontal overflow, and no console errors.
+
 ## Still open
 
 - **Other tools' unique upgrades:** only the Steel Pin has one. The other five show "No special upgrade yet".
@@ -208,7 +242,11 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - The upgrade shelf empties early: `COST_SCALE` 2.5 maxes most tune upgrades in run 1. The `moreTuneLevels` sim variant halves that at about the same pacing.
 - **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: half of what helpers alone would earn, capped at 8 h; see the away bonus rule above).
 - **Save sync between devices:** not built. Moving a save is manual (code or file). Tested only on desktop Chrome so far; iOS Safari `pagehide` and the clipboard on phones are not yet verified on a device.
-- **Phone layout:** not built. The viewport meta now makes phones lay the page out at device width instead of 980 px desktop width. This has not been checked on a real phone; the 390 px checks ran in desktop Chrome. At 390 px the board and the shop share the height tightly. The `@media (max-width: 820px)` rules stack the shop under the board, let the open backpack cover the dock, and lift the bottom bar above the dock while the Artifacts button shows. Without that button, the bottom bar at 390 px already overflowed by 13 px before artifacts (the frenzy meter squeezes to 5 px); not fixed.
+- **Phone layout:** not checked on a real phone; the phone checks run in desktop Chrome at phone sizes. At 390 px the board and the shop share the height tightly, so the Forge panel scrolls inside itself.
+  - The `@media (max-width: 820px)` rules stack the shop under the board and let the open backpack cover the dock.
+  - They always put the bottom bar (combo, tool label, frenzy meter) above the dock, and move the start hint above it.
+  - With the longest tool name and a combo showing, nothing overlaps or scrolls sideways at 360, 390 and 430 px, and all five dock buttons sit inside the board.
+  - At 360 the combo multiplier is clipped and the frenzy meter shrinks to about 35 px.
 - **Artifacts:** only the Hall of Ducks and the Pink Duck exist.
   - Not built: other ducks, other halls, and bonus types other than payout. Material costs are supported, but no artifact uses one yet.
   - The duck's x1.4 lives in one constant (`PINK_DUCK_PAYOUT`).
@@ -218,9 +256,12 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **Collecting the duck's 10,000 Rose Pearls** (sim, no duck) takes 102, 59 and 45 min of play casual, and 127, 49 and 76 min engaged, at the first helper, the first Fresh Batch and cycle 6. That is far longer than a run, so the stash builds over several Fresh Batches.
     - Selling them would have paid 0.44M-1.5M juice, but Roses are only 0.2-0.6% of income at those points, so keeping costs almost nothing per minute.
     - Measured with every type pooled; a Rose-only pool would collect faster.
+    - **Some rows look odd.** With the duck, casual cycle 6 takes 85 min and engaged's first Fresh Batch 96 min, against 45 and 49 without it. Each row is one 60-second window from a single seed (frenzy, the board fill and the pearl mix at that moment all move it), so single rows are noisy. Averaging several windows or seeds would be needed before using them for tuning.
   - Spending that lasts across Fresh Batches is still the natural fix for the empty late-game shelf.
-- **Forge, the next session:** the forge panel, the Strike tap interaction (`forgeStrike` exists, capped at 5 per second) and the forge dock button. No UI calls the forge yet.
-  - The recipe numbers and the Forge Speed and Extra Slot prices are first guesses: no sim models the forge.
-  - Nothing uses materials yet.
+- **Forge:** the engine and panel are built.
+  - Materials have no real use yet: no artifact costs one.
+  - No second duck and no second hall.
+  - The recipe numbers and the Forge Speed and Extra Slot prices are untuned first guesses; no sim models the forge.
+  - The forge and the Pink Duck both draw on kept Rose Pearls. Nothing guards the duck's stash: one Rose Dust start takes 100 of them.
 - **Raw numbers:** the Fresh Batch button and the Flavors line print raw integers (`+6666 Flavors`, `x3238.4`). They fit today, but they don't use `fmt`.
 - **Sim limitations** (see the report): no backpack selling, the away bonus is reported but never taken, pool never toggled, fixed cell counts per board tier. During a run, helpers get no frenzy meter credit and hit a random pearl they can break; the game (and the sim's helper hour) take the best payout per hit. Switching the run would move the reference pacing numbers. The nothing-to-want columns read 0.0 everywhere (before this change too), so they carry no signal.
