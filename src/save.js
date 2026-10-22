@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 7;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -66,6 +66,30 @@ const MIGRATIONS = {
     const src = isObj(d.artifacts) ? d.artifacts : {}, artifacts = {}; let n = 0;
     for (const k of Object.keys(src)) if (src[k] === true) { n++; artifacts[k] = { copies: [{ id: n, art: k, rarity: 'common', perks: [] }], active: n }; }
     return Object.assign({}, d, { version: 6, artifacts });
+  },
+  // v6 copies had no paid cost and no lock. Each copy gets what it would have cost: an artifact's repeat-craft price, except
+  // a Pink Duck's first copy (its lowest id), which paid the first-craft price. The prices are frozen here as they were on
+  // 2026-10-22, so a later change to the tables never changes this step. Epic and Mythic copies start locked, like new ones.
+  6: (d) => {
+    const FIRST = { pink_duck: [{ kind: 'pearl', qty: 10000 }] };
+    const REPEAT = {
+      pink_duck: [{ kind: 'pearl', qty: 2500 }],
+      rose_lantern: [{ kind: 'material', id: 'rosegold', qty: 2 }],
+      blue_compass: [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }],
+      mint_clock: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }],
+    };
+    const src = isObj(d.artifacts) ? d.artifacts : {}, artifacts = {};
+    for (const k of Object.keys(src)) {
+      const e = src[k];
+      if (!isObj(e) || !Array.isArray(e.copies) || !REPEAT[k]) { artifacts[k] = e; continue; }
+      const ids = e.copies.filter((c) => isObj(c) && Number.isInteger(c.id)).map((c) => c.id), first = ids.length ? Math.min(...ids) : null;
+      const copies = e.copies.map((c) => (isObj(c) ? Object.assign({}, c, {
+        paid: ((FIRST[k] && c.id === first) ? FIRST[k] : REPEAT[k]).map((x) => Object.assign({}, x)),
+        locked: c.rarity === 'epic' || c.rarity === 'mythic',
+      }) : c));
+      artifacts[k] = Object.assign({}, e, { copies });
+    }
+    return Object.assign({}, d, { version: 7, artifacts });
   },
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }

@@ -1,10 +1,11 @@
 /* ---------- Artifacts: permanent items crafted from kept pearls or forge alloys, grouped in halls. Pure, no DOM. ---------- */
-// Every craft makes a copy: { id, art, rarity, perks: [{ stat, value }] }. state.artifacts holds, per artifact id,
+// Every craft makes a copy: { id, art, rarity, perks: [{ stat, value }], paid: [cost lines as spent], locked }. state.artifacts holds, per artifact id,
 // { copies: [...], active: <copy id> }. Only the active copy (the one on its pedestal) counts: its artifact's base bonus
 // plus its own perks. The first copy goes on the pedestal by itself; later copies wait until setActive puts them there.
 // A copy's roll is stored in the save, so loading never re-rolls.
 const ARTS = (() => {
   const PINK_DUCK_PAYOUT = 1.4; // Ian's value (was 1.25); may change again
+  const REFUND_SHARE = 0.4; // scrapping a shelf copy refunds floor(this x what it cost when it was crafted), line by line
   const RELIC_HALL_NAME = 'Hall of Relics'; // one string, easy to rename
   // halls in display order; the Artifacts panel draws one section per hall
   const HALLS = [
@@ -23,12 +24,13 @@ const ARTS = (() => {
     { id: 'blue_compass', hall: 'relics', name: 'Blue Compass', description: 'Forge speed x1.3.', cost: [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'forge', value: 1.3 } },
     { id: 'mint_clock', hall: 'relics', name: 'Mint Clock', description: 'Away bonus x1.2.', cost: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'away', value: 1.2 } },
   ];
-  // each craft rolls a rarity by weight; perks = how many distinct perks it gets, range = what their rolled values are multiplied by
+  // each craft rolls a rarity by weight; perks = how many distinct perks it gets, range = what their rolled values are multiplied by;
+  // lockNew = a new copy of this rarity starts locked, so it cannot be scrapped by accident
   const RARITIES = [
-    { id: 'common', name: 'Common', weight: 55, perks: 0, range: 1 },
-    { id: 'rare', name: 'Rare', weight: 30, perks: 1, range: 1 },
-    { id: 'epic', name: 'Epic', weight: 12, perks: 2, range: 1.5 },
-    { id: 'mythic', name: 'Mythic', weight: 3, perks: 3, range: 2.5 },
+    { id: 'common', name: 'Common', weight: 55, perks: 0, range: 1, lockNew: false },
+    { id: 'rare', name: 'Rare', weight: 30, perks: 1, range: 1, lockNew: false },
+    { id: 'epic', name: 'Epic', weight: 12, perks: 2, range: 1.5, lockNew: true },
+    { id: 'mythic', name: 'Mythic', weight: 3, perks: 3, range: 2.5, lockNew: true },
   ];
   // the perk pool: value = an added fraction (0.05 = +5%), rolled in min..max, times the rarity's range, never above cap.
   // A payout perk multiplies payouts by (1 + value); the others add to their stat's other bonuses.
@@ -72,10 +74,12 @@ const ARTS = (() => {
     return { rarity: rar.id, perks };
   }
   const nextId = (arts) => { let n = 0; for (const k in arts) { const e = entry(arts, k); if (e) for (const c of e.copies) n = Math.max(n, c.id); } return n + 1; };
-  // adds a copy; the first copy of an artifact goes on its pedestal, later ones never replace it
-  function addCopy(arts, id, rarity, perks) {
+  // adds a copy; the first copy of an artifact goes on its pedestal, later ones never replace it.
+  // paid: the cost lines actually spent (default: what the next craft costs now); locked: default from the rarity's lockNew
+  function addCopy(arts, id, rarity, perks, paid, locked) {
+    const pay = paid || craftCost(id, arts), r = rarityById(rarity);
     if (!entry(arts, id)) arts[id] = { copies: [], active: null };
-    const c = { id: nextId(arts), art: id, rarity, perks: perks || [] };
+    const c = { id: nextId(arts), art: id, rarity, perks: perks || [], paid: pay.map((x) => Object.assign({}, x)), locked: locked == null ? !!(r && r.lockNew) : !!locked };
     arts[id].copies.push(c);
     if (arts[id].copies.length === 1) arts[id].active = c.id;
     return c;
@@ -83,14 +87,35 @@ const ARTS = (() => {
   // consumes exactly the cost (and the matching share of each pearl stack's stored value), rolls the copy and returns it; null = not crafted
   function craft(id, inv, arts, invV, stock, rng) {
     if (!canCraft(id, inv, arts, stock)) return null;
-    for (const c of craftCost(id, arts)) {
+    const cost = craftCost(id, arts);
+    for (const c of cost) {
       if (isMat(c)) { stock[c.id] -= c.qty; if (!stock[c.id]) delete stock[c.id]; continue; }
       const h = inv[c.kind];
       if (invV && invV[c.kind] != null) invV[c.kind] = h - c.qty > 0 ? invV[c.kind] * (h - c.qty) / h : 0;
       inv[c.kind] = h - c.qty;
     }
     const r = roll(rng);
-    return addCopy(arts, id, r.rarity, r.perks);
+    return addCopy(arts, id, r.rarity, r.perks, cost);
+  }
+  // what scrapping a copy gives back: floor(REFUND_SHARE x each paid line), in the same currency
+  const refundOf = (c) => (c && Array.isArray(c.paid) ? c.paid : []).map((x) => Object.assign({}, x, { qty: Math.floor(+(x.qty * REFUND_SHARE).toPrecision(12)) }));
+  // why a copy cannot be scrapped ('' = it can)
+  function scrapBlock(arts, id, copyId) {
+    const e = entry(arts, id), c = e && e.copies.find((x) => x.id === copyId);
+    if (!c) return 'missing'; if (e.active === copyId) return 'pedestal'; if (c.locked) return 'locked'; return '';
+  }
+  // removes a shelf copy and refunds floor(REFUND_SHARE x its paid cost): pearls into inv (the backpack), materials into stock.
+  // Never the copy on the pedestal, never a locked copy. Returns the refund lines (qty may be 0), or null and changes nothing.
+  function scrap(arts, id, copyId, inv, stock) {
+    if (scrapBlock(arts, id, copyId)) return null;
+    const e = arts[id], c = e.copies.find((x) => x.id === copyId), back = refundOf(c);
+    e.copies.splice(e.copies.indexOf(c), 1);
+    for (const x of back) { if (!x.qty) continue; if (isMat(x)) stock[x.id] = (stock[x.id] || 0) + x.qty; else inv[x.kind] = (inv[x.kind] || 0) + x.qty; }
+    return back;
+  }
+  function setLocked(arts, id, copyId, on) {
+    const e = entry(arts, id), c = e && e.copies.find((x) => x.id === copyId);
+    if (!c) return false; c.locked = !!on; return true;
   }
   // puts an owned copy on its artifact's pedestal; free, at any time
   function setActive(arts, id, copyId) {
@@ -112,11 +137,25 @@ const ARTS = (() => {
   // untrusted input (a save) -> valid artifacts: unknown artifacts and copies with an unknown rarity or a bad or repeated id
   // are dropped; perks keep known, distinct stats (as many as the rarity allows) with values clamped to min..cap; the active
   // copy must be an owned one, otherwise the first copy goes on the pedestal
+  // paid lines from a save: each must name one of the artifact's cost lines (same kind, and id for materials), with a whole qty
+  // from 0 up to the most any copy in this save could have paid; missing or bad paid falls back to the cheapest repeat price
+  function paidFromSave(a, p, n) {
+    const top = Math.max(1, (a.repeatFactor == null ? 1 : a.repeatFactor) * Math.pow(a.costGrowth == null ? 1 : a.costGrowth, Math.max(0, n - 1)));
+    const same = (x, c) => (isMat(c) ? x.kind === 'material' && x.id === c.id : x.kind === c.kind);
+    const out = [];
+    for (const c of a.cost) {
+      const x = Array.isArray(p) ? p.find((y) => y && typeof y === 'object' && same(y, c)) : null;
+      const q = x && Number.isFinite(x.qty) ? Math.floor(x.qty) : NaN;
+      const repeat = Math.ceil(+(c.qty * (a.repeatFactor == null ? 1 : a.repeatFactor)).toPrecision(12));
+      out.push(Object.assign({}, c, { qty: Number.isFinite(q) ? Math.max(0, Math.min(Math.ceil(c.qty * top), q)) : repeat }));
+    }
+    return out;
+  }
   function fromSave(d) {
     const out = {}, src = d && typeof d === 'object' && !Array.isArray(d) ? d : {}, ids = new Set();
     for (const a of ARTIFACTS) {
       const e = src[a.id]; if (!e || typeof e !== 'object' || !Array.isArray(e.copies)) continue;
-      const copies = [];
+      const copies = [], n = e.copies.length;
       for (const c of e.copies) {
         if (!c || typeof c !== 'object') continue;
         const rar = rarityById(c.rarity);
@@ -127,14 +166,14 @@ const ARTS = (() => {
           if (!def || seen.has(def.stat) || typeof p.value !== 'number' || !Number.isFinite(p.value) || perks.length >= rar.perks) continue;
           seen.add(def.stat); perks.push({ stat: def.stat, value: Math.min(def.cap, Math.max(def.min, p.value)) });
         }
-        ids.add(c.id); copies.push({ id: c.id, art: a.id, rarity: rar.id, perks });
+        ids.add(c.id); copies.push({ id: c.id, art: a.id, rarity: rar.id, perks, paid: paidFromSave(a, c.paid, n), locked: c.locked === true });
       }
       if (!copies.length) continue;
       out[a.id] = { copies, active: copies.some((c) => c.id === e.active) ? e.active : copies[0].id };
     }
     return out;
   }
-  return { PINK_DUCK_PAYOUT, RELIC_HALL_NAME, HALLS, ARTIFACTS, RARITIES, PERKS, STATS, byId, rarityById, perkById, isMat, have, count, activeCopy,
+  return { PINK_DUCK_PAYOUT, REFUND_SHARE, refundOf, scrapBlock, scrap, setLocked, RELIC_HALL_NAME, HALLS, ARTIFACTS, RARITIES, PERKS, STATS, byId, rarityById, perkById, isMat, have, count, activeCopy,
     craftCost, canCraft, roll, addCopy, craft, setActive, activeBonuses, payoutMult, fromSave };
 })();
 if (typeof module !== 'undefined') module.exports = ARTS;

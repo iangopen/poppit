@@ -82,7 +82,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
 
     // ---- save, export, import, backup, Fresh Batch, Reset ----
     const artJson = JSON.stringify(st.artifacts), ser = G.serialize();
-    ok('serialize writes the copies, rolls and pedestals', JSON.stringify(ser.artifacts) === artJson && ser.version === 6);
+    ok('serialize writes the copies, rolls and pedestals', JSON.stringify(ser.artifacts) === artJson && ser.version === G.SAVE_VERSION);
     const code = G.encodeSave(ser); G.loadState({ version: 6 });
     ok('a save code brings back every copy with its roll, never re-rolled', G.loadState(G.decodeSave(code)) === 'ok' && JSON.stringify(st.artifacts) === artJson && near(G.getS().artMult, 1.4));
     G.save(); const raw = store['poppit.v1'];
@@ -102,7 +102,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     fresh(); const base = rosePay();
     G.loadState({ version: 5, artifacts: { pink_duck: true } }); fresh();
     const old = rosePay();
-    ok('a v5 save with the duck loads one Common copy on the pedestal, paying x1.4 as before', JSON.stringify(st.artifacts) === '{"pink_duck":{"copies":[{"id":1,"art":"pink_duck","rarity":"common","perks":[]}],"active":1}}' && near(old / base, 1.4), JSON.stringify(st.artifacts));
+    ok('a v5 save with the duck loads one Common copy on the pedestal, paying x1.4 as before', JSON.stringify(st.artifacts) === '{"pink_duck":{"copies":[{"id":1,"art":"pink_duck","rarity":"common","perks":[],"paid":[{"kind":"pearl","qty":10000}],"locked":false}],"active":1}}' && near(old / base, 1.4), JSON.stringify(st.artifacts));
   } finally { Date.now = realNow; }
   for (const l of run) console.log('run: ' + l);
 };

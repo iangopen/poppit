@@ -1,7 +1,8 @@
 // Artifacts, Keep and the artifact saves in the real game (run from tests/harness32.js).
 module.exports = ({ G, ok, frames, E, store, els }) => {
   const st = G.state, A = require('../src/artifacts.js');
-  const ducks = () => A.count(st.artifacts, 'pink_duck'), oneDuck = () => ({ pink_duck: { copies: [{ id: 1, art: 'pink_duck', rarity: 'common', perks: [] }], active: 1 } });
+  const ducks = () => A.count(st.artifacts, 'pink_duck'), oneDuck = () => ({ pink_duck: { copies: [{ id: 1, art: 'pink_duck', rarity: 'common', perks: [] }], active: 1 } }),
+    oneDuckV7 = () => ({ pink_duck: { copies: [{ id: 1, art: 'pink_duck', rarity: 'common', perks: [], paid: [{ kind: 'pearl', qty: 10000 }], locked: false }], active: 1 } }); // after the v6 -> v7 step
   const fresh = () => { G.resetRun(); G.clearBoard(); G.setMeter(0); };
   const popRose = (src) => { const c = G.cells.find((x) => !x.p); const p = G.spawnAt(c, 'pearl', false); p.born = 1; G.setCombo(0); G.popPearl(p, src); };
   const gain = (src, autoSell) => { st.autoSell = autoSell; const s0 = st.sparks, v0 = st.invV.pearl; popRose(src); return autoSell ? st.sparks - s0 : st.invV.pearl - v0; };
@@ -58,20 +59,20 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   st.col.pearl.popped = pop0; st.col.pearl.sPopped = sp0;
 
   // save v4 (artifacts and Keep); v6 turned owned artifacts into copies
-  ok('SAVE_VERSION is 6 (artifact copies came after the forge save)', G.SAVE_VERSION === 6);
+  ok('SAVE_VERSION is 7 (paid costs and locks came after artifact copies)', G.SAVE_VERSION === 7);
   const m = G.migrateSave({ version: 3, sparks: 5, inv: { pearl: 50 } }).save;
   ok('a v3 save migrates with no artifacts and nothing kept', m.version === G.SAVE_VERSION && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
   ok('and loads that way', G.loadState({ version: 3, inv: { pearl: 50 } }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && st.inv.pearl === 50);
   ok('a v1 save walks every step to the current version', G.migrateSave({ sparks: 1, lv: {} }).save.version === G.SAVE_VERSION);
   ok('a v4 save keeps only known artifacts set to true (as one Common copy each), and Keep only known ids', G.loadState({ version: 4, artifacts: { pink_duck: true, golden_goose: true, x: 'yes' }, keep: { pearl: true, blue: 1, dragon: true, golden: 'yes', mint: true } }) === 'ok' &&
-    JSON.stringify(st.artifacts) === JSON.stringify(oneDuck()) && JSON.stringify(st.keep) === '{"pearl":true,"mint":true}', JSON.stringify([st.artifacts, st.keep]));
+    JSON.stringify(st.artifacts) === JSON.stringify(oneDuckV7()) && JSON.stringify(st.keep) === '{"pearl":true,"mint":true}', JSON.stringify([st.artifacts, st.keep]));
   ok('a non-object artifacts or keep loads as empty', G.loadState({ version: 4, artifacts: ['pink_duck'], keep: 'pearl' }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}');
   ok('a save newer than SAVE_VERSION is refused', G.loadState({ version: G.SAVE_VERSION + 1, artifacts: {} }) === 'newer');
 
   // round trip: serialize, save code, import with its backup, restore
   G.loadState({ version: 6, sparks: 77, artifacts: oneDuck(), keep: { pearl: true, coral: true }, inv: { pearl: 1234 } }); G.recalc();
   const ser = G.serialize();
-  ok('serialize writes artifacts and keep', ser.version === G.SAVE_VERSION && JSON.stringify(ser.artifacts) === JSON.stringify(oneDuck()) && ser.keep.pearl === true && ser.keep.coral === true);
+  ok('serialize writes artifacts and keep', ser.version === G.SAVE_VERSION && JSON.stringify(ser.artifacts) === JSON.stringify(oneDuckV7()) && ser.keep.pearl === true && ser.keep.coral === true);
   const code = G.encodeSave(ser);
   G.loadState({ version: 4 });
   ok('a save code carries artifacts and keep', G.loadState(G.decodeSave(code)) === 'ok' && ducks() === 1 && st.keep.coral === true && st.inv.pearl === 1234);

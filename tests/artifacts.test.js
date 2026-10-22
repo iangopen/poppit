@@ -34,7 +34,7 @@ test('crafting consumes exactly 10,000 Rose Pearls and their share of stored val
   const inv = inv0(12345), invV = { pearl: 24690, 'pearl:s': 400, blue: 70 }, arts = {};
   assert.strictEqual(A.canCraft('pink_duck', inv, arts), true);
   const c = A.craft('pink_duck', inv, arts, invV, undefined, () => 0);
-  assert.deepStrictEqual(c, { id: 1, art: 'pink_duck', rarity: 'common', perks: [] });
+  assert.deepStrictEqual(c, { id: 1, art: 'pink_duck', rarity: 'common', perks: [], paid: [{ kind: 'pearl', qty: 10000 }], locked: false }, 'the copy records what it cost');
   assert.deepStrictEqual(inv, { pearl: 2345, 'pearl:s': 40, blue: 7 }, 'only normal Rose Pearls are spent');
   assert.ok(Math.abs(invV.pearl - 24690 * 2345 / 12345) < 1e-9 && invV['pearl:s'] === 400);
   assert.deepStrictEqual(arts, { pink_duck: { copies: [c], active: 1 } }, 'the first copy goes on the pedestal');
@@ -179,7 +179,67 @@ test('fromSave clamps: unknown ids, bad rarities and ids, repeated or unknown pe
     [6, 'rare', 'shiny=0.07'],
   ], 'perks capped by the rarity count, distinct, known, clamped');
   assert.strictEqual(out.pink_duck.active, 4, 'an active id that is not owned falls back to the first copy');
-  assert.deepStrictEqual(out.mint_clock, { active: 9, copies: [{ id: 9, art: 'mint_clock', rarity: 'common', perks: [] }] }, 'a Common copy has no perks');
+  assert.deepStrictEqual(out.mint_clock, { active: 9, copies: [{ id: 9, art: 'mint_clock', rarity: 'common', perks: [], paid: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }], locked: false }] }, 'a Common copy has no perks; missing paid falls back to the repeat price, missing locked to false');
   assert.deepStrictEqual(A.fromSave(undefined), {}); assert.deepStrictEqual(A.fromSave([1]), {}); assert.deepStrictEqual(A.fromSave({ pink_duck: true }), {});
   const round = A.fromSave(JSON.parse(JSON.stringify(out))); assert.deepStrictEqual(round, out, 'a clean save loads unchanged: no re-roll');
+});
+test('paid cost is recorded at craft: 10,000 for the first duck, 2,500 for a repeat, alloys for a relic; a later price change never touches it', () => {
+  const arts = {}, inv = { pearl: 20000 }, stock = { azure_steel: 2, rosegold: 1 };
+  const a = A.craft('pink_duck', inv, arts, null, null, () => 0), b = A.craft('pink_duck', inv, arts, null, null, () => 0);
+  const r = A.craft('blue_compass', inv, arts, null, stock, () => 0);
+  assert.deepStrictEqual([a.paid, b.paid, r.paid], [[{ kind: 'pearl', qty: 10000 }], [{ kind: 'pearl', qty: 2500 }], [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }]]);
+  const d = A.byId('pink_duck'), r0 = d.repeatFactor; d.repeatFactor = 2;
+  try { assert.deepStrictEqual(A.refundOf(b), [{ kind: 'pearl', qty: 1000 }], 'the refund follows what was paid, not today\'s price'); } finally { d.repeatFactor = r0; }
+});
+test('new Epic and Mythic copies start locked; Common and Rare do not; locks toggle at any time', () => {
+  assert.deepStrictEqual(A.RARITIES.map((r) => r.id + ' ' + r.lockNew), ['common false', 'rare false', 'epic true', 'mythic true']);
+  const arts = {}, inv = { pearl: 1e5 };
+  const got = [0, 0.7, 0.9, 0.99].map((x) => A.craft('pink_duck', inv, arts, null, null, () => x));
+  assert.deepStrictEqual(got.map((c) => c.rarity + ' ' + c.locked), ['common false', 'rare false', 'epic true', 'mythic true']);
+  assert.strictEqual(A.setLocked(arts, 'pink_duck', got[3].id, false), true); assert.strictEqual(got[3].locked, false);
+  assert.strictEqual(A.setLocked(arts, 'pink_duck', got[0].id, true), true); assert.strictEqual(got[0].locked, true, 'even the pedestal copy');
+  assert.strictEqual(A.setLocked(arts, 'pink_duck', 99, true), false);
+});
+test('scrap refunds floor(40%) of the paid cost in the same currency; never the pedestal copy or a locked one', () => {
+  assert.strictEqual(A.REFUND_SHARE, 0.4);
+  const arts = {}, inv = { pearl: 12500 }, stock = {};
+  const first = A.craft('pink_duck', inv, arts, null, null, () => 0), rep = A.craft('pink_duck', inv, arts, null, null, () => 0.99);
+  assert.strictEqual(inv.pearl, 0);
+  assert.strictEqual(A.scrapBlock(arts, 'pink_duck', first.id), 'pedestal'); assert.strictEqual(A.scrap(arts, 'pink_duck', first.id, inv, stock), null);
+  assert.strictEqual(A.scrapBlock(arts, 'pink_duck', rep.id), 'locked'); assert.strictEqual(A.scrap(arts, 'pink_duck', rep.id, inv, stock), null);
+  assert.strictEqual(A.count(arts, 'pink_duck'), 2); assert.strictEqual(inv.pearl, 0, 'nothing changes when refused');
+  A.setLocked(arts, 'pink_duck', rep.id, false);
+  assert.deepStrictEqual(A.scrap(arts, 'pink_duck', rep.id, inv, stock), [{ kind: 'pearl', qty: 1000 }]);
+  assert.deepStrictEqual([inv.pearl, A.count(arts, 'pink_duck'), A.scrapBlock(arts, 'pink_duck', rep.id)], [1000, 1, 'missing']);
+  A.setActive(arts, 'pink_duck', first.id); A.addCopy(arts, 'pink_duck', 'common', []); // a repeat Common, paid 2,500
+  A.setActive(arts, 'pink_duck', A.activeCopy(arts, 'pink_duck').id + 1);
+  assert.deepStrictEqual(A.scrap(arts, 'pink_duck', first.id, inv, stock), [{ kind: 'pearl', qty: 4000 }], 'the first duck off its pedestal refunds 40% of 10,000');
+  // alloys: floor of 40% per line, back into the stock (a fixture price, since 40% of 1 or 2 alloys floors to 0)
+  const rel = {}; A.addCopy(rel, 'blue_compass', 'common', [], [{ kind: 'material', id: 'azure_steel', qty: 7 }, { kind: 'material', id: 'rosegold', qty: 3 }]); A.addCopy(rel, 'blue_compass', 'rare', []);
+  assert.deepStrictEqual(A.scrap(rel, 'blue_compass', 2, inv, stock), [{ kind: 'material', id: 'azure_steel', qty: 0 }, { kind: 'material', id: 'rosegold', qty: 0 }], 'today\'s relic prices refund nothing');
+  const nx = A.addCopy(rel, 'blue_compass', 'rare', []); A.setActive(rel, 'blue_compass', nx.id);
+  assert.deepStrictEqual(A.scrap(rel, 'blue_compass', 1, inv, stock), [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }]);
+  assert.deepStrictEqual(stock, { azure_steel: 2, rosegold: 1 }, 'floor(2.8) and floor(1.2) back into the stock');
+});
+test('migration v6 -> v7: paid costs frozen at the 2026-10-22 prices (a duck\'s first copy 10,000, the rest the repeat price); Epic and Mythic locked', () => {
+  const v6 = { version: 6, artifacts: {
+    pink_duck: { active: 3, copies: [{ id: 3, art: 'pink_duck', rarity: 'common', perks: [] }, { id: 1, art: 'pink_duck', rarity: 'epic', perks: [] }, { id: 5, art: 'pink_duck', rarity: 'mythic', perks: [] }] },
+    mint_clock: { active: 2, copies: [{ id: 2, art: 'mint_clock', rarity: 'rare', perks: [] }] }, ghost: { copies: 'x' } } };
+  const m = JSON.parse(JSON.stringify(MIGRATIONS[6](v6)));
+  assert.strictEqual(m.version, 7);
+  assert.deepStrictEqual(m.artifacts.pink_duck.copies.map((c) => [c.id, c.paid[0].qty, c.locked]), [[3, 2500, false], [1, 10000, true], [5, 2500, true]], 'the lowest id is the first copy');
+  assert.deepStrictEqual(m.artifacts.mint_clock.copies[0].paid, [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }]);
+  assert.deepStrictEqual(m.artifacts.ghost, { copies: 'x' }, 'unknown entries pass through for fromSave to drop');
+  assert.strictEqual(JSON.stringify(MIGRATIONS[6]({ version: 6 }).artifacts), '{}');
+  const loaded = A.fromSave(m.artifacts); assert.deepStrictEqual(loaded.pink_duck.copies.map((c) => c.paid[0].qty), [2500, 10000, 2500], 'and loads unchanged');
+});
+test('fromSave clamps paid and locked: known cost lines only, whole and bounded, locked must be true', () => {
+  const d = { pink_duck: { active: 1, copies: [
+    { id: 1, rarity: 'common', perks: [], paid: [{ kind: 'pearl', qty: 1e9 }], locked: 'yes' },
+    { id: 2, rarity: 'rare', perks: [], paid: [{ kind: 'blue', qty: 50 }, { kind: 'pearl', qty: 2500.7 }], locked: true },
+    { id: 3, rarity: 'rare', perks: [], paid: [{ kind: 'pearl', qty: -5 }] },
+    { id: 4, rarity: 'rare', perks: [], paid: 'lots' } ] } };
+  const c = A.fromSave(d).pink_duck.copies;
+  assert.deepStrictEqual(c.map((x) => [x.paid, x.locked]), [
+    [[{ kind: 'pearl', qty: 10000 }], false], [[{ kind: 'pearl', qty: 2500 }], true], [[{ kind: 'pearl', qty: 0 }], false], [[{ kind: 'pearl', qty: 2500 }], false]]);
 });
