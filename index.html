@@ -958,7 +958,7 @@ const ECON = (() => {
     coral:  { base: 3000,   grow: 2.4, max: 5, group: 'marble', req: (L) => L.violet > 0 },
     opal:   { base: 14000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.marble > 0 },
     ruby:   { base: 28000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.opal > 0 },
-    black:  { base: 60000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.ruby > 0 },
+    black:  { base: 55000,  grow: 2.4, max: 5, group: 'marble', req: (L) => L.ruby > 0 },
     shiny:  { base: 400,    grow: 2.2, max: 10, group: 'tune' },
   };
   const ORDER = ['lucky', 'auto', 'sharp', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black', 'shiny', 'spawn', 'combo', 'fuel', 'tempo', 'board'];
@@ -991,7 +991,7 @@ const ECON = (() => {
   const KIND = {}; PEARLS.forEach((t) => { KIND[t.id] = { hp: t.hp, mult: t.mult }; });
   const SHINY_MULT = 5;
   // spawn weight of a type, relative to a base pearl weight of 100 (0 = locked)
-  const NEW_BASE = { mint: 3, golden: 2, violet: 1.2, coral: 0.8, marble: 0.5, opal: 0.35, ruby: 0.25, black: 0.15 };
+  const NEW_BASE = { mint: 3, golden: 2, violet: 1.2, coral: 0.8, marble: 0.5, opal: 0.35, ruby: 0.25, black: 0.8 }; // black was 0.15: at 0.8 a Black shows up most runs once unlocked (2026-10-22)
   function typeWeight(id, L) {
     if (id === 'pearl') return 100;
     if (id === 'blue') return L.lucky > 0 ? 4 + 3 * L.lucky : 0;
@@ -1021,7 +1021,7 @@ const ECON = (() => {
   const shinyChance = (L, bonus) => (0.005 + 0.0025 * (L.shiny || 0)) * (1 + (bonus || 0)); // bonus: the active artifacts' shiny bonus (stats().shinyBonus)
   const FRENZY_SECS = 7, HELPER_METER = 0.25; // frenzy length; a helper pop fills the meter this much (a tap fills 1)
   const AWAY_SHARE = 0.5; // the away bonus pays this share of what helpers alone would earn (before artifact bonuses)
-  const FLAVOR_BONUS = 0.2; // each Flavor adds this much to every payout
+  const FLAVOR_BONUS = 0.1; // each Flavor adds this much to every payout (was 0.2 until 2026-10-22: artifacts now stack on top)
   const COST_SCALE = 2.5; // global dial: how long each upgrade takes to afford
   const COLLAPSE_MIN_RUN = 5000000; // run juice needed before a Fresh Batch
   const COLLAPSE_GAIN_DIV = 1250000; // Flavors = floor(sqrt(run / this)): exactly 2 at the floor, so cycles shrink slowly
@@ -1100,7 +1100,7 @@ const ECON = (() => {
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 
@@ -2208,7 +2208,7 @@ function updateShelf() {
   btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
   if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
   $('collapseText').textContent = ready
-    ? 'Pops the whole board and restarts. Each Flavor adds 20% to every payout, permanently.'
+    ? 'Pops the whole board and restarts. Each Flavor adds ' + Math.round(ECON.FLAVOR_BONUS * 100) + '% to every payout, permanently.'
     : 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run to unlock a Fresh Batch (' + fmt(run) + ' so far).';
 }
 function buy(id) {

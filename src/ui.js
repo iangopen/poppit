@@ -65,7 +65,7 @@ function updateShelf() {
   btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
   if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
   $('collapseText').textContent = ready
-    ? 'Pops the whole board and restarts. Each Flavor adds 20% to every payout, permanently.'
+    ? 'Pops the whole board and restarts. Each Flavor adds ' + Math.round(ECON.FLAVOR_BONUS * 100) + '% to every payout, permanently.'
     : 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run to unlock a Fresh Batch (' + fmt(run) + ' so far).';
 }
 function buy(id) {

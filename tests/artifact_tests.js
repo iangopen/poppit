@@ -15,7 +15,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   ok('the Pink Duck pays x1.4 on a backpack pop, an auto-sell pop and a helper pop', after.every((a, i) => Math.abs(a / before[i] - A.PINK_DUCK_PAYOUT) < 1e-9) && A.PINK_DUCK_PAYOUT === 1.4, before.map((b, i) => b.toFixed(2) + '->' + after[i].toFixed(2)).join(' '));
   ok('the payout line shows the duck', G.payoutLine() === 'Payouts x1.4 (artifacts x1.4)', G.payoutLine());
   st.echoes = 2; G.recalc();
-  ok('and the Flavors with it', G.payoutLine() === 'Payouts x1.96 (Flavors 2 x1.4, artifacts x1.4)', G.payoutLine());
+  ok('and the Flavors with it', G.payoutLine() === 'Payouts x1.68 (Flavors 2 x1.2, artifacts x1.4)', G.payoutLine());
   st.echoes = 0; st.artifacts = {}; G.recalc();
   ok('without a duck the line is back to Flavors only, or hidden', G.payoutLine() === '');
 

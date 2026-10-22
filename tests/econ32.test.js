@@ -173,3 +173,12 @@ test('only the Steel Pin has a unique upgrade, priced like the old Wide Swing at
   assert.deepStrictEqual([0, 1, 2, 3, 4].map((l) => E.uniqueCost(0, l)), [88, 298, 1012, 3440, 11693]);
   assert.strictEqual(E.TOOLS[0].unique.effect(1).brush, 0.045); assert.ok(Math.abs(E.TOOLS[0].unique.effect(3).brush - 0.085) < 1e-12);
 });
+test('the 2026-10-22 pacing dials: 10% per Flavor, Black at base 55,000 with first-level weight 0.8, the floor unscaled', () => {
+  assert.strictEqual(E.FLAVOR_BONUS, 0.1);
+  assert.strictEqual(E.stats({ lv: E.zeroLevels(), echoes: 7, equip: -1, toolUp: {} }).echoMult, 1 + 0.1 * 7);
+  assert.strictEqual(E.UPG.black.base, 55000); assert.strictEqual(E.cost('black', 0), Math.ceil(55000 * E.COST_SCALE));
+  assert.strictEqual(E.NEW_BASE.black, 0.8); assert.strictEqual(E.typeWeight('black', Object.assign(E.zeroLevels(), { black: 1 })), 0.8);
+  assert.strictEqual(E.COLLAPSE_MIN_RUN, 5e6); assert.strictEqual(E.collapseReady(5e6), true); assert.strictEqual(E.collapseReady(5e6 - 1), false);
+  const A = require('../src/artifacts.js'), { DUCKS } = require('../tools/sim32.js'), mult = (d) => A.payoutMult({ pink_duck: { copies: [Object.assign({ id: 1 }, DUCKS[d])], active: 1 } });
+  assert.ok(Math.abs(mult('plain') - 1.4) < 1e-12 && Math.abs(mult('best') - 1.61) < 1e-12, 'the sim ducks are x1.4 and x1.61');
+});
