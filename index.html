@@ -385,7 +385,11 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #hint { bottom: 44px; font-size: 17px; }
   #meterLbl { display: none; }
   #pack { bottom: 6px; max-height: calc(100% - 12px); } /* a short phone board: the open backpack may cover the dock */
-  #stage.arts #bottom, #stage.forge #bottom { left: 8px; bottom: 76px; } /* four or five dock buttons leave no room beside them: the bar sits above the dock */
+  #bottom, #stage.arts #bottom, #stage.forge #bottom { left: 8px; bottom: 76px; } /* a phone has no room beside the dock: the bar sits above it */
+  #hint { bottom: 122px; }
+  #toolLbl { font-size: 17px; padding: 5px 12px 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #meter { width: 64px; }
+  #combo { overflow: hidden; gap: 6px; } #combo .lbl, #comboBar { display: none; } /* the count and multiplier fit beside the tool label */
 }
 @media (prefers-reduced-motion: reduce) {
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
