@@ -253,13 +253,35 @@ body {
 .anext { margin-top: 4px; }
 .aodds { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
 .areason { font: 700 12px/1.3 var(--font-ui); color: var(--accent); }
-.shelf { width: 100%; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.shelf { width: 100%; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.shead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
 .shelf h6 { margin: 0; font: 400 20px/1 var(--font-brand); color: var(--fg); text-align: left; }
-.scopy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; text-align: left; padding: 6px 8px; border-radius: 10px; border-left: 4px solid var(--rc); background: #fbf8f0; }
-.sct { min-width: 0; font: 700 12.5px/1.3 var(--font-ui); color: var(--fg); }
+.ssorts { display: flex; gap: 6px; flex-wrap: wrap; }
+.ssort { min-height: 44px; padding: 6px 10px; font-size: 12px; }
+.ssort.on { background: var(--fg); color: #fff; border-color: var(--fg); }
+.sbulk { min-height: 44px; font-size: 12.5px; white-space: normal; text-align: center; }
+.srows { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; } /* the shelf scrolls inside the card */
+.scopy { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 8px 8px 8px 10px; border-radius: 10px; border-left: 4px solid var(--rc); background: #fbf8f0; min-width: 0; }
+.scopy.locked { background: #f4efe2; }
+.sct { min-width: 0; font: 700 12.5px/1.3 var(--font-ui); color: var(--fg); overflow-wrap: anywhere; }
 .srar { color: var(--rt); font-weight: 800; margin-right: 6px; }
-.schg { grid-column: 1; font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
-.splace { grid-column: 2; grid-row: 1 / span 2; min-height: 36px; min-width: 64px; }
+.schg, .sref { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); overflow-wrap: anywhere; }
+.sref { color: var(--fg); }
+.sbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.sbtns .chip { min-height: 44px; min-width: 64px; padding: 6px 12px; font-size: 12.5px; }
+.slock { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.slock .lock { display: none; }
+.slock.on { background: var(--fg); color: #fff; border-color: var(--fg); }
+.slock.on .lock { display: block; }
+.sscrap:disabled { opacity: 0.45; cursor: default; }
+/* the in-page confirmation */
+.cfm { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 16px; background: rgba(34, 26, 14, 0.6); }
+.cfBox { width: min(340px, 100%); padding: 18px 16px 14px; background: var(--panel-solid); border-radius: 18px; border: 2.5px solid #3a2e1c; box-shadow: 0 24px 50px -20px rgba(0, 0, 0, 0.6); text-align: left; animation: rvIn 260ms cubic-bezier(.2, 1.4, .4, 1); }
+.cfBox h3 { margin: 0 0 6px; font: 400 26px/1.1 var(--font-brand); color: var(--fg); }
+.cfBox p { margin: 0 0 14px; font: 600 13px/1.4 var(--font-ui); color: var(--fg); }
+.cfBtns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.cfBtns .chip { min-height: 44px; min-width: 104px; font-size: 13.5px; }
+.cfBtns .chip:focus-visible, .sbtns .chip:focus-visible, .ssort:focus-visible, .sbulk:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* the roll reveal */
 .reveal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(34, 26, 14, 0.74); cursor: pointer; }
 .rvBox { position: relative; width: min(360px, 100%); padding: 22px 18px 16px; text-align: center; background: var(--panel-solid); border: 3px solid var(--rc); border-radius: 22px; box-shadow: 0 0 var(--gl) var(--rc), 0 24px 50px -20px rgba(0, 0, 0, 0.6); animation: rvIn 420ms cubic-bezier(.2, 1.4, .4, 1); overflow: hidden; }
@@ -442,7 +464,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #combo { overflow: hidden; gap: 6px; } #combo .lbl, #comboBar { display: none; } /* the count and multiplier fit beside the tool label */
 }
 @media (prefers-reduced-motion: reduce) {
-  .reveal *, .rvBox { animation: none !important; }
+  .reveal *, .rvBox, .cfBox { animation: none !important; }
   .rvParts { display: none; }
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
 }
@@ -618,6 +640,13 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <button class="big" id="collapseBtn" type="button" disabled>Fresh Batch</button>
     </div>
   </aside>
+</div>
+<div id="confirm" class="cfm" hidden role="alertdialog" aria-modal="true" aria-labelledby="cfTitle" aria-describedby="cfText">
+  <div class="cfBox">
+    <h3 id="cfTitle"></h3>
+    <p id="cfText"></p>
+    <div class="cfBtns"><button type="button" class="chip" id="cfCancel" data-cf="cancel">Cancel</button><button type="button" class="chip hot" id="cfOk" data-cf="ok">Scrap</button></div>
+  </div>
 </div>
 <div id="reveal" class="reveal" hidden role="dialog" aria-modal="true" aria-labelledby="rvRar" aria-describedby="rvCmp">
   <div class="rvBox">

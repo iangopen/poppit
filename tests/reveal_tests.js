@@ -5,7 +5,7 @@ module.exports = ({ G, ok, frames, E, els }) => {
   const seq = (...xs) => { let i = 0; return () => xs[i++ % xs.length]; };
   const FORCE = { common: [0], rare: [0.7, 0, 0.5], epic: [0.9, 0, 0.5, 0, 0.5], mythic: [0.99, 0, 0.5, 0, 0.5, 0, 0.5] }; // weights 55 / 30 / 12 / 3
   const duck = () => G.artView()[0].items.find((a) => a.id === 'pink_duck');
-  const tap = (el, attr, value) => el.fire('click', { target: { closest: (sel) => (attr && sel === '[' + attr + ']' ? { dataset: { [attr.slice(5)]: value }, disabled: false } : null) } });
+  const tap = (el, attr, value, extra) => el.fire('click', { target: { closest: (sel) => (attr && sel === '[' + attr + ']' ? { dataset: Object.assign({ [attr.slice(5)]: value }, extra || {}), disabled: false } : null) } });
   const key = (k) => els.reveal.fire('keydown', { key: k, stopPropagation() {}, preventDefault() {} });
   const reset = () => { G.loadState({ version: 6, lv: E.zeroLevels() }); G.resetRun(); G.closeReveal(); els.arts.hidden = false; G.setArtTab('ducks'); };
 
@@ -68,7 +68,7 @@ module.exports = ({ G, ok, frames, E, els }) => {
     shelf.length === A.count(st.artifacts, 'pink_duck') - 1 && shelf[0].rarity === 'mythic' && shelf[shelf.length - 1].rarity === 'common', shelf.map((c) => c.rarity).join());
   ok('each shelf copy says which stats change when placed', mOnShelf.change.startsWith('Placing it: Payouts x1.4 → x' + +(1.4 * (1 + pv)).toFixed(3) + ', Shiny chance +0% → +') && shelf.find((c) => c.rarity === 'common').change === 'Placing it changes no stats', mOnShelf.change);
   ok('the top line sums the pedestals', line0 === 'On your pedestals: Pink Duck (Common). Together: Payouts x1.4.', line0);
-  tap(els.artHalls, 'data-place', 'pink_duck:' + m.id);
+  tap(els.artHalls, 'data-sact', 'place', { art: 'pink_duck', copy: String(m.id) });
   const line1 = els.artSum.textContent;
   ok('Place swaps the active copy and the stat line follows', st.artifacts.pink_duck.active === m.id && line1.startsWith('On your pedestals: Pink Duck (Mythic). Together: Payouts x' + +(1.4 * (1 + pv)).toFixed(3) + ', Shiny chance +') &&
     /Mythic copy/.test(els.artHalls.innerHTML), line1);

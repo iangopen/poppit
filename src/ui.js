@@ -362,7 +362,31 @@ function pedestalLine() {
   const fx = ARTS.STATS.filter((s) => (s === 'payout' ? Math.abs(b.payout - 1) > 1e-9 : b[s] > 1e-9)).map((s) => statName(s) + ' ' + statTxt(s, b[s]));
   return 'On your pedestals: ' + on.map((x) => x.a.name + ' (' + ARTS.rarityById(x.c.rarity).name + ')').join(', ') + '. Together: ' + fx.join(', ') + '.';
 }
-let artSig = '', artTab = ARTS.HALLS[0].id;
+let artSig = '', artTab = ARTS.HALLS[0].id, shelfSort = 'best'; // shelfSort: 'best' (rarity, then oldest) or 'new' (newest first)
+// "+1,000 Rose Pearls" or "+1 Azure Steel, +1 Rosegold"; lines that refund 0 are left out ('' = nothing back)
+function refundText(lines) {
+  const sum = {}; for (const x of lines) { const k = ARTS.isMat(x) ? 'm:' + x.id : x.kind; sum[k] = (sum[k] || 0) + x.qty; }
+  return Object.keys(sum).filter((k) => sum[k] > 0).map((k) => '+' + whole2(sum[k]) + ' ' + (k.startsWith('m:') ? matName(k.slice(2)) : pearlName(k) + 's')).join(', ');
+}
+const refundLines = (copies) => [].concat(...copies.map((c) => ARTS.refundOf(c)));
+// shelf copies that "Scrap all unlocked below the pedestal's rarity" takes: unlocked, off the pedestal, of a lower rarity
+function bulkTargets(id) {
+  const act = ARTS.activeCopy(state.artifacts, id); if (!act) return [];
+  return state.artifacts[id].copies.filter((c) => c !== act && !c.locked && rarityRank(c.rarity) < rarityRank(act.rarity));
+}
+// the shelf rows of one artifact: every Common off the pedestal in one stack (they have no perks), every other copy alone
+function shelfView(a, act) {
+  const off = ARTS.count(state.artifacts, a.id) ? state.artifacts[a.id].copies.filter((c) => c !== act) : [];
+  const commons = off.filter((c) => c.rarity === ARTS.RARITIES[0].id).sort((x, y) => y.id - x.id), rows = [];
+  if (commons.length) {
+    const open = commons.filter((c) => !c.locked);
+    rows.push({ stack: true, key: 'stack', rarity: commons[0].rarity, rarityName: ARTS.rarityById(commons[0].rarity).name, count: commons.length, newest: commons[0].id, ids: commons.map((c) => c.id),
+      locked: !open.length, open: open.length, perks: [], change: placeText(a, act, commons[0]),
+      refund: open.length ? refundText(ARTS.refundOf(open[0])) : '', refundAll: refundText(refundLines(open)) });
+  }
+  for (const c of off) if (c.rarity !== ARTS.RARITIES[0].id) rows.push(Object.assign(copyView(c), { key: String(c.id), newest: c.id, locked: !!c.locked, change: placeText(a, act, c), refund: refundText(ARTS.refundOf(c)) }));
+  return rows.sort(shelfSort === 'new' ? (x, y) => y.newest - x.newest : (x, y) => rarityRank(y.rarity) - rarityRank(x.rarity) || (x.stack ? -1 : y.stack ? 1 : x.id - y.id));
+}
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => {
     const n = ARTS.count(state.artifacts, a.id), act = ARTS.activeCopy(state.artifacts, a.id), reason = craftReason(a.id);
@@ -371,8 +395,8 @@ function artView() {
       cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
         : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
       active: act ? copyView(act) : null,
-      shelf: n ? state.artifacts[a.id].copies.filter((c) => c !== act).sort((x, y) => rarityRank(y.rarity) - rarityRank(x.rarity) || x.id - y.id)
-        .map((c) => Object.assign(copyView(c), { change: placeText(a, act, c) })) : [],
+      shelf: shelfView(a, act), shelfCount: Math.max(0, n - 1),
+      bulk: (() => { const t = bulkTargets(a.id); return { n: t.length, refund: refundText(refundLines(t)), below: act ? ARTS.rarityById(act.rarity).name : '' }; })(),
     };
   }) }));
 }
@@ -388,14 +412,27 @@ function artCard(a) {
       (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
     '<small class="aodds">' + a.odds + '</small>' + (a.reason ? '<small class="areason">' + a.reason + '</small>' : '') +
     '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + (a.reason ? ' title="' + a.reason + '"' : '') + '>' + (a.owned ? 'Craft another' : 'Craft') + '</button>' +
-    (a.shelf.length ? '<div class="shelf"><h6>On the shelf (' + a.shelf.length + ')</h6>' + a.shelf.map((c) =>
-      '<div class="scopy r-' + c.rarity + '"><div class="sct"><span class="srar">' + c.rarityName + '</span><span class="sperk">' + (c.perks.length ? c.perks.join(', ') : 'No perks') + '</span></div>' +
-      '<small class="schg">' + c.change + '</small><button type="button" class="chip splace" data-place="' + a.id + ':' + c.id + '">Place</button></div>').join('') + '</div>' : '') +
+    (a.shelf.length ? shelfHTML(a) : '') +
     '</div>';
+}
+const lockBtn = (on, art, key, label) => '<button type="button" class="chip slock' + (on ? ' on' : '') + '" data-sact="lock" data-art="' + art + '" data-copy="' + key + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Unlock ' : 'Lock ') + label + '">' + LOCK_SVG + '<span>' + (on ? 'Locked' : 'Lock') + '</span></button>';
+function shelfHTML(a) {
+  const sortBtn = (k, t) => '<button type="button" class="chip ssort' + (shelfSort === k ? ' on' : '') + '" data-sort="' + k + '" aria-pressed="' + (shelfSort === k) + '">' + t + '</button>';
+  return '<div class="shelf"><div class="shead"><h6>On the shelf (' + a.shelfCount + ')</h6><div class="ssorts" role="group" aria-label="Sort the shelf">' + sortBtn('best', 'Best first') + sortBtn('new', 'Newest first') + '</div></div>' +
+    (a.bulk.n ? '<button type="button" class="chip sbulk" data-bulk="' + a.id + '">Scrap all unlocked below ' + a.bulk.below + ' (' + a.bulk.n + ')</button>' : '') +
+    '<div class="srows">' + a.shelf.map((c) => {
+      const what = c.stack ? c.rarityName + ' x' + c.count : c.rarityName, back = c.refund ? 'Scrap: ' + c.refund : 'Scrap: no refund';
+      return '<div class="scopy r-' + c.rarity + (c.locked ? ' locked' : '') + '"><div class="sct"><span class="srar">' + what + '</span><span class="sperk">' + (c.perks.length ? c.perks.join(', ') : 'No perks') + '</span></div>' +
+        '<small class="schg">' + c.change + '</small><small class="sref">' + (c.locked ? 'Locked: unlock it to scrap' : back + (c.stack && c.open > 1 ? ' each' : '')) + '</small>' +
+        '<div class="sbtns"><button type="button" class="chip splace" data-sact="place" data-art="' + a.id + '" data-copy="' + c.key + '">Place</button>' +
+        lockBtn(c.locked, a.id, c.key, what) +
+        '<button type="button" class="chip sscrap" data-sact="scrap" data-art="' + a.id + '" data-copy="' + c.key + '"' + (c.locked ? ' disabled' : '') + '>Scrap</button>' +
+        (c.stack && c.open > 1 ? '<button type="button" class="chip sscrap" data-sact="scrapall" data-art="' + a.id + '" data-copy="stack">Scrap all ' + c.open + '</button>' : '') + '</div></div>';
+    }).join('') + '</div></div>';
 }
 function updateArts() {
   if ($('arts').hidden) return;
-  const v = artView(), sig = JSON.stringify(v) + materialLine() + artTab;
+  const v = artView(), sig = JSON.stringify(v) + materialLine() + artTab + shelfSort;
   if (sig === artSig) return; artSig = sig;
   $('artMats').textContent = materialLine();
   $('artSum').textContent = pedestalLine();
@@ -417,10 +454,88 @@ function setActiveCopy(id, copyId) {
   if (!ARTS.setActive(state.artifacts, id, copyId)) return false;
   recalc(); artSig = ''; forgeSig = ''; updateArts(); updateForge(); updateHud(0.016); save(); return true;
 }
+// scraps shelf copies of one artifact and refunds floor(REFUND_SHARE x what each cost): Rose Pearls back into the backpack, where
+// auto-sell never reaches them (it only sells new pops), alloys back into the forge stock. Returns the refund lines, or null.
+function scrapCopies(id, copyIds) {
+  const got = []; let n = 0;
+  for (const cid of copyIds) {
+    const before = Object.assign({}, state.inv), back = ARTS.scrap(state.artifacts, id, cid, state.inv, state.forge.stock);
+    if (!back) continue;
+    n++; got.push(...back);
+    for (const x of back) if (!ARTS.isMat(x) && x.qty > 0) { // refunded pearls carry the stack's average value, or a fresh pop's value
+      const h = before[x.kind] || 0; state.invV[x.kind] = (state.invV[x.kind] || 0) + x.qty * (h > 0 ? (state.invV[x.kind] || 0) / h : ECON.popValue(S, 0, false, x.kind));
+    }
+  }
+  if (!n) return null;
+  const t = refundText(got);
+  toast('Scrapped ' + n + ' ' + ARTS.byId(id).name + (n === 1 ? ' copy' : ' copies') + (t ? ': ' + t : ' (no refund)'));
+  Snd.sell(n); artSig = ''; forgeSig = ''; recalc(); updateArts(); updateForge(); updatePack(); save(); return got;
+}
+function setCopyLock(id, copyIds, on) { let k = 0; for (const c of copyIds) if (ARTS.setLocked(state.artifacts, id, c, on)) k++; if (k) { artSig = ''; updateArts(); save(); } return k > 0; }
+const copyOf = (id, cid) => (state.artifacts[id] ? state.artifacts[id].copies.find((c) => c.id === cid) : null);
+const stackIds = (id) => { const act = ARTS.activeCopy(state.artifacts, id); return state.artifacts[id].copies.filter((c) => c !== act && c.rarity === ARTS.RARITIES[0].id).sort((x, y) => y.id - x.id); };
+// one shelf action: place, lock, scrap or scrapall, on a copy id or the Common stack ('stack'); Epic and up, and every multi-copy scrap, ask first
+function shelfAction(act, id, key) {
+  if (!state.artifacts[id]) return false;
+  const a = ARTS.byId(id), stack = key === 'stack', c = stack ? null : copyOf(id, +key);
+  if (!stack && !c) return false;
+  const commons = stack ? stackIds(id) : [], open = commons.filter((x) => !x.locked);
+  if (act === 'place') { const t = stack ? commons[0] : c; if (!t || !setActiveCopy(id, t.id)) return false; toast(a.name + ' (' + ARTS.rarityById(t.rarity).name + ') is on your pedestal'); return true; }
+  if (act === 'lock') return stack ? setCopyLock(id, commons.map((x) => x.id), open.length > 0) : setCopyLock(id, [c.id], !c.locked);
+  if (act === 'scrap' && stack) return open.length ? !!scrapCopies(id, [open[0].id]) : false;
+  if (act === 'scrap') {
+    if (ARTS.scrapBlock(state.artifacts, id, c.id)) return false;
+    if (rarityRank(c.rarity) < 2) return !!scrapCopies(id, [c.id]);
+    const back = refundText(ARTS.refundOf(c));
+    openConfirm('Scrap this ' + ARTS.rarityById(c.rarity).name + ' ' + a.name + '?', 'It has ' + (c.perks.length ? c.perks.map(perkText).join(', ') : 'no perks') + '. You get ' + (back || 'nothing') + ' back. This cannot be undone.', 'Scrap it', () => scrapCopies(id, [c.id]));
+    return true;
+  }
+  if (act === 'scrapall' && stack && open.length) {
+    const back = refundText(refundLines(open));
+    openConfirm('Scrap ' + open.length + ' Common ' + a.name + ' copies?', 'You get ' + (back || 'nothing') + ' back. Locked copies stay. This cannot be undone.', 'Scrap ' + open.length, () => scrapCopies(id, open.map((x) => x.id)));
+    return true;
+  }
+  return false;
+}
+// the bulk action: every unlocked shelf copy below the pedestal copy's rarity, after a confirmation that names the count and the refund
+function bulkScrap(id) {
+  const t = bulkTargets(id); if (!t.length) return false;
+  const act = ARTS.activeCopy(state.artifacts, id), back = refundText(refundLines(t));
+  openConfirm('Scrap ' + t.length + (t.length === 1 ? ' copy' : ' copies') + ' below ' + ARTS.rarityById(act.rarity).name + '?',
+    t.length + ' unlocked ' + ARTS.byId(id).name + (t.length === 1 ? ' copy goes' : ' copies go') + ' for ' + (back || 'no refund') + '. Locked copies and the one on the pedestal stay. This cannot be undone.', 'Scrap ' + t.length, () => scrapCopies(id, t.map((c) => c.id)));
+  return true;
+}
 $('artHalls').addEventListener('click', (e) => {
-  const pl = e.target.closest && e.target.closest('[data-place]');
-  if (pl) { const [id, cid] = pl.dataset.place.split(':'); Snd.click(); if (setActiveCopy(id, +cid)) toast(ARTS.byId(id).name + ' (' + ARTS.rarityById(ARTS.activeCopy(state.artifacts, id).rarity).name + ') is on your pedestal'); return; }
-  const b = e.target.closest && e.target.closest('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); }
+  const at = (sel) => e.target.closest && e.target.closest(sel);
+  const so = at('[data-sort]'); if (so) { Snd.click(); shelfSort = so.dataset.sort; artSig = ''; updateArts(); return; }
+  const bk = at('[data-bulk]'); if (bk) { Snd.click(); bulkScrap(bk.dataset.bulk); return; }
+  const sa = at('[data-sact]'); if (sa) { if (sa.disabled) return; Snd.click(); shelfAction(sa.dataset.sact, sa.dataset.art, sa.dataset.copy); return; }
+  const b = at('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); }
+});
+/* ----- in-page confirmation (never a browser dialog): focus starts on Cancel and stays inside; Escape or a tap outside cancels ----- */
+let cf = null;
+function openConfirm(title, text, okText, onOk) {
+  cf = { onOk, back: document.activeElement || null };
+  $('cfTitle').textContent = title; $('cfText').textContent = text; $('cfOk').textContent = okText;
+  $('confirm').hidden = false; if ($('cfCancel').focus) $('cfCancel').focus(); return true;
+}
+function closeConfirm(ok) {
+  if (!cf) return null;
+  const c = cf; cf = null; $('confirm').hidden = true;
+  const r = ok ? c.onOk() : null;
+  if (c.back && c.back.focus && c.back.isConnected !== false) c.back.focus(); return r;
+}
+$('confirm').addEventListener('click', (e) => {
+  const b = e.target && e.target.closest && e.target.closest('[data-cf]');
+  if (b) { Snd.click(); closeConfirm(b.dataset.cf === 'ok'); return; }
+  if (!(e.target && e.target.closest && e.target.closest('.cfBox'))) closeConfirm(false); // a tap on the backdrop cancels
+});
+$('confirm').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { if (e.stopPropagation) e.stopPropagation(); if (e.preventDefault) e.preventDefault(); closeConfirm(false); return; }
+  if (e.key !== 'Tab') return;
+  const list = [$('cfCancel'), $('cfOk')], i = list.indexOf(document.activeElement);
+  if (e.preventDefault) e.preventDefault();
+  const next = list[((i < 0 ? (e.shiftKey ? 0 : -1) : i) + (e.shiftKey ? -1 : 1) + 2) % 2]; if (next && next.focus) next.focus();
 });
 $('artTabs').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-tab]'); if (b) { Snd.click(); setArtTab(b.dataset.tab); } });
 
@@ -495,7 +610,7 @@ $('reveal').addEventListener('keydown', (e) => {
   const next = list[((i < 0 ? (e.shiftKey ? 0 : -1) : i) + (e.shiftKey ? -1 : 1) + n) % n]; if (next && next.focus) next.focus();
 });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { Snd.click(); $(b.dataset.close).hidden = true; $(PANEL_BTN[b.dataset.close]).setAttribute('aria-expanded', 'false'); }));
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rv) { closeReveal(); return; } if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cf) { closeConfirm(false); return; } if (e.key === 'Escape' && rv) { closeReveal(); return; } if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
 const resetTools = () => { state.owned = [true, false, false, false, false, false]; state.equip = -1; state.toolUp = {}; toolView = 0; };
 const zeroInv = () => { INV_IDS.forEach((id) => { state.inv[id] = 0; state.invV[id] = 0; }); };
 const clearUnkept = () => { INV_IDS.forEach((id) => { if (!isKept(id)) { state.inv[id] = 0; state.invV[id] = 0; } }); }; // Fresh Batch
