@@ -81,6 +81,8 @@ const FORGE = (() => {
     f.strikes.push(now);
     return true;
   }
+  // a material cost line as the player reads it: "2 of 5 Rose Dust"
+  const costText = (have, need, id) => Math.floor(Math.min(have, need)).toLocaleString('en-US') + ' of ' + need.toLocaleString('en-US') + ' ' + ((byId(id) || { name: id }).name);
   const upgCost = (id, lvl) => Math.ceil(UPG[id].base * Math.pow(UPG[id].grow, lvl));
   const canBuy = (f, id, sparks) => !!UPG[id] && f.lv[id] < UPG[id].max && sparks >= upgCost(id, f.lv[id]);
   // returns the juice to take (0 = not bought); Forge Speed re-times running jobs, Extra Slot opens an empty slot
@@ -116,6 +118,6 @@ const FORGE = (() => {
     return f;
   }
   return { MATERIALS, BASE_SLOTS, SPEED_PER_LEVEL, FRENZY_FACTOR, STRIKE_SECS, STRIKE_CAP, STRIKE_WINDOW_MS, UPG, byId, blank, slotCount, speedFactor, baseRate,
-    setRate, setFrenzy, canStart, start, progress, secsLeft, finish, collect, strike, upgCost, canBuy, buy, toSave, fromSave };
+    setRate, setFrenzy, canStart, start, progress, secsLeft, finish, collect, strike, costText, upgCost, canBuy, buy, toSave, fromSave };
 })();
 if (typeof module !== 'undefined') module.exports = FORGE;

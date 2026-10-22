@@ -27,6 +27,12 @@ test('the script is every src module in build order, artifacts.js and forge.js f
   assert.strictEqual(html, read('src', 'head.html') + order.map((f) => read('src', f)).join('') + read('src', 'tail.html'));
   assert.ok(html.includes('const ARTS = (() => {') && html.indexOf('const ARTS') < html.indexOf('const ECON'));
 });
+test('the Forge dock button, its dot and the Forge panel are in the page, hidden until opened', () => {
+  assert.ok(/<button id="forgeBtn" class="dock"[^>]*aria-controls="forge"[^>]*hidden>/.test(html), 'dock button, hidden until the gate');
+  assert.ok(/<span class="fdot" id="forgeDot" hidden><\/span>/.test(html), 'finished-job dot, hidden');
+  assert.ok(/<section class="panel" id="forge" hidden aria-label="Forge">/.test(html));
+  for (const id of ['fSpeed', 'fSlots', 'fRecipes', 'fStock', 'fUpg', 'artMats']) assert.ok(html.includes('id="' + id + '"'), id);
+});
 test('index.html is built from the current src/head.html and src/tail.html (run npm run build)', () => {
   assert.ok(html.startsWith(read('src', 'head.html')) && html.endsWith(read('src', 'tail.html')));
 });

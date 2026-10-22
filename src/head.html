@@ -194,6 +194,42 @@ body {
 .abar { display: block; height: 12px; background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 255px 8px 225px 8px / 8px 225px 8px 255px; overflow: hidden; }
 .abar i { display: block; height: 100%; width: 100%; background: repeating-linear-gradient(-55deg, #f0286c 0 4px, #ff86ae 4px 7px); transform-origin: left center; }
 .anote { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+/* Forge panel: the same large panel and card family as Artifacts */
+#forge { left: 6px; right: 6px; top: 6px; bottom: 6px; width: auto; transform-origin: center; }
+.fspeed { margin: 0; font: 400 20px/1.1 var(--font-brand); color: var(--fg); }
+#forgeBody { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; align-content: start; padding: 2px 4px 4px 2px; }
+.fsec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fsec h4 { margin: 0; font: 400 24px/1.1 var(--font-brand); color: var(--fg); }
+#fSlots, #fRecipes, #fUpg { display: flex; flex-direction: column; gap: 8px; }
+.fslot { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "n s" "m s" "b s" "l s"; column-gap: 10px; row-gap: 3px; align-items: center; padding: 10px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; font: 700 13px var(--font-ui); color: var(--fg); min-width: 0; }
+.fslot.empty { grid-template-areas: "n" "m"; grid-template-columns: 1fr; }
+.fsn { grid-area: n; font: 800 10.5px var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.fse { grid-area: m; color: var(--muted); font-weight: 600; }
+.fsm { grid-area: m; font: 400 22px/1 var(--font-brand); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbar { grid-area: b; display: block; height: 12px; background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 255px 8px 225px 8px / 8px 225px 8px 255px; overflow: hidden; }
+.fbar i { display: block; height: 100%; width: 100%; background: repeating-linear-gradient(-55deg, #f5b020 0 4px, #ff8a3d 4px 7px); transform-origin: left center; transform: scaleX(0); }
+.fleft { grid-area: l; color: var(--muted); font-variant-numeric: tabular-nums; }
+.strike { grid-area: s; min-width: 76px; min-height: 52px; padding: 0 14px; font: 400 22px/1 var(--font-brand); color: #fff; background: #5e6470; border: 2.5px solid #3a2e1c; border-radius: 255px 14px 225px 14px / 14px 225px 14px 255px; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; box-shadow: 0 4px 0 #3a2e1c; }
+.strike:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.strike.hit { animation: strikeHit 180ms cubic-bezier(.2, 1.4, .4, 1); }
+.strike.capped { animation: strikeCap 220ms ease; }
+@keyframes strikeHit { 0% { transform: translateY(3px) scale(0.94); box-shadow: 0 1px 0 #3a2e1c; } 100% { transform: none; } }
+@keyframes strikeCap { 0%, 100% { transform: none; } 30% { transform: translateX(-3px); } 70% { transform: translateX(3px); } }
+.minus1 { position: absolute; right: 26px; top: 4px; font: 400 22px/1 var(--font-brand); color: #ff8a3d; pointer-events: none; animation: minus1 650ms ease-out forwards; }
+@keyframes minus1 { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-26px); } }
+.frec { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; font: 700 12.5px/1.3 var(--font-ui); color: var(--muted); min-width: 0; }
+.frh { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.frh canvas { width: 28px; height: 28px; flex: none; }
+.frn { flex: 1; min-width: 0; font: 400 22px/1 var(--font-brand); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frs { flex: none; color: var(--fg); font-variant-numeric: tabular-nums; }
+.frc { font-variant-numeric: tabular-nums; }
+.frw { color: var(--accent); font-weight: 700; }
+.frw:empty { display: none; }
+.fra { display: flex; justify-content: flex-end; gap: 8px; }
+.fstart { min-width: 88px; min-height: 36px; }
+.fstart:disabled { opacity: 0.5; cursor: default; }
+#fUpg .up { margin: 0; }
+.matLine { color: var(--fg); }
 .acard .craft { min-width: 120px; }
 .acard .craft:disabled { opacity: 0.55; cursor: default; }
 .acard.own .craft:disabled { opacity: 1; background: var(--gold); color: #3a2e1c; border-color: #3a2e1c; }
@@ -278,6 +314,9 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 #bookBtn { left: 146px; } #bookBtn svg { transform: rotate(4deg); }
 #artBtn { left: 202px; } #artBtn svg { transform: rotate(-3deg); }
 #stage.arts #bottom { left: 262px; } /* room for the Artifacts button while it shows */
+#forgeBtn { left: 258px; } #forgeBtn svg { transform: rotate(2deg); }
+#stage.forge #bottom { left: 318px; } /* and for the Forge button */
+.fdot { position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2.5px solid #fffdf6; box-shadow: 0 0 0 1.5px #3a2e1c; }
 .dock:hover { transform: scale(1.07) rotate(-2deg); }
 .dock:active { transform: scale(1.06, 0.92); }
 .dock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 16px; }
@@ -346,7 +385,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #hint { bottom: 44px; font-size: 17px; }
   #meterLbl { display: none; }
   #pack { bottom: 6px; max-height: calc(100% - 12px); } /* a short phone board: the open backpack may cover the dock */
-  #stage.arts #bottom { left: 8px; bottom: 76px; } /* four dock buttons leave no room beside them: the bar sits above the dock */
+  #stage.arts #bottom, #stage.forge #bottom { left: 8px; bottom: 76px; } /* four or five dock buttons leave no room beside them: the bar sits above the dock */
 }
 @media (prefers-reduced-motion: reduce) {
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
@@ -457,7 +496,28 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
     <section class="panel" id="arts" hidden aria-label="Artifacts">
       <header><h3>Artifacts</h3><button class="x" type="button" data-close="arts" aria-label="Close artifacts">&#10005;</button></header>
       <p class="hint2">Craft artifacts from pearls you keep. They are yours for good, through every Fresh Batch.</p>
+      <p class="hint2 matLine" id="artMats"></p>
       <div id="artHalls"></div>
+    </section>
+    <button id="forgeBtn" class="dock" type="button" aria-expanded="false" aria-controls="forge" aria-label="Forge" hidden>
+      <svg viewBox="0 0 64 64" width="54" height="54" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M37.5 17.5 C33 13.5 35 8.5 39 5 C39 9.5 43.5 10.5 43 15 C42.5 18 40 19 37.5 17.5 Z" fill="#ff8a3d"/>
+        <path d="M39 15.5 C38 13.5 39 11.5 40.5 10.5" stroke="#f5b020" stroke-width="2"/>
+        <path d="M7 25 C19 23.5 41 23.5 51 24.5 C55 25 58 26.5 59 29.5 C53 31 48 31.5 45 33.5 L43.5 39.5 C43.5 42.5 46 44 49 45 L49 50 L16 50 L16 45 C19 44 21.5 42.5 21.5 39.5 L20 33.5 C15.5 31.5 10 30 7 25 Z" fill="#9aa2b1"/>
+        <path d="M11 27.5 C22 26.5 38 26.5 50 27.5" stroke="#fff" stroke-width="2" opacity="0.7"/>
+        <path d="M12 50 L53 50 L55.5 57 L9.5 57 Z" fill="#5e6470"/>
+      </svg>
+      <span class="fdot" id="forgeDot" hidden></span>
+    </button>
+    <section class="panel" id="forge" hidden aria-label="Forge">
+      <header><h3>Forge</h3><button class="x" type="button" data-close="forge" aria-label="Close forge">&#10005;</button></header>
+      <p class="hint2">The forge turns pearls from your backpack into materials over time. It uses them whether or not they are kept, and kept Rose Pearls are also what the Pink Duck needs.</p>
+      <p class="fspeed" id="fSpeed"></p>
+      <div id="forgeBody">
+        <section class="fsec"><h4>Slots</h4><div id="fSlots"></div></section>
+        <section class="fsec"><h4>Recipes</h4><div id="fRecipes"></div></section>
+        <section class="fsec"><h4>Materials</h4><p class="hint2" id="fStock"></p><h4>Forge upgrades</h4><div id="fUpg"></div></section>
+      </div>
     </section>
     <section class="panel" id="tools" hidden aria-label="Tools">
       <header><h3>Tools</h3><button class="x" type="button" data-close="tools" aria-label="Close tools">&#10005;</button></header>

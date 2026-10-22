@@ -103,7 +103,7 @@ function updateHud(dt) {
   updatePack();
   const ec = $('echoes');
   setLbl('echoes', payoutLine()); ec.hidden = !payoutLine();
-  syncArtBtn();
+  syncDock();
   setLbl('toolLbl', S.toolName + ' · ' + S.power + (S.power === 1 ? ' hit power' : ' hit power'));
   const cb = $('combo');
   cb.classList.toggle('on', combo > 1);
@@ -152,7 +152,7 @@ function setKeep(id, on) {
   if (!ECON.PEARLS.some((t) => t.id === id)) return false;
   if (on) state.keep[id] = true; else delete state.keep[id];
   toast(on ? 'Keeping ' + ECON.PEARLS.find((t) => t.id === id).name + 's: their pops go to your backpack, and Sell all skips them' : 'Stopped keeping ' + ECON.PEARLS.find((t) => t.id === id).name + 's');
-  updatePack(); updateArts(); save(); return true;
+  updatePack(); updateArts(); updateForge(); save(); return true;
 }
 function updateKeep() {
   if ($('pack').hidden) return;
@@ -258,14 +258,14 @@ function sellAll() {
 }
 $('sellBtn').addEventListener('click', () => { Snd.resume(); sellAll(); });
 $('autoSell').addEventListener('change', (e) => { state.autoSell = e.target.checked; Snd.resume(); Snd.click(); toast(state.autoSell ? 'Auto-sell on. New pops sell the moment they pop, your backpack stays as it is' : 'Auto-sell off. New pops go to your backpack'); updateHud(0.016); save(); });
-const PANEL_BTN = { pack: 'packBtn', settings: 'setBtn', tools: 'toolBtn', pool: 'poolBtn', book: 'bookBtn', arts: 'artBtn' };
+const PANEL_BTN = { pack: 'packBtn', settings: 'setBtn', tools: 'toolBtn', pool: 'poolBtn', book: 'bookBtn', arts: 'artBtn', forge: 'forgeBtn' };
 function openPanel(id) {
   Snd.click();
   Object.keys(PANEL_BTN).forEach((p) => {
     const show = p === id && $(p).hidden;
     $(p).hidden = !show; $(PANEL_BTN[p]).setAttribute('aria-expanded', String(show));
   });
-  updatePack(); updatePool(); artSig = ''; updateArts(); if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
+  updatePack(); updatePool(); artSig = ''; updateArts(); if (id === 'forge' && !$('forge').hidden) { setForgeDot(false); forgeSig = ''; updateForge(); } if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
 }
 $('packBtn').addEventListener('click', () => openPanel('pack'));
 $('setBtn').addEventListener('click', () => openPanel('settings'));
@@ -273,13 +273,24 @@ $('toolBtn').addEventListener('click', () => openPanel('tools'));
 $('poolBtn').addEventListener('click', () => openPanel('pool'));
 $('bookBtn').addEventListener('click', () => openPanel('book'));
 $('artBtn').addEventListener('click', () => openPanel('arts'));
+$('forgeBtn').addEventListener('click', () => openPanel('forge'));
 
 /* ----- artifacts: permanent items crafted from kept pearls, one section per hall ----- */
-const ART_DOCK_ROSES = 100; // the Artifacts button shows once this many Rose Pearls were popped in total
-function syncArtBtn() {
-  const c = state.col.pearl, show = c.popped + c.sPopped >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => state.artifacts[a.id]);
-  if ($('artBtn').hidden === show) { $('artBtn').hidden = !show; $('stage').classList.toggle('arts', show); }
+const ART_DOCK_ROSES = 100; // the Artifacts and Forge buttons show once this many Rose Pearls were popped in total
+const rosesPopped = () => state.col.pearl.popped + state.col.pearl.sPopped;
+const forgeUsed = () => state.forge.slots.some(Boolean) || Object.keys(state.forge.stock).length > 0 || state.forge.lv.speed > 0 || state.forge.lv.slot > 0;
+// dock buttons behind a gate, keyed by their PANEL_BTN panel id; the stage gets the panel id as a class while its button shows
+const DOCK_GATES = {
+  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => state.artifacts[a.id]),
+  forge: () => rosesPopped() >= ART_DOCK_ROSES || forgeUsed(), // a loaded save with forge work keeps its button
+};
+function syncDock() {
+  for (const id in DOCK_GATES) {
+    const b = $(PANEL_BTN[id]), show = DOCK_GATES[id]();
+    if (b.hidden === show) { b.hidden = !show; $('stage').classList.toggle(id, show); }
+  }
 }
+const syncArtBtn = syncDock; // the older name, kept for the tests
 const pearlName = (kind) => (ECON.PEARLS.find((t) => t.id === kind) || { name: kind }).name;
 const DUCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M6 50 C16 47.5 26 52 34 49.5 C42 47 50 51.5 58 49" stroke="#8fc7e8" stroke-width="2.4"/>' +
@@ -292,18 +303,19 @@ let artSig = '';
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
     id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
-    cost: a.cost.map((c) => (ARTS.isMat(c) ? { kind: c.id, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, label: (FORGE.byId(c.id) || { name: c.id }).name, unit: 'in stock' }
+    cost: a.cost.map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
       : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
   })) }));
 }
 const whole2 = (n) => Math.floor(n).toLocaleString('en-US');
 function updateArts() {
   if ($('arts').hidden) return;
-  const v = artView(), sig = JSON.stringify(v);
+  const v = artView(), sig = JSON.stringify(v) + materialLine();
   if (sig === artSig) return; artSig = sig;
+  $('artMats').textContent = materialLine();
   $('artHalls').innerHTML = v.map((h) => '<section class="hall"><h4>' + h.name + '</h4><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map((a) =>
     '<div class="acard' + (a.owned ? ' own' : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div><h5>' + a.name + '</h5><p class="ad">' + a.desc + '</p>' +
-    a.cost.map((c) => '<div class="acost"><span>' + whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
+    a.cost.map((c) => '<div class="acost"><span>' + (c.mat ? c.text : whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit) + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
       (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
     (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
     '</div>').join('') + '</div></section>').join('');
@@ -571,7 +583,7 @@ function finishCollapse() {
   const gain = collapse.gain; collapse = null;
   state.echoes += gain; state.collapses += 1; state.sparks = 0; state.runEarned = 0; state.lv = ECON.zeroLevels(); clearUnkept(); resetTools(); // kept stacks and artifacts survive
   resetRun();
-  toast('Yum! Flavors +' + gain + '. Everything pays ' + multTxt(S.echoMult * S.artMult) + ' now'); updateShelf(); save();
+  toast('Yum! Flavors +' + gain + '. Everything pays ' + multTxt(S.echoMult * S.artMult) + ' now'); updateShelf(); forgeSig = ''; updateForge(); save();
 }
 
 /* ----- input ----- */
@@ -687,12 +699,130 @@ function awayBonus(secs) {
 }
 /* ----- forge engine hooks (the forge panel comes later): timers run on wall-clock time ----- */
 // finish every job whose end time has passed; returns how many
-function forgeCatchUp() { return FORGE.collect(state.forge, Date.now()); }
+function forgeCatchUp() { const n = FORGE.collect(state.forge, Date.now()); if (n) { forgeDone(); } return n; }
 // frenzy speeds the forge only while the page is open and visible
-function forgeTick() { const now = Date.now(); FORGE.setFrenzy(state.forge, frenzyT > 0 && !document.hidden, now); FORGE.collect(state.forge, now); }
-function forgeStart(slot, mat) { if (!FORGE.start(state.forge, slot, mat, state.inv, Date.now(), state.invV)) return false; updatePack(); save(); return true; }
+function forgeTick() { const now = Date.now(); FORGE.setFrenzy(state.forge, frenzyT > 0 && !document.hidden, now); if (FORGE.collect(state.forge, now)) forgeDone(); }
+function forgeStart(slot, mat) { if (!FORGE.start(state.forge, slot, mat, state.inv, Date.now(), state.invV)) return false; updatePack(); updateForge(); save(); return true; }
 function forgeStrike(slot) { return FORGE.strike(state.forge, Date.now(), slot); }
-function forgeBuy(id) { const c = FORGE.buy(state.forge, id, state.sparks, Date.now()); if (!c) return false; state.sparks -= c; save(); return true; }
+function forgeBuy(id) { const c = FORGE.buy(state.forge, id, state.sparks, Date.now()); if (!c) return false; state.sparks -= c; updateForge(); save(); return true; }
+// a job finished: save the stock, and mark the dock button if the panel is not open to show it
+function forgeDone() { if ($('forge').hidden) setForgeDot(true); forgeSig = ''; updateForge(); updateArts(); save(); }
+let forgeDot = false;
+function setForgeDot(on) { forgeDot = !!on; $('forgeDot').hidden = !forgeDot; }
+
+/* ----- forge panel: slots with Strike, recipes with Start and Keep, material stock, forge upgrades ----- */
+const durTxt = (s) => { s = Math.max(0, Math.ceil(s)); if (s < 60) return s + 's'; if (s < 3600) return Math.floor(s / 60) + 'm' + (s % 60 ? ' ' + (s % 60) + 's' : ''); return Math.floor(s / 3600) + 'h' + (Math.floor(s % 3600 / 60) ? ' ' + Math.floor(s % 3600 / 60) + 'm' : ''); };
+const freeSlot = () => state.forge.slots.findIndex((j) => !j);
+const matName = (id) => (FORGE.byId(id) || { name: id }).name;
+// the real reason a recipe cannot start, in plain words ('' = it can)
+function startReason(m) {
+  const r = m.recipe, have = state.inv[r.kind] || 0, nm = pearlName(r.kind) + 's';
+  if (freeSlot() < 0) return state.forge.slots.length > 1 ? 'All forge slots are busy' : 'The forge slot is busy';
+  if (have >= r.qty) return '';
+  if (state.autoSell && !isKept(r.kind)) return 'Turn on Keep for ' + nm + ', or turn off auto-sell';
+  const spawning = (ECON.poolChances(state.pool, state.lv)[r.kind] || 0) > 0;
+  if (!spawning) return nm + ' are not spawning right now: unlock them in the shop or add them to your pool';
+  return 'Need ' + whole2(r.qty - have) + ' more ' + nm + ' in your backpack';
+}
+const forgeSpeedText = () => { const f = state.forge; return 'Forge speed x' + +f.rate.toFixed(2) + ': level ' + f.lv.speed + (f.frenzy ? ', frenzy x' + FORGE.FRENZY_FACTOR : ''); };
+const FORGE_UPG_DESC = {
+  speed: (f) => '+' + Math.round(FORGE.SPEED_PER_LEVEL * 100) + '% forge speed per level (now x' + +FORGE.speedFactor(f.lv.speed, false).toFixed(2) + ')',
+  slot: (f) => 'One more job at once (now ' + FORGE.slotCount(f) + (FORGE.slotCount(f) === 1 ? ' slot)' : ' slots)'),
+};
+function forgeView() {
+  const f = state.forge, now = Date.now();
+  return {
+    speed: forgeSpeedText(),
+    slots: f.slots.map((j, i) => (j ? { i, mat: j.mat, name: matName(j.mat), progress: FORGE.progress(f, i, now), left: durTxt(FORGE.secsLeft(f, i, now)) } : { i, empty: true })),
+    recipes: FORGE.MATERIALS.filter((m) => state.col[m.recipe.kind] && state.col[m.recipe.kind].found).map((m) => {
+      const reason = startReason(m);
+      return { id: m.id, name: m.name, kind: m.recipe.kind, cost: m.recipe.qty + ' ' + pearlName(m.recipe.kind) + 's', time: durTxt(m.recipe.secs / f.rate), have: state.inv[m.recipe.kind] || 0, stock: f.stock[m.id] || 0, kept: isKept(m.recipe.kind), can: !reason, reason };
+    }),
+    stock: FORGE.MATERIALS.filter((m) => f.stock[m.id] > 0).map((m) => ({ id: m.id, name: m.name, n: f.stock[m.id] })),
+    upg: Object.keys(FORGE.UPG).map((id) => { const u = FORGE.UPG[id], lvl = f.lv[id], maxed = lvl >= u.max, cost = maxed ? 0 : FORGE.upgCost(id, lvl);
+      return { id, name: u.name, lvl, max: u.max, maxed, cost, can: !maxed && state.sparks >= cost, desc: FORGE_UPG_DESC[id](f) }; }),
+  };
+}
+const materialLine = () => { const s = FORGE.MATERIALS.filter((m) => state.forge.stock[m.id] > 0); return s.length ? 'Your materials: ' + s.map((m) => m.name + ' ' + whole2(state.forge.stock[m.id])).join(', ') : 'No materials yet. The Forge makes them from pearls.'; };
+let forgeSig = '';
+const fRows = { slots: [], recipes: [], upg: {} };
+function buildForgeUpg() {
+  for (const id of Object.keys(FORGE.UPG)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'up'; b.dataset.fup = id;
+    b.innerHTML = '<span class="top"><span class="nm"></span><span class="lv"></span></span><span class="ds"></span><span class="cs"></span>';
+    $('fUpg').appendChild(b);
+    fRows.upg[id] = { el: b, nm: b.querySelector('.nm'), lv: b.querySelector('.lv'), ds: b.querySelector('.ds'), cs: b.querySelector('.cs'), cache: {} };
+    fRows.upg[id].nm.textContent = FORGE.UPG[id].name;
+  }
+}
+function updateForge() {
+  if ($('forge').hidden) return;
+  const v = forgeView(), sig = v.slots.map((s) => (s.empty ? '-' : s.mat)).join() + '|' + v.recipes.map((r) => r.id).join();
+  if (sig !== forgeSig) { // structure changed: rebuild the slot and recipe rows
+    forgeSig = sig;
+    $('fSlots').innerHTML = ''; fRows.slots = v.slots.map((s) => {
+      const r = document.createElement('div'); r.className = 'fslot' + (s.empty ? ' empty' : '');
+      r.innerHTML = s.empty ? '<span class="fsn">Slot ' + (s.i + 1) + '</span><span class="fse">Empty: start a recipe below</span>'
+        : '<span class="fsn">Slot ' + (s.i + 1) + '</span><span class="fsm">' + s.name + '</span><span class="fbar"><i></i></span><span class="fleft"></span>' +
+          '<button type="button" class="strike" data-strike="' + s.i + '" aria-label="Strike: take 1 second off ' + s.name + '">Strike</button>';
+      $('fSlots').appendChild(r);
+      return { el: r, bar: r.querySelector('.fbar i'), left: r.querySelector('.fleft'), cache: {} };
+    });
+    $('fRecipes').innerHTML = ''; fRows.recipes = v.recipes.map((m) => {
+      const r = document.createElement('div'); r.className = 'frec';
+      r.innerHTML = '<div class="frh"><canvas width="64" height="64" data-art="' + m.kind + '"></canvas><span class="frn">' + m.name + '</span><span class="frs"></span></div>' +
+        '<div class="frc"></div><small class="frw"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false">' + LOCK_SVG + '<span>Keep</span></button>' +
+        '<button type="button" class="chip hot fstart" data-fstart="' + m.id + '">Start</button></div>';
+      $('fRecipes').appendChild(r);
+      const cv = r.querySelector('canvas'); if (cv.getContext && spr.pearl[m.kind]) { const x = cv.getContext('2d'); x.drawImage(bigSprite(m.kind), -5, -5, 74, 74); }
+      return { el: r, s: r.querySelector('.frs'), c: r.querySelector('.frc'), w: r.querySelector('.frw'), k: r.querySelector('.keepT'), b: r.querySelector('.fstart'), cache: {} };
+    });
+  }
+  setLbl('fSpeed', v.speed);
+  v.slots.forEach((s, i) => { const r = fRows.slots[i]; if (!r || s.empty) return; r.bar.style.transform = 'scaleX(' + s.progress.toFixed(3) + ')'; setText(r, 'left', r.left, s.left + ' left'); });
+  v.recipes.forEach((m, i) => {
+    const r = fRows.recipes[i]; if (!r) return;
+    setText(r, 's', r.s, m.stock ? m.stock + ' in stock' : '');
+    setText(r, 'c', r.c, m.cost + ' · ' + m.time + ' · you have ' + whole2(m.have));
+    setText(r, 'w', r.w, m.reason);
+    r.b.disabled = !m.can; r.b.title = m.reason || 'Start ' + m.name;
+    r.k.classList.toggle('on', m.kept); r.k.setAttribute('aria-pressed', String(m.kept)); setText(r, 'k', r.k.lastElementChild, m.kept ? 'Kept' : 'Keep');
+  });
+  setLbl('fStock', v.stock.length ? v.stock.map((s) => s.name + ' ' + whole2(s.n)).join(', ') : 'No materials yet');
+  v.upg.forEach((u) => {
+    const r = fRows.upg[u.id]; if (!r) return;
+    r.el.classList.toggle('can', u.can); r.el.classList.toggle('max', u.maxed);
+    r.el.style.setProperty('--p', u.maxed ? '0%' : (clamp(state.sparks / u.cost, 0, 1) * 100).toFixed(0) + '%');
+    setText(r, 'lv', r.lv, 'Lv ' + u.lvl + '/' + u.max); setText(r, 'ds', r.ds, u.desc); setText(r, 'cs', r.cs, u.maxed ? 'Max' : fmt(u.cost));
+  });
+}
+function forgeStartUI(mat) {
+  const i = freeSlot(); if (i < 0) return false;
+  if (!forgeStart(i, mat)) return false;
+  Snd.buy(1); toast('The forge is making ' + matName(mat)); forgeSig = ''; updateForge(); return true;
+}
+function forgeBuyUI(id) {
+  if (!forgeBuy(id)) return false;
+  Snd.buy(state.forge.lv[id]); const r = fRows.upg[id]; if (r) { r.el.classList.remove('flash'); void r.el.offsetWidth; r.el.classList.add('flash'); }
+  forgeSig = ''; updateForge(); return true;
+}
+// Strike: pointerdown so touch and mouse both answer at once; a keyboard press arrives as a click with no pointer
+function strikeUI(btn) {
+  const i = +btn.dataset.strike;
+  if (!forgeStrike(i)) { btn.classList.remove('capped'); void btn.offsetWidth; btn.classList.add('capped'); return false; }
+  Snd.hit('pearl', 0.6, false); btn.classList.remove('hit'); void btn.offsetWidth; btn.classList.add('hit');
+  const m = document.createElement('span'); m.className = 'minus1'; m.textContent = '-' + FORGE.STRIKE_SECS + 's';
+  btn.parentNode.appendChild(m); setTimeout(() => { if (m.parentNode) m.parentNode.removeChild(m); }, 700);
+  updateForge(); return true;
+}
+$('fSlots').addEventListener('pointerdown', (e) => { const b = e.target.closest && e.target.closest('[data-strike]'); if (b) { e.preventDefault(); Snd.resume(); strikeUI(b); } });
+$('fSlots').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-strike]'); if (b && e.detail === 0) strikeUI(b); });
+$('fRecipes').addEventListener('click', (e) => {
+  const k = e.target.closest && e.target.closest('[data-fkeep]'); if (k) { Snd.click(); setKeep(k.dataset.fkeep, !isKept(k.dataset.fkeep)); return; }
+  const b = e.target.closest && e.target.closest('[data-fstart]'); if (b && !b.disabled) { Snd.resume(); forgeStartUI(b.dataset.fstart); }
+});
+$('fUpg').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-fup]'); if (b) { Snd.resume(); forgeBuyUI(b.dataset.fup); } });
 
 /* ----- buttons ----- */
 function paintMute() { $('muteBtn').textContent = state.muted ? 'Sound off' : 'Sound on'; }
@@ -795,7 +925,7 @@ function afterLoad() {
   collapse = null; armed = false; clearTimeout(armTimer); toolView = state.equip >= 0 ? state.equip : state.lv.tool;
   resetRun(); syncDiscoveries(); $('autoSell').checked = state.autoSell;
   paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); paintMusic();
-  updateShelf(); updatePack(); updatePool(); paintRestore();
+  updateShelf(); updatePack(); updatePool(); paintRestore(); artSig = ''; updateArts(); forgeSig = ''; setForgeDot(false); updateForge(); // no stale numbers from the old save
 }
 $('loadSave').addEventListener('click', () => { Snd.click(); checkImport($('saveText').value); });
 $('confirmLoad').addEventListener('click', () => { Snd.click(); applyImport(); });
@@ -832,9 +962,9 @@ function frame(ts) {
   if (hitStop > 0) hitStop -= dt;
   else { acc += dt; while (acc >= DT) { step(DT); acc -= DT; } }
   hudT += dt; saveT += dt;
-  if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); hudT = 0; }
+  forgeTick(); // before the HUD, so the speed line and slots show this frame's frenzy and finished jobs
+  if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); updateForge(); hudT = 0; }
   if (saveT > 5) { save(); saveT = 0; }
-  forgeTick();
   render();
   if (!$('tools').hidden) drawPedestal(ts);
   adapt(performance.now() - w0, dt);
@@ -844,7 +974,7 @@ function start(data) {
   const loaded = data && data.lv ? loadState(data) : loadStored();
   if (loaded === 'newer') { saveBlocked = true; toast('Your save is from a newer version of Poppit, so it was not loaded or changed. Reload to update.'); }
   const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
-  recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
+  recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); buildForgeUpg(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
   awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
   paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
