@@ -605,25 +605,34 @@ const ARTS = (() => {
   return { PINK_DUCK_PAYOUT, HALLS, ARTIFACTS, byId, isMat, have, canCraft, craft, payoutMult };
 })();
 if (typeof module !== 'undefined') module.exports = ARTS;
-/* ---------- Forge: pearls become crafting materials over time. Pure, no DOM; every number is data. ---------- */
+/* ---------- Forge: pearls become dusts, and dusts become alloys, over time. Pure, no DOM; every number is data. ---------- */
 // A job is { mat, start, end } in ms timestamps. end is planned at the forge's current speed (rate): when the rate
 // changes (frenzy, a Forge Speed level) the remaining work is re-timed from now. Saves always store ends at the
 // no-frenzy rate (toSave), so a closed or hidden page never carries frenzy, and a job is done only when now >= end:
 // a clock that jumps backwards can delay a job but never finish it early.
 const FORGE = (() => {
-  // one material per pearl type: the quantity falls and the time doubles per roster position
+  // recipe inputs: { kind: 'pearl', id, qty } takes normal pearls from the backpack, { kind: 'material', id, qty } takes from the stock
+  const P = (id, qty) => ({ kind: 'pearl', id, qty }), M = (id, qty) => ({ kind: 'material', id, qty });
+  // dusts: one per pearl type, made from pearls; the quantity falls and the time doubles per roster position
   const MATERIALS = [
-    { id: 'rose_dust', name: 'Rose Dust', recipe: { kind: 'pearl', qty: 100, secs: 30 } },
-    { id: 'blue_dust', name: 'Blue Dust', recipe: { kind: 'blue', qty: 70, secs: 60 } },
-    { id: 'mint_dust', name: 'Mint Dust', recipe: { kind: 'mint', qty: 45, secs: 120 } },
-    { id: 'golden_dust', name: 'Golden Dust', recipe: { kind: 'golden', qty: 30, secs: 240 } },
-    { id: 'violet_dust', name: 'Violet Dust', recipe: { kind: 'violet', qty: 20, secs: 480 } },
-    { id: 'coral_dust', name: 'Coral Dust', recipe: { kind: 'coral', qty: 14, secs: 960 } },
-    { id: 'marble_dust', name: 'Marble Dust', recipe: { kind: 'marble', qty: 10, secs: 1920 } },
-    { id: 'opal_dust', name: 'Opal Dust', recipe: { kind: 'opal', qty: 7, secs: 3840 } },
-    { id: 'ruby_dust', name: 'Ruby Dust', recipe: { kind: 'ruby', qty: 5, secs: 7680 } },
-    { id: 'black_dust', name: 'Black Dust', recipe: { kind: 'black', qty: 3, secs: 15360 } }, // 4 h 16 min
+    { id: 'rose_dust', name: 'Rose Dust', recipe: { inputs: [P('pearl', 100)], secs: 30 } },
+    { id: 'blue_dust', name: 'Blue Dust', recipe: { inputs: [P('blue', 70)], secs: 60 } },
+    { id: 'mint_dust', name: 'Mint Dust', recipe: { inputs: [P('mint', 45)], secs: 120 } },
+    { id: 'golden_dust', name: 'Golden Dust', recipe: { inputs: [P('golden', 30)], secs: 240 } },
+    { id: 'violet_dust', name: 'Violet Dust', recipe: { inputs: [P('violet', 20)], secs: 480 } },
+    { id: 'coral_dust', name: 'Coral Dust', recipe: { inputs: [P('coral', 14)], secs: 960 } },
+    { id: 'marble_dust', name: 'Marble Dust', recipe: { inputs: [P('marble', 10)], secs: 1920 } },
+    { id: 'opal_dust', name: 'Opal Dust', recipe: { inputs: [P('opal', 7)], secs: 3840 } },
+    { id: 'ruby_dust', name: 'Ruby Dust', recipe: { inputs: [P('ruby', 5)], secs: 7680 } },
+    { id: 'black_dust', name: 'Black Dust', recipe: { inputs: [P('black', 3)], secs: 15360 } }, // 4 h 16 min
   ];
+  // alloys: the second tier, made from dusts; relics in the Hall of Relics cost alloys. Untuned.
+  const ALLOYS = [
+    { id: 'rosegold', name: 'Rosegold', recipe: { inputs: [M('rose_dust', 6), M('blue_dust', 2)], secs: 120 } },
+    { id: 'azure_steel', name: 'Azure Steel', recipe: { inputs: [M('blue_dust', 4), M('mint_dust', 2)], secs: 300 } },
+    { id: 'mintsilver', name: 'Mintsilver', recipe: { inputs: [M('mint_dust', 4), M('golden_dust', 2)], secs: 600 } },
+  ];
+  const ALL = MATERIALS.concat(ALLOYS); // every stock item, dusts first
   const BASE_SLOTS = 1;
   const SPEED_PER_LEVEL = 0.25; // Forge Speed: +25% per level
   const FRENZY_FACTOR = 2; // while frenzy is on and the page is open
@@ -633,11 +642,13 @@ const FORGE = (() => {
     speed: { name: 'Forge Speed', base: 20000, grow: 2.8, max: 10 },
     slot: { name: 'Extra Slot', base: 250000, grow: 10, max: 3 },
   };
-  const byId = (id) => MATERIALS.find((m) => m.id === id) || null;
-  const blank = () => ({ slots: [null], stock: {}, lv: { speed: 0, slot: 0 }, rate: 1, frenzy: false, strikes: [] });
+  const byId = (id) => ALL.find((m) => m.id === id) || null;
+  const isAlloy = (id) => ALLOYS.some((m) => m.id === id);
+  // bonus: the active artifacts' forge speed bonus (an added fraction), live only like rate and frenzy
+  const blank = () => ({ slots: [null], stock: {}, lv: { speed: 0, slot: 0 }, rate: 1, frenzy: false, bonus: 0, strikes: [] });
   const slotCount = (f) => BASE_SLOTS + f.lv.slot;
-  const speedFactor = (speedLv, frenzy) => (1 + SPEED_PER_LEVEL * speedLv) * (frenzy ? FRENZY_FACTOR : 1);
-  const baseRate = (f) => speedFactor(f.lv.speed, false);
+  const speedFactor = (speedLv, frenzy, bonus) => (1 + SPEED_PER_LEVEL * speedLv) * (1 + (bonus || 0)) * (frenzy ? FRENZY_FACTOR : 1);
+  const baseRate = (f) => speedFactor(f.lv.speed, false, f.bonus);
   // re-time every running job for a new speed; the work left (ms at rate 1) never exceeds the recipe
   function setRate(f, rate, now) {
     for (const j of f.slots) {
@@ -647,19 +658,45 @@ const FORGE = (() => {
     }
     f.rate = rate;
   }
-  function setFrenzy(f, on, now) { if (f.frenzy !== !!on) { f.frenzy = !!on; setRate(f, speedFactor(f.lv.speed, f.frenzy), now); } }
-  function canStart(f, slot, matId, inv) {
-    const m = byId(matId);
-    return !!m && Number.isInteger(slot) && slot >= 0 && slot < slotCount(f) && !f.slots[slot] && ((inv && inv[m.recipe.kind]) || 0) >= m.recipe.qty;
+  function setFrenzy(f, on, now) { if (f.frenzy !== !!on) { f.frenzy = !!on; setRate(f, speedFactor(f.lv.speed, f.frenzy, f.bonus), now); } }
+  // an artifact forge speed bonus came or went (a craft, a pedestal swap, a load): re-time running jobs
+  function setBonus(f, bonus, now) { bonus = bonus || 0; if (f.bonus !== bonus) { f.bonus = bonus; setRate(f, speedFactor(f.lv.speed, f.frenzy, bonus), now); } }
+  const haveOf = (f, inp, inv) => (inp.kind === 'material' ? f.stock[inp.id] || 0 : (inv && inv[inp.id]) || 0);
+  // the first input the player is short of, with its numbers (name is set for materials; the game names pearls), or null
+  function missing(f, matId, inv) {
+    const m = byId(matId); if (!m) return null;
+    for (const inp of m.recipe.inputs) {
+      const h = haveOf(f, inp, inv);
+      if (h < inp.qty) return { kind: inp.kind, id: inp.id, qty: inp.qty, have: h, short: inp.qty - h, name: inp.kind === 'material' ? byId(inp.id).name : null };
+    }
+    return null;
   }
-  // takes the recipe's normal pearls (and their share of stored sale value) right away
+  function canStart(f, slot, matId, inv) {
+    return !!byId(matId) && Number.isInteger(slot) && slot >= 0 && slot < slotCount(f) && !f.slots[slot] && !missing(f, matId, inv);
+  }
+  // takes every input right away: normal pearls (and their share of stored sale value) from the backpack, materials from the stock
   function start(f, slot, matId, inv, now, invV) {
     if (!canStart(f, slot, matId, inv)) return false;
-    const r = byId(matId).recipe, have = inv[r.kind];
-    if (invV && invV[r.kind] != null) invV[r.kind] = have - r.qty > 0 ? invV[r.kind] * (have - r.qty) / have : 0;
-    inv[r.kind] = have - r.qty;
+    const r = byId(matId).recipe;
+    for (const inp of r.inputs) {
+      if (inp.kind === 'material') { f.stock[inp.id] -= inp.qty; if (!f.stock[inp.id]) delete f.stock[inp.id]; continue; }
+      const have = inv[inp.id];
+      if (invV && invV[inp.id] != null) invV[inp.id] = have - inp.qty > 0 ? invV[inp.id] * (have - inp.qty) / have : 0;
+      inv[inp.id] = have - inp.qty;
+    }
     f.slots[slot] = { mat: matId, start: now, end: now + r.secs * 1000 / f.rate };
     return true;
+  }
+  // everything a material takes from nothing, one job after another at rate 1: { pearls: { id: n }, secs }
+  function fromScratch(matId) {
+    const m = byId(matId), out = { pearls: {}, secs: m.recipe.secs };
+    for (const inp of m.recipe.inputs) {
+      if (inp.kind === 'pearl') { out.pearls[inp.id] = (out.pearls[inp.id] || 0) + inp.qty; continue; }
+      const sub = fromScratch(inp.id);
+      for (const k in sub.pearls) out.pearls[k] = (out.pearls[k] || 0) + sub.pearls[k] * inp.qty;
+      out.secs += sub.secs * inp.qty;
+    }
+    return out;
   }
   // 0..1 by work done; a clock behind the start reads 0
   function progress(f, slot, now) {
@@ -696,7 +733,7 @@ const FORGE = (() => {
   function buy(f, id, sparks, now) {
     if (!canBuy(f, id, sparks)) return 0;
     const c = upgCost(id, f.lv[id]); f.lv[id]++;
-    if (id === 'speed') setRate(f, speedFactor(f.lv.speed, f.frenzy), now);
+    if (id === 'speed') setRate(f, speedFactor(f.lv.speed, f.frenzy, f.bonus), now);
     while (f.slots.length < slotCount(f)) f.slots.push(null);
     return c;
   }
@@ -707,13 +744,14 @@ const FORGE = (() => {
     const slots = f.slots.map((j) => (j ? { mat: j.mat, start: j.start, end: now >= j.end || f.rate === b ? j.end : at(j) + Math.min(byId(j.mat).recipe.secs * 1000, (j.end - at(j)) * f.rate) / b } : null));
     return { slots, stock: Object.assign({}, f.stock), lv: { speed: f.lv.speed, slot: f.lv.slot } };
   }
-  // untrusted input (a save) -> a valid forge at the no-frenzy rate; bad jobs are dropped, numbers clamped
-  function fromSave(d) {
+  // untrusted input (a save) -> a valid forge at the no-frenzy rate; bad jobs are dropped, numbers clamped.
+  // bonus is the loaded artifacts' forge speed bonus: the saved ends were planned at the rate that included it
+  function fromSave(d, bonus) {
     const f = blank(), o = d && typeof d === 'object' && !Array.isArray(d) ? d : {}, lv = o.lv && typeof o.lv === 'object' ? o.lv : {};
     const lvl = (x, max) => { const n = Math.floor(+x); return Number.isFinite(n) && n > 0 ? Math.min(max, n) : 0; };
-    f.lv.speed = lvl(lv.speed, UPG.speed.max); f.lv.slot = lvl(lv.slot, UPG.slot.max); f.rate = baseRate(f);
+    f.lv.speed = lvl(lv.speed, UPG.speed.max); f.lv.slot = lvl(lv.slot, UPG.slot.max); f.bonus = bonus || 0; f.rate = baseRate(f);
     const stock = o.stock && typeof o.stock === 'object' ? o.stock : {};
-    for (const m of MATERIALS) { const n = lvl(stock[m.id], 1e15); if (n > 0) f.stock[m.id] = n; }
+    for (const m of ALL) { const n = lvl(stock[m.id], 1e15); if (n > 0) f.stock[m.id] = n; }
     const src = Array.isArray(o.slots) ? o.slots : [];
     f.slots = [];
     for (let i = 0; i < slotCount(f); i++) {
@@ -724,8 +762,8 @@ const FORGE = (() => {
     }
     return f;
   }
-  return { MATERIALS, BASE_SLOTS, SPEED_PER_LEVEL, FRENZY_FACTOR, STRIKE_SECS, STRIKE_CAP, STRIKE_WINDOW_MS, UPG, byId, blank, slotCount, speedFactor, baseRate,
-    setRate, setFrenzy, canStart, start, progress, secsLeft, finish, collect, strike, costText, upgCost, canBuy, buy, toSave, fromSave };
+  return { MATERIALS, ALLOYS, ALL, BASE_SLOTS, SPEED_PER_LEVEL, FRENZY_FACTOR, STRIKE_SECS, STRIKE_CAP, STRIKE_WINDOW_MS, UPG, byId, isAlloy, blank, slotCount, speedFactor, baseRate,
+    setRate, setFrenzy, setBonus, missing, canStart, start, fromScratch, progress, secsLeft, finish, collect, strike, costText, upgCost, canBuy, buy, toSave, fromSave };
 })();
 if (typeof module !== 'undefined') module.exports = FORGE;
 'use strict';
@@ -2627,15 +2665,22 @@ function setForgeDot(on) { forgeDot = !!on; $('forgeDot').hidden = !forgeDot; }
 const durTxt = (s) => { s = Math.max(0, Math.ceil(s)); if (s < 60) return s + 's'; if (s < 3600) return Math.floor(s / 60) + 'm' + (s % 60 ? ' ' + (s % 60) + 's' : ''); return Math.floor(s / 3600) + 'h' + (Math.floor(s % 3600 / 60) ? ' ' + Math.floor(s % 3600 / 60) + 'm' : ''); };
 const freeSlot = () => state.forge.slots.findIndex((j) => !j);
 const matName = (id) => (FORGE.byId(id) || { name: id }).name;
-// the real reason a recipe cannot start, in plain words ('' = it can)
+// a dust recipe's pearl type (null for alloys, which are made from dusts)
+const recipePearl = (m) => { const p = m.recipe.inputs.find((i) => i.kind === 'pearl'); return p ? p.id : null; };
+const inputText = (i) => i.qty + ' ' + (i.kind === 'pearl' ? pearlName(i.id) + 's' : matName(i.id));
+// an alloy row shows once every pearl type behind its dusts has been found
+const alloyShown = (m) => m.recipe.inputs.every((i) => { const d = FORGE.byId(i.id), k = d && recipePearl(d); return k && state.col[k] && state.col[k].found; });
+// the real reason a recipe cannot start, in plain words ('' = it can); it names the first missing item
 function startReason(m) {
-  const r = m.recipe, have = state.inv[r.kind] || 0, nm = pearlName(r.kind) + 's';
   if (freeSlot() < 0) return state.forge.slots.length > 1 ? 'All forge slots are busy' : 'The forge slot is busy';
-  if (have >= r.qty) return '';
-  if (state.autoSell && !isKept(r.kind)) return 'Turn on Keep for ' + nm + ', or turn off auto-sell';
-  const spawning = (ECON.poolChances(state.pool, state.lv)[r.kind] || 0) > 0;
+  const miss = FORGE.missing(state.forge, m.id, state.inv);
+  if (!miss) return '';
+  if (miss.kind === 'material') return 'Need ' + whole2(miss.short) + ' more ' + miss.name + ': make it in the forge';
+  const nm = pearlName(miss.id) + 's';
+  if (state.autoSell && !isKept(miss.id)) return 'Turn on Keep for ' + nm + ', or turn off auto-sell';
+  const spawning = (ECON.poolChances(state.pool, state.lv)[miss.id] || 0) > 0;
   if (!spawning) return nm + ' are not spawning right now: unlock them in the shop or add them to your pool';
-  return 'Need ' + whole2(r.qty - have) + ' more ' + nm + ' in your backpack';
+  return 'Need ' + whole2(miss.short) + ' more ' + nm + ' in your backpack';
 }
 const forgeSpeedText = () => { const f = state.forge; return 'Forge speed x' + +f.rate.toFixed(2) + ': level ' + f.lv.speed + (f.frenzy ? ', frenzy x' + FORGE.FRENZY_FACTOR : ''); };
 const FORGE_UPG_DESC = {
@@ -2647,16 +2692,17 @@ function forgeView() {
   return {
     speed: forgeSpeedText(),
     slots: f.slots.map((j, i) => (j ? { i, mat: j.mat, name: matName(j.mat), progress: FORGE.progress(f, i, now), left: durTxt(FORGE.secsLeft(f, i, now)) } : { i, empty: true })),
-    recipes: FORGE.MATERIALS.filter((m) => state.col[m.recipe.kind] && state.col[m.recipe.kind].found).map((m) => {
-      const reason = startReason(m);
-      return { id: m.id, name: m.name, kind: m.recipe.kind, cost: m.recipe.qty + ' ' + pearlName(m.recipe.kind) + 's', time: durTxt(m.recipe.secs / f.rate), have: state.inv[m.recipe.kind] || 0, stock: f.stock[m.id] || 0, kept: isKept(m.recipe.kind), can: !reason, reason };
+    recipes: FORGE.MATERIALS.filter((m) => state.col[recipePearl(m)] && state.col[recipePearl(m)].found).concat(FORGE.ALLOYS.filter(alloyShown)).map((m) => {
+      const reason = startReason(m), kind = recipePearl(m);
+      const have = m.recipe.inputs.map((i) => (i.kind === 'pearl' ? whole2(state.inv[i.id] || 0) : whole2(f.stock[i.id] || 0) + ' ' + matName(i.id))).join(', ');
+      return { id: m.id, name: m.name, kind, alloy: !kind, cost: m.recipe.inputs.map(inputText).join(' + '), time: durTxt(m.recipe.secs / f.rate), have, stock: f.stock[m.id] || 0, kept: !!kind && isKept(kind), can: !reason, reason };
     }),
-    stock: FORGE.MATERIALS.filter((m) => f.stock[m.id] > 0).map((m) => ({ id: m.id, name: m.name, n: f.stock[m.id] })),
+    stock: FORGE.ALL.filter((m) => f.stock[m.id] > 0).map((m) => ({ id: m.id, name: m.name, n: f.stock[m.id] })),
     upg: Object.keys(FORGE.UPG).map((id) => { const u = FORGE.UPG[id], lvl = f.lv[id], maxed = lvl >= u.max, cost = maxed ? 0 : FORGE.upgCost(id, lvl);
       return { id, name: u.name, lvl, max: u.max, maxed, cost, can: !maxed && state.sparks >= cost, desc: FORGE_UPG_DESC[id](f) }; }),
   };
 }
-const materialLine = () => { const s = FORGE.MATERIALS.filter((m) => state.forge.stock[m.id] > 0); return s.length ? 'Your materials: ' + s.map((m) => m.name + ' ' + whole2(state.forge.stock[m.id])).join(', ') : 'No materials yet. The Forge makes them from pearls.'; };
+const materialLine = () => { const s = FORGE.ALL.filter((m) => state.forge.stock[m.id] > 0); return s.length ? 'Your materials: ' + s.map((m) => m.name + ' ' + whole2(state.forge.stock[m.id])).join(', ') : 'No materials yet. The Forge makes them from pearls.'; };
 let forgeSig = '';
 const fRows = { slots: [], recipes: [], upg: {} };
 function buildForgeUpg() {
@@ -2684,11 +2730,11 @@ function updateForge() {
     });
     $('fRecipes').innerHTML = ''; fRows.recipes = v.recipes.map((m) => {
       const r = document.createElement('div'); r.className = 'frec';
-      r.innerHTML = '<div class="frh"><canvas width="64" height="64" data-art="' + m.kind + '"></canvas><span class="frn">' + m.name + '</span><span class="frs"></span></div>' +
-        '<div class="frc"></div><small class="frw"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false">' + LOCK_SVG + '<span>Keep</span></button>' +
+      r.innerHTML = '<div class="frh"><canvas width="64" height="64"' + (m.alloy ? ' hidden' : ' data-art="' + m.kind + '"') + '></canvas><span class="frn">' + m.name + '</span><span class="frs"></span></div>' +
+        '<div class="frc"></div><small class="frw"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false"' + (m.alloy ? ' hidden' : '') + '>' + LOCK_SVG + '<span>Keep</span></button>' +
         '<button type="button" class="chip hot fstart" data-fstart="' + m.id + '">Start</button></div>';
       $('fRecipes').appendChild(r);
-      const cv = r.querySelector('canvas'); if (cv.getContext && spr.pearl[m.kind]) { const x = cv.getContext('2d'); x.drawImage(bigSprite(m.kind), -5, -5, 74, 74); }
+      const cv = r.querySelector('canvas'); if (!m.alloy && cv.getContext && spr.pearl[m.kind]) { const x = cv.getContext('2d'); x.drawImage(bigSprite(m.kind), -5, -5, 74, 74); }
       return { el: r, s: r.querySelector('.frs'), c: r.querySelector('.frc'), w: r.querySelector('.frw'), k: r.querySelector('.keepT'), b: r.querySelector('.fstart'), cache: {} };
     });
   }
@@ -2697,7 +2743,7 @@ function updateForge() {
   v.recipes.forEach((m, i) => {
     const r = fRows.recipes[i]; if (!r) return;
     setText(r, 's', r.s, m.stock ? m.stock + ' in stock' : '');
-    setText(r, 'c', r.c, m.cost + ' · ' + m.time + ' · you have ' + whole2(m.have));
+    setText(r, 'c', r.c, m.cost + ' · ' + m.time + ' · you have ' + m.have);
     setText(r, 'w', r.w, m.reason);
     r.b.disabled = !m.can; r.b.title = m.reason || 'Start ' + m.name;
     r.k.classList.toggle('on', m.kept); r.k.setAttribute('aria-pressed', String(m.kept)); setText(r, 'k', r.k.lastElementChild, m.kept ? 'Kept' : 'Keep');

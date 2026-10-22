@@ -1,17 +1,18 @@
-// The forge engine (src/forge.js): recipes, jobs on timestamps, speed, Strike, slots, upgrades, saves, material costs.
+// The forge engine (src/forge.js): dust and alloy recipes, jobs on timestamps, speed, Strike, slots, upgrades, saves, material costs.
 const test = require('node:test'), assert = require('node:assert');
 const F = require('../src/forge.js'), E = require('../src/econ.js'), A = require('../src/artifacts.js');
 const T = 1.7e12, S = 1000; // a fixed "now" in ms
 const inv0 = () => ({ pearl: 250, 'pearl:s': 9, blue: 140 });
+const pin = (m) => m.recipe.inputs[0]; // a dust's one pearl input
 
 test('one material per pearl type, in roster order, named from the type', () => {
-  assert.deepStrictEqual(F.MATERIALS.map((m) => m.recipe.kind), E.PEARLS.map((t) => t.id));
+  assert.deepStrictEqual(F.MATERIALS.map((m) => pin(m).id), E.PEARLS.map((t) => t.id));
   assert.deepStrictEqual(F.MATERIALS.map((m) => m.name), ['Rose Dust', 'Blue Dust', 'Mint Dust', 'Golden Dust', 'Violet Dust', 'Coral Dust', 'Marble Dust', 'Opal Dust', 'Ruby Dust', 'Black Dust']);
-  for (const m of F.MATERIALS) { assert.ok(/_dust$/.test(m.id) && Number.isInteger(m.recipe.qty) && m.recipe.qty > 0 && m.recipe.secs > 0, m.id); assert.strictEqual(F.byId(m.id), m); }
+  for (const m of F.MATERIALS) { assert.ok(/_dust$/.test(m.id) && m.recipe.inputs.length === 1 && pin(m).kind === 'pearl' && Number.isInteger(pin(m).qty) && pin(m).qty > 0 && m.recipe.secs > 0, m.id); assert.strictEqual(F.byId(m.id), m); }
   assert.strictEqual(new Set(F.MATERIALS.map((m) => m.id)).size, F.MATERIALS.length);
 });
 test('quantity falls and time doubles per roster position, Rose 100 / 30 s to Black 3 / about 4 h', () => {
-  const r = F.MATERIALS.map((m) => m.recipe);
+  const r = F.MATERIALS.map((m) => ({ qty: pin(m).qty, secs: m.recipe.secs }));
   assert.deepStrictEqual([r[0].qty, r[0].secs], [100, 30]);
   assert.strictEqual(r[9].qty, 3); assert.ok(r[9].secs >= 3.5 * 3600 && r[9].secs <= 4.5 * 3600, r[9].secs);
   for (let i = 1; i < r.length; i++) { assert.ok(r[i].qty < r[i - 1].qty, 'qty falls at ' + i); assert.strictEqual(r[i].secs, 2 * r[i - 1].secs, 'time doubles at ' + i); }
@@ -127,4 +128,71 @@ test('artifact costs accept material lines (fixture artifact, not a real duck)',
     assert.deepStrictEqual(stock, {}, 'a spent-out material leaves the stock');
   } finally { A.ARTIFACTS.splice(A.ARTIFACTS.indexOf(fx), 1); }
   assert.strictEqual(A.byId('test_fixture'), null); assert.strictEqual(A.ARTIFACTS.length, 1);
+});
+
+// ---- alloys: the second tier, made from dusts ----
+test('three alloys made from dusts only, as data', () => {
+  const sum = (id) => F.byId(id).recipe.inputs.map((i) => i.kind + ':' + i.id + 'x' + i.qty).join(' ') + ' ' + F.byId(id).recipe.secs + 's';
+  assert.deepStrictEqual(F.ALLOYS.map((a) => a.name), ['Rosegold', 'Azure Steel', 'Mintsilver']);
+  assert.strictEqual(sum('rosegold'), 'material:rose_dustx6 material:blue_dustx2 120s');
+  assert.strictEqual(sum('azure_steel'), 'material:blue_dustx4 material:mint_dustx2 300s');
+  assert.strictEqual(sum('mintsilver'), 'material:mint_dustx4 material:golden_dustx2 600s');
+  for (const a of F.ALLOYS) { assert.ok(F.isAlloy(a.id) && a.recipe.inputs.every((i) => i.kind === 'material' && F.byId(i.id) && !F.isAlloy(i.id)), a.id); }
+  assert.strictEqual(F.ALL.length, F.MATERIALS.length + F.ALLOYS.length); assert.strictEqual(new Set(F.ALL.map((m) => m.id)).size, F.ALL.length);
+});
+test('an alloy start consumes exactly its dusts and no pearls', () => {
+  const f = F.blank(), inv = inv0(), invV = { pearl: 500, blue: 1400 };
+  f.stock = { rose_dust: 7, blue_dust: 2, mint_dust: 3 };
+  assert.strictEqual(F.start(f, 0, 'rosegold', inv, T, invV), true);
+  assert.deepStrictEqual(f.stock, { rose_dust: 1, mint_dust: 3 }, '6 Rose Dust and both Blue Dust taken, Mint untouched');
+  assert.deepStrictEqual([inv, invV], [inv0(), { pearl: 500, blue: 1400 }], 'no pearls taken');
+  assert.deepStrictEqual(f.slots[0], { mat: 'rosegold', start: T, end: T + 120 * S });
+});
+test('a short alloy is refused, takes nothing, and the reason names the dust', () => {
+  const f = F.blank(); f.stock = { rose_dust: 6, blue_dust: 1 };
+  assert.strictEqual(F.canStart(f, 0, 'rosegold', {}), false);
+  assert.strictEqual(F.start(f, 0, 'rosegold', { pearl: 9999 }, T), false);
+  assert.deepStrictEqual(f.stock, { rose_dust: 6, blue_dust: 1 });
+  assert.deepStrictEqual(F.missing(f, 'rosegold', {}), { kind: 'material', id: 'blue_dust', qty: 2, have: 1, short: 1, name: 'Blue Dust' });
+  f.stock = {}; assert.strictEqual(F.missing(f, 'rosegold', {}).name, 'Rose Dust', 'the first missing input');
+  assert.deepStrictEqual(F.missing(f, 'rose_dust', { pearl: 40 }), { kind: 'pearl', id: 'pearl', qty: 100, have: 40, short: 60, name: null });
+  assert.strictEqual(F.missing(f, 'rose_dust', { pearl: 100 }), null);
+});
+test('an alloy job finishes by timestamp, into the same stock, with Strike and speed', () => {
+  const f = F.blank(); f.stock = { blue_dust: 4, mint_dust: 2 };
+  F.start(f, 0, 'azure_steel', {}, T);
+  assert.strictEqual(F.strike(f, T + 1, 0), true); assert.strictEqual(f.slots[0].end, T + 299 * S);
+  assert.strictEqual(F.finish(f, 0, T + 299 * S - 1), null); assert.strictEqual(F.collect(f, T + 299 * S), 1);
+  assert.deepStrictEqual([f.stock, f.slots], [{ azure_steel: 1 }, [null]]);
+});
+test('an alloy job finishes offline from a save, and alloys load in the stock', () => {
+  const f = F.blank(); f.stock = { mint_dust: 4, golden_dust: 2, rosegold: 3 };
+  F.start(f, 0, 'mintsilver', {}, T);
+  const back = F.fromSave(JSON.parse(JSON.stringify(F.toSave(f, T + 5 * S))));
+  assert.deepStrictEqual([back.slots, back.stock], [[{ mat: 'mintsilver', start: T, end: T + 600 * S }], { rosegold: 3 }]);
+  assert.strictEqual(F.collect(back, T + 599 * S), 0); assert.strictEqual(F.collect(back, T + 3600 * S), 1, 'an hour later');
+  assert.deepStrictEqual(back.stock, { rosegold: 3, mintsilver: 1 });
+  assert.deepStrictEqual(F.fromSave({ stock: { azure_steel: 2, mintsilver: -1, adamant: 4 } }).stock, { azure_steel: 2 });
+  assert.deepStrictEqual(F.fromSave({ slots: [{ mat: 'rosegold', start: 5, end: 9e15 }] }).slots, [{ mat: 'rosegold', start: 5, end: 5 + 120 * S }], 'clamped to the alloy recipe');
+});
+test('costText renders alloy lines', () => {
+  assert.strictEqual(F.costText(1, 2, 'rosegold'), '1 of 2 Rosegold');
+  assert.strictEqual(F.costText(5, 2, 'azure_steel'), '2 of 2 Azure Steel');
+  assert.strictEqual(F.costText(0, 2, 'mintsilver'), '0 of 2 Mintsilver');
+});
+test('fromScratch: pearls and serial forge time behind each alloy at level 0', () => {
+  assert.deepStrictEqual(F.fromScratch('rose_dust'), { pearls: { pearl: 100 }, secs: 30 });
+  assert.deepStrictEqual(F.fromScratch('rosegold'), { pearls: { pearl: 600, blue: 140 }, secs: 6 * 30 + 2 * 60 + 120 });
+  assert.deepStrictEqual(F.fromScratch('azure_steel'), { pearls: { blue: 280, mint: 90 }, secs: 4 * 60 + 2 * 120 + 300 });
+  assert.deepStrictEqual(F.fromScratch('mintsilver'), { pearls: { mint: 180, golden: 60 }, secs: 4 * 120 + 2 * 240 + 600 });
+});
+test('an artifact forge bonus multiplies the speed, re-times jobs, and saves at the bonus rate', () => {
+  assert.strictEqual(F.speedFactor(0, false, 0.3), 1.3); assert.strictEqual(F.speedFactor(2, true, 0.5), 1.5 * 1.5 * 2); assert.strictEqual(F.speedFactor(1, false), 1.25);
+  const f = F.blank(); F.start(f, 0, 'blue_dust', inv0(), T);
+  F.setBonus(f, 0.5, T + 30 * S);
+  assert.strictEqual(f.slots[0].end, T + 30 * S + 20 * S, '30 s of work left at x1.5');
+  const s = F.toSave(f, T + 30 * S); assert.strictEqual(s.slots[0].end, T + 50 * S);
+  const back = F.fromSave(JSON.parse(JSON.stringify(s)), 0.5);
+  assert.deepStrictEqual([back.rate, back.bonus, back.slots[0].end], [1.5, 0.5, T + 50 * S], 'loaded with the same bonus: same end');
+  F.setBonus(back, 0, T + 40 * S); assert.strictEqual(back.slots[0].end, T + 40 * S + 15 * S, 'the bonus gone: 10 s at x1.5 = 15 s at x1');
 });

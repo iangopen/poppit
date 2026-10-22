@@ -714,15 +714,22 @@ function setForgeDot(on) { forgeDot = !!on; $('forgeDot').hidden = !forgeDot; }
 const durTxt = (s) => { s = Math.max(0, Math.ceil(s)); if (s < 60) return s + 's'; if (s < 3600) return Math.floor(s / 60) + 'm' + (s % 60 ? ' ' + (s % 60) + 's' : ''); return Math.floor(s / 3600) + 'h' + (Math.floor(s % 3600 / 60) ? ' ' + Math.floor(s % 3600 / 60) + 'm' : ''); };
 const freeSlot = () => state.forge.slots.findIndex((j) => !j);
 const matName = (id) => (FORGE.byId(id) || { name: id }).name;
-// the real reason a recipe cannot start, in plain words ('' = it can)
+// a dust recipe's pearl type (null for alloys, which are made from dusts)
+const recipePearl = (m) => { const p = m.recipe.inputs.find((i) => i.kind === 'pearl'); return p ? p.id : null; };
+const inputText = (i) => i.qty + ' ' + (i.kind === 'pearl' ? pearlName(i.id) + 's' : matName(i.id));
+// an alloy row shows once every pearl type behind its dusts has been found
+const alloyShown = (m) => m.recipe.inputs.every((i) => { const d = FORGE.byId(i.id), k = d && recipePearl(d); return k && state.col[k] && state.col[k].found; });
+// the real reason a recipe cannot start, in plain words ('' = it can); it names the first missing item
 function startReason(m) {
-  const r = m.recipe, have = state.inv[r.kind] || 0, nm = pearlName(r.kind) + 's';
   if (freeSlot() < 0) return state.forge.slots.length > 1 ? 'All forge slots are busy' : 'The forge slot is busy';
-  if (have >= r.qty) return '';
-  if (state.autoSell && !isKept(r.kind)) return 'Turn on Keep for ' + nm + ', or turn off auto-sell';
-  const spawning = (ECON.poolChances(state.pool, state.lv)[r.kind] || 0) > 0;
+  const miss = FORGE.missing(state.forge, m.id, state.inv);
+  if (!miss) return '';
+  if (miss.kind === 'material') return 'Need ' + whole2(miss.short) + ' more ' + miss.name + ': make it in the forge';
+  const nm = pearlName(miss.id) + 's';
+  if (state.autoSell && !isKept(miss.id)) return 'Turn on Keep for ' + nm + ', or turn off auto-sell';
+  const spawning = (ECON.poolChances(state.pool, state.lv)[miss.id] || 0) > 0;
   if (!spawning) return nm + ' are not spawning right now: unlock them in the shop or add them to your pool';
-  return 'Need ' + whole2(r.qty - have) + ' more ' + nm + ' in your backpack';
+  return 'Need ' + whole2(miss.short) + ' more ' + nm + ' in your backpack';
 }
 const forgeSpeedText = () => { const f = state.forge; return 'Forge speed x' + +f.rate.toFixed(2) + ': level ' + f.lv.speed + (f.frenzy ? ', frenzy x' + FORGE.FRENZY_FACTOR : ''); };
 const FORGE_UPG_DESC = {
@@ -734,16 +741,17 @@ function forgeView() {
   return {
     speed: forgeSpeedText(),
     slots: f.slots.map((j, i) => (j ? { i, mat: j.mat, name: matName(j.mat), progress: FORGE.progress(f, i, now), left: durTxt(FORGE.secsLeft(f, i, now)) } : { i, empty: true })),
-    recipes: FORGE.MATERIALS.filter((m) => state.col[m.recipe.kind] && state.col[m.recipe.kind].found).map((m) => {
-      const reason = startReason(m);
-      return { id: m.id, name: m.name, kind: m.recipe.kind, cost: m.recipe.qty + ' ' + pearlName(m.recipe.kind) + 's', time: durTxt(m.recipe.secs / f.rate), have: state.inv[m.recipe.kind] || 0, stock: f.stock[m.id] || 0, kept: isKept(m.recipe.kind), can: !reason, reason };
+    recipes: FORGE.MATERIALS.filter((m) => state.col[recipePearl(m)] && state.col[recipePearl(m)].found).concat(FORGE.ALLOYS.filter(alloyShown)).map((m) => {
+      const reason = startReason(m), kind = recipePearl(m);
+      const have = m.recipe.inputs.map((i) => (i.kind === 'pearl' ? whole2(state.inv[i.id] || 0) : whole2(f.stock[i.id] || 0) + ' ' + matName(i.id))).join(', ');
+      return { id: m.id, name: m.name, kind, alloy: !kind, cost: m.recipe.inputs.map(inputText).join(' + '), time: durTxt(m.recipe.secs / f.rate), have, stock: f.stock[m.id] || 0, kept: !!kind && isKept(kind), can: !reason, reason };
     }),
-    stock: FORGE.MATERIALS.filter((m) => f.stock[m.id] > 0).map((m) => ({ id: m.id, name: m.name, n: f.stock[m.id] })),
+    stock: FORGE.ALL.filter((m) => f.stock[m.id] > 0).map((m) => ({ id: m.id, name: m.name, n: f.stock[m.id] })),
     upg: Object.keys(FORGE.UPG).map((id) => { const u = FORGE.UPG[id], lvl = f.lv[id], maxed = lvl >= u.max, cost = maxed ? 0 : FORGE.upgCost(id, lvl);
       return { id, name: u.name, lvl, max: u.max, maxed, cost, can: !maxed && state.sparks >= cost, desc: FORGE_UPG_DESC[id](f) }; }),
   };
 }
-const materialLine = () => { const s = FORGE.MATERIALS.filter((m) => state.forge.stock[m.id] > 0); return s.length ? 'Your materials: ' + s.map((m) => m.name + ' ' + whole2(state.forge.stock[m.id])).join(', ') : 'No materials yet. The Forge makes them from pearls.'; };
+const materialLine = () => { const s = FORGE.ALL.filter((m) => state.forge.stock[m.id] > 0); return s.length ? 'Your materials: ' + s.map((m) => m.name + ' ' + whole2(state.forge.stock[m.id])).join(', ') : 'No materials yet. The Forge makes them from pearls.'; };
 let forgeSig = '';
 const fRows = { slots: [], recipes: [], upg: {} };
 function buildForgeUpg() {
@@ -771,11 +779,11 @@ function updateForge() {
     });
     $('fRecipes').innerHTML = ''; fRows.recipes = v.recipes.map((m) => {
       const r = document.createElement('div'); r.className = 'frec';
-      r.innerHTML = '<div class="frh"><canvas width="64" height="64" data-art="' + m.kind + '"></canvas><span class="frn">' + m.name + '</span><span class="frs"></span></div>' +
-        '<div class="frc"></div><small class="frw"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false">' + LOCK_SVG + '<span>Keep</span></button>' +
+      r.innerHTML = '<div class="frh"><canvas width="64" height="64"' + (m.alloy ? ' hidden' : ' data-art="' + m.kind + '"') + '></canvas><span class="frn">' + m.name + '</span><span class="frs"></span></div>' +
+        '<div class="frc"></div><small class="frw"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false"' + (m.alloy ? ' hidden' : '') + '>' + LOCK_SVG + '<span>Keep</span></button>' +
         '<button type="button" class="chip hot fstart" data-fstart="' + m.id + '">Start</button></div>';
       $('fRecipes').appendChild(r);
-      const cv = r.querySelector('canvas'); if (cv.getContext && spr.pearl[m.kind]) { const x = cv.getContext('2d'); x.drawImage(bigSprite(m.kind), -5, -5, 74, 74); }
+      const cv = r.querySelector('canvas'); if (!m.alloy && cv.getContext && spr.pearl[m.kind]) { const x = cv.getContext('2d'); x.drawImage(bigSprite(m.kind), -5, -5, 74, 74); }
       return { el: r, s: r.querySelector('.frs'), c: r.querySelector('.frc'), w: r.querySelector('.frw'), k: r.querySelector('.keepT'), b: r.querySelector('.fstart'), cache: {} };
     });
   }
@@ -784,7 +792,7 @@ function updateForge() {
   v.recipes.forEach((m, i) => {
     const r = fRows.recipes[i]; if (!r) return;
     setText(r, 's', r.s, m.stock ? m.stock + ' in stock' : '');
-    setText(r, 'c', r.c, m.cost + ' · ' + m.time + ' · you have ' + whole2(m.have));
+    setText(r, 'c', r.c, m.cost + ' · ' + m.time + ' · you have ' + m.have);
     setText(r, 'w', r.w, m.reason);
     r.b.disabled = !m.can; r.b.title = m.reason || 'Start ' + m.name;
     r.k.classList.toggle('on', m.kept); r.k.setAttribute('aria-pressed', String(m.kept)); setText(r, 'k', r.k.lastElementChild, m.kept ? 'Kept' : 'Keep');

@@ -25,7 +25,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     st.autoSell = true; st.col.blue.found = true; st.keep.blue = true; st.lv.lucky = 0;
     ok('a kept type that is not spawning says so', /^Blue Pearls are not spawning right now/.test(rec('blue_dust').reason), rec('blue_dust').reason);
     delete st.keep.blue;
-    ok('only discovered types have recipes', G.forgeView().recipes.map((r) => r.id).join() === 'rose_dust,blue_dust');
+    ok('only discovered types have recipes, then the alloys their dusts make', G.forgeView().recipes.map((r) => r.id).join() === 'rose_dust,blue_dust,rosegold', G.forgeView().recipes.map((r) => r.id).join());
 
     // the Keep toggle in the panel is the backpack's Keep state
     els.forge.hidden = false; G.updateForge();
@@ -36,7 +36,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
 
     // Start consumes the recipe
     st.inv.pearl = 150; st.invV.pearl = 300;
-    ok('Start is enabled with 150 kept Roses', rec('rose_dust').can && rec('rose_dust').reason === '' && rec('rose_dust').have === 150 && rec('rose_dust').time === '30s');
+    ok('Start is enabled with 150 kept Roses', rec('rose_dust').can && rec('rose_dust').reason === '' && rec('rose_dust').have === '150' && rec('rose_dust').time === '30s');
     clickIn(els.fRecipes, 'data-fstart', 'rose_dust');
     const v1 = G.forgeView();
     ok('Start takes exactly 100 Rose Pearls and fills slot 1', st.inv.pearl === 50 && v1.slots[0].mat === 'rose_dust' && v1.slots[0].left === '30s' && v1.slots[0].progress === 0, 'pearls 150 -> ' + st.inv.pearl);
