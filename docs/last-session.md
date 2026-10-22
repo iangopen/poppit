@@ -66,8 +66,10 @@ Item 3: Fresh Batch floor scaled by Flavors (floor x (1 + 0.1 x Flavors)), not a
 
 Item 4: duck off and duck on (not tuned against; the 4-minute target is the no-duck run)
 - no duck: casual 12.8 / 12.9 / 10.2 / 8.6 / 6.6 / 5.4; engaged 6.0 / 3.6 / 3.4 / 3.0 / 2.2 / 2.3
-- plain duck x1.4: casual 11.0 / 8.6 / 6.2 / 5.0 / 4.1 / 4.6; engaged 3.6 / 3.3 / 2.6 / 2.1 / 2.4 / 1.8
-- best duck x1.61: casual 8.9 / 7.4 / 4.6 / 5.1 / 4.8 / 2.9; engaged 2.7 / 2.8 / 2.2 / 1.9 / 2.1 / 1.7
+- plain duck x1.4: casual 11.0 / 8.6 / 6.2 / 5.0 / 4.1 / 4.6;
+  engaged 3.6 / 3.3 / 2.6 / 2.1 / 2.4 / 1.8
+- best duck x1.61: casual 8.9 / 7.4 / 4.6 / 5.1 / 4.8 / 2.9;
+  engaged 2.7 / 2.8 / 2.2 / 1.9 / 2.1 / 1.7
 - Under the floor:
   - plain duck: no casual cycle; every engaged cycle, by 0.4 to 2.2 min;
   - best duck: casual C6 by 1.1 min; every engaged cycle, by 1.2 to 2.3 min.
