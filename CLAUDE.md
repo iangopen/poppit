@@ -62,7 +62,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `awayShare` (`AWAY_SHARE` 0.5 × (1 + away)): `awayBonus()`;
   - `spawnEvery` is divided by (1 + spawn);
   - `forgeBonus`: `recalc()` passes it to `FORGE.setBonus`, which re-times running jobs.
-  - The payout line under the juice counter reads e.g. "Payouts x1.96 (Flavors 2 x1.4, artifacts x1.4)".
+  - The payout line under the juice counter reads e.g. "Payouts x1.68 (Flavors 2 x1.2, artifacts x1.4)".
 - **Keep** (`state.keep`, pearl type id → `true`):
   - A kept type covers its shiny stack too (`isKept(kind)` in `src/world.js`).
   - Its pops go to the backpack even with auto-sell on.
@@ -147,9 +147,10 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **Chain Reaction no longer exists.** `tests/econ32.test.js` fails if `src/` or `tools/` mention "chain" outside the save migration that refunds it.
   - the pearl roster: `PEARLS`, with hp, payout and spawn `cap`. **Payouts are derived:** each entry's table value is kept as `baseMult`, and `mult` = `baseMult × PAYOUT_STEEPNESS^rank` rounded to two significant figures (`PAYOUT_STEEPNESS = 1.5`, Rose is rank 0). This gives 1, 7.5, 27, 100, 350, 1,100, 4,000, 14K, 51K and 190K. Change the curve with the constant, not the table;
   - spawn weights (`NEW_BASE`, `typeWeight`);
-  - **the global dials**, the only levers the last rebalance moved: `COST_SCALE = 2.5`, Helpers base 45000, `COLLAPSE_MIN_RUN = 5e6`, and `collapseGain = floor(sqrt(run / COLLAPSE_GAIN_DIV))` with `COLLAPSE_GAIN_DIV = 1.25e6` (exactly 2 Flavors at the floor). `collapseReady` is unchanged;
+  - **the global dials** (2026-10-21): `COST_SCALE = 2.5`, Helpers base 45000, `COLLAPSE_MIN_RUN = 5e6` (not scaled by Flavors), and `collapseGain = floor(sqrt(run / COLLAPSE_GAIN_DIV))` with `COLLAPSE_GAIN_DIV = 1.25e6` (exactly 2 Flavors at the floor). `collapseReady` is unchanged;
+  - **the pacing dials** (2026-10-22, data only): `FLAVOR_BONUS` 0.1 (was 0.2), `UPG.black.base` 55,000 (was 60,000; level 1 costs 137,500) and `NEW_BASE.black` 0.8 (was 0.15). `NEW_BASE` is exported so the sim can override it. The sim variant `oldDials` replays the old values;
   - frenzy: `stats().frenzyNeed = 200 - 24 × Fuel` (4x the old 50 - 6 × Fuel). It lasts `FRENZY_SECS` (7 s). A tap adds 1 to the meter, a helper pop `HELPER_METER` (0.25). `src/world.js`, `src/ui.js` and the sim read these constants;
-  - `FLAVOR_BONUS = 0.2`: what each Flavor adds to every payout (`echoMult = 1 + FLAVOR_BONUS × echoes`);
+  - `FLAVOR_BONUS = 0.1`: what each Flavor adds to every payout (`echoMult = 1 + FLAVOR_BONUS × echoes`). The Fresh Batch text reads it ("Each Flavor adds 10% ..."), so it is never written as a literal;
   - **helpers:** `helperCanHit(kind, power)` (hp ≤ 3 × power) and `helperScore(kind, hpLeft, power)` (payout per remaining hit) are the helper's targeting rules. `stepAuto` in `src/world.js` and the sim both call them;
   - **away bonus rule:** `awayBonus()` pays 50% of `idleRate(S, pool, L, shinyOn)`, capped at 8 h. `idleRate` is `helperIdle(...).rate`, the steady state of helpers alone:
     - a type helpers cannot hit fills its cap, and `trySpawn` turns its share into Rose;
@@ -216,17 +217,17 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `tests/away.test.js`: runs the sim's checkpoints (about 15 s) and checks the away bonus against the measured helper-only hour. It `require`s `tools/sim32.js`, which runs its CLI only when called directly.
 - `npm run sim`: runs `tools/sim32.js`, the seeded pacing sim. It plays 6 Fresh Batch cycles for a casual and an engaged profile, and the output is identical run to run.
   - `--wait=25`: the player keeps going to minute 25 before pressing Fresh Batch.
-  - `--variant=NAME`: plays a tuning option (`scaledFloor`, `moreFlavors`, `moreTuneLevels`).
+  - `--variant=NAME`: plays a tuning option: `oldDials` (the dials before 2026-10-22), `scaledFloor` (floor × (1 + `FLAVOR_BONUS` × Flavors)), `moreFlavors`, `moreTuneLevels`, `flavor20`, `flavor5`, `pinkDuck`, `pinkDuckBest`. Variant levers: `minRun`, `gain`, `base`, `max`, `flavorBonus`, `newBase` (first-level spawn weights, set on `ECON.NEW_BASE` for the run and restored), `duck`, `artifacts`.
   - `--compare`: prints a summary of every variant.
   - `--log`: prints a per-mark pacing log.
-  - `--duck` (or `--variant=pinkDuck`): the player owns the Pink Duck from the start. By default no ducks are owned, and the output is then unchanged by artifacts.
+  - `--duck` (or `--variant=pinkDuck`): the player owns a plain Pink Duck (one Common copy, x1.4) from the start. `--duck=best` (or `pinkDuckBest`): the best-case duck, a Mythic copy with a top payout perk (+15%), x1.61; only payout is modelled. By default no ducks are owned. `DUCKS` in the sim holds both.
   - The report also prints "Rose collection for the Pink Duck": Rose pops per minute at the first helper, the first Fresh Batch and the last cycle, the minutes 10,000 take, what they would sell for, and the Rose share of income. The sim never actually keeps pearls.
   - Variants override levers inside the sim only. The sim's copies of the cost formulas are checked against `src/econ.js` at startup.
 
 ## State: real and verified (2026-10-21)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 31 econ unit tests, 14 artifacts unit tests, 21 forge unit tests, 8 page tests, 258 harness checks (`tests/reveal_tests.js` adds the panel, the reveal and the stash warning) and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
+- **Tests:** 32 econ unit tests (one pins the 2026-10-22 dials and the sim's two ducks), 14 artifacts unit tests, 21 forge unit tests, 8 page tests, 258 harness checks (`tests/reveal_tests.js` adds the panel, the reveal and the stash warning) and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
 - **Unique upgrades, Helpers and auto-sell (2026-10-18), checked in Chrome:**
   - a new game earns juice from pops with an empty backpack;
   - the Tools panel shows Wide Swing on the Steel Pin page and the muted line on the Awl page;
@@ -255,11 +256,14 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - the pool cards show `x… payout`;
   - no payout text in the book (all 10 pages) or on the pool cards overflows (`scrollWidth` ≤ `clientWidth`);
   - the only console messages were the favicon 404 and Chrome's autoplay notice.
-- **Balance (2026-10-21):** `docs/balance-report.md` is current. Pacing targets, with sim results (reference seeds):
-  - **First Fresh Batch:** target 11–13 min casual, 6–8 min engaged. Sim: **12.8** and **6.2** (before this change: 42.9 and 18.6).
-  - **First helper:** target 70–90% of the way to it. Sim: 11.4 min (**89%**) casual, 4.8 min (**77%**) engaged.
-  - **Cycles 2–6:** target shorter each time but never under 4 min. Sim: casual 10.8 / 7.7 / 6.6 / 5.9 / 5.8 (met). Engaged 3.5 / 3.1 / 3.1 / 2.1 / 2.4 (**missed**: see below).
-  - **No upgrade group maxed in run 1:** met by group (verb / Pearls & Marbles / tune). Per upgrade, 10 of 18 reach max (6 before).
+- **Balance (2026-10-22):** `docs/balance-report.md` is current. Pacing targets, with sim results (reference seeds, no duck):
+  - **First Fresh Batch:** target 11–13 min casual, 6–8 min engaged. Sim: **12.8** and **6.0** (6.2 before the Black change; the seed 1–8 averages are 12.8 and 5.4, against 12.7 and 5.6 before).
+  - **First helper:** target 70–90% of the way to it. Sim: 11.4 min (**89%**) casual, 4.8 min (**80%**) engaged.
+  - **Cycles 2–6:** target shorter each time but never under 4 min. Sim: casual 12.9 / 10.2 / 8.6 / 6.6 / 5.4 (none under 4, but C2 is 0.1 min longer than C1). Engaged 3.6 / 3.4 / 3.0 / 2.2 / 2.3 (**missed**: see Still open).
+  - **No upgrade group maxed in run 1:** met by group (verb / Pearls & Marbles / tune). Per upgrade, 10 of 18 (casual) and 9 of 18 (engaged) reach max.
+  - **Black earns in at least 3 of 6 cycles:** casual 4 (C2, C3, C4, C6), engaged 4 (C1–C4). Over seeds 1–8: 3.5 and 3.1 of 6.
+  - After six cycles: 19 Flavors (x2.9) for both profiles (15 x4.0 and 13 x3.6 before).
+  - With a duck from minute 0 (not tuned against): plain x1.4, casual 11.0 / 8.6 / 6.2 / 5.0 / 4.1 / 4.6 and engaged 3.6 / 3.3 / 2.6 / 2.1 / 2.4 / 1.8; best x1.61, casual 8.9 / 7.4 / 4.6 / 5.1 / 4.8 / 2.9 and engaged 2.7 / 2.8 / 2.2 / 1.9 / 2.1 / 1.7.
 - **Away bonus (2026-10-21):** one hour away against half of the measured helper-only hour is 0.89–1.04 at all 21 sim checkpoints. At the first Fresh Batch it pays 7.3M (casual) and 5.7M (engaged); the first version paid 84.2M and 67.3M. In the real game, a Ruby + Black pool with the Steel Pin makes helpers pop only Roses (harness check).
 
 - **Artifacts and Keep (2026-10-21), checked in headless Chrome** (the Chrome extension was not connected) at 1280×800 and 390×844:
@@ -281,7 +285,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - Two Rosegold jobs took 12 Rose Dust and 4 Blue Dust and no pearls; the Rose Lantern took the 2 Rosegold. The Blue Compass re-timed a running job from 30 s to 23.08 s left.
   - A Mint Clock with a +10% away perk raised a 1 h away bonus x1.3 (8,791 → 11,428).
   - In headless Chrome at 390×844: the Artifacts panel shows both halls with alloy cost lines, the forge lists Rosegold with "Need 1 more Blue Dust: make it in the forge", no overflow, no console errors.
-  - `npm run sim` and `--duck` print exactly what they printed before (an owned duck is one Common copy).
+  - `npm run sim` and `--duck` printed exactly what they printed before (an owned duck is one Common copy). The 2026-10-22 dials changed both since.
 - **Forge UI (2026-10-21), checked in headless Chrome at 390×844** (the extension was not connected), from a fresh profile:
   - with default settings, 100 Rose pops showed the Forge button, and Start read "Turn on Keep for Rose Pearls, or turn off auto-sell";
   - Keep from the panel turned the backpack row to Kept;
@@ -296,14 +300,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 
 - **Other tools' unique upgrades:** only the Steel Pin has one. The other five show "No special upgrade yet".
 - **Balance:**
-  - **Engaged later cycles drop under 4 min.** At the minimum 2 Flavors per batch (x1.4), engaged C2 is already 3.5 min, and a Flavor-scaled floor does not fix it (`scaledFloor` variant). It needs a lever outside the four global dials: a smaller multiplier per Flavor, or Fresh Batch costs that scale with Flavors.
-  - **First-run times are seed-sensitive.** Over seeds 1–8: casual 12.7 min (10.3–14.5), engaged 5.6 min (3.8–6.9). Casual runs about 2.3x engaged at every dial setting tried, wider than the 13 / 6 the bands allow; that comes from tap rate and skill.
-  - **Per-Flavor bonus: Ian to choose** 20% (now), 10% or 5%. The report's table has the numbers. 5% keeps engaged cycles at or over 4 min through C5, but Fresh Batch is then worth only x1.6–1.8 after six batches.
-  - **One type dominates income** (over 60%) in casual C3–C6 and engaged C6 (Opal, Ruby or Marble). Spawn weights were not retuned.
-  - **Black earns 0% when Fresh Batch is taken at once.** It unlocks 0.1–1.2 min before the floor (it costs 150K), and its 0.10% spawn share gives 0.02–0.29 expected Blacks per cycle. Played to minute 25, it earns 45–61%. Helpers can never hit it (it needs power 107; the best tool reaches 38). Options in the report, none applied: (A) a cheaper Black unlock, (B) a larger `NEW_BASE.black`.
+  - **Engaged later cycles drop under 4 min.** On the reference seeds engaged C2–C6 are 3.6 / 3.4 / 3.0 / 2.2 / 2.3. At 10% per Flavor with the old Black dials they were 4.5 / 4.2 / 3.4 / 2.9 / 3.0. Black pops end runs early by jumping run juice past the floor. Over seeds 1–8, 35 of 40 engaged later cycles are under 4 min (33 of 40 with the old Black dials). The Flavor-scaled floor (`scaledFloor`, 10%) changed nothing up to C4 and was not applied. Fixing it needs a non-data change: Fresh Batch costs that grow faster than the multiplier, or a gain curve that does not pay for overshoot.
+  - **Each cycle shorter:** missed by 0.1 min in casual C2 (12.9 against 12.8) and engaged C6 (2.3 against 2.2). That is within seed noise.
+  - **First-run times are seed-sensitive.** Over seeds 1–8: casual 12.8 min, engaged 5.4 min (old dials 12.7 and 5.6). Casual runs about 2.3x engaged, wider than the 13 / 6 the bands allow; that comes from tap rate and skill.
+  - **The first run moved for engaged** (6.2 → 6.0, inside its band). No Black combination that qualifies kept it at exactly 6.2, because more Black spawns shift run 1's random stream. The report has the whole grid.
+  - **Black now dominates income.** One Black pop is 70–93% of a cycle's income, so 10 of 12 cycles have one type over 60% (Black in 8 of them). Spreading income out would need Black's payout or the payout curve to change.
+  - **Black is still tap-only.** Helpers can never hit it (power 107 needed; the best tool reaches 38), so it earns nothing while away.
   - The sim always holds its best tool, so it uses Wide Swing only until it buys the Awl (about 1.7 min). A real player may switch back to the Steel Pin to sweep; nothing models that.
   - Fresh Batch cycles still shrink when Fresh Batch is taken at once.
-  - Flavors still explode when the player waits: x366 casual, x714 engaged after six 25-minute runs.
+  - **Flavors still explode when the player waits:** six 25-minute runs give 2,238 Flavors (x224.8) casual and 4,871 (x488.1) engaged, against 1,827 (x366) and 3,567 (x714) before. The multiplier is lower at 10%, but Black (79–87% of a long run's income) brings more Flavors. Only a gain-curve change would cap it.
   - The upgrade shelf empties early: `COST_SCALE` 2.5 maxes most tune upgrades in run 1. The `moreTuneLevels` sim variant halves that at about the same pacing.
 - **Offline progress:** not built as a feature. Only a simple away bonus exists (`awayBonus()`: half of what helpers alone would earn, capped at 8 h; see the away bonus rule above).
 - **Save sync between devices:** not built. Moving a save is manual (code or file). Tested only on desktop Chrome so far; iOS Safari `pagehide` and the clipboard on phones are not yet verified on a device.
@@ -325,13 +330,13 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
     - Before the retune a Mythic took 100 crafts and 1,000,000 Roses (76-211 h).
   - **Relics from scratch** (one slot, Forge Speed 0): Rosegold 740 pearls and 7 min, Azure Steel 370 and 13 min, Mintsilver 240 and 26 min. Rose Lantern 1,480 pearls and 14 min, Blue Compass 1,480 and 33 min, Mint Clock 850 and 65 min. Collecting the pearls takes far longer than the forge time.
   - The duck's x1.4 lives in one constant (`PINK_DUCK_PAYOUT`).
-  - The sim cannot keep or craft. `--duck` owns the duck from minute 0. At x1.4 the first Fresh Batch is 11.2 min casual and 3.6 min engaged on the reference seeds (12.8 and 6.2 without).
-    - Over seeds 1-8 the means are 9.9 and 4.0 min (12.7 and 5.6 without, 10.6 and 4.7 at x1.25).
-    - Single seeds are noisy: casual seed 1 reads 8.9 min at x1.25 but 11.2 min at x1.4.
-  - **Collecting the duck's 10,000 Rose Pearls** (sim, no duck) takes 102, 59 and 45 min of play casual, and 127, 49 and 76 min engaged, at the first helper, the first Fresh Batch and cycle 6. That is far longer than a run, so the stash builds over several Fresh Batches.
+  - The sim cannot keep or craft. `--duck` owns a plain duck from minute 0 and `--duck=best` a x1.61 one. On the 2026-10-22 dials the first Fresh Batch is 11.0 / 3.6 min (plain) and 8.9 / 2.7 min (best), casual / engaged, against 12.8 / 6.0 without.
+    - With the plain duck, no casual cycle is under 4 min, and every engaged cycle is (by 0.4–2.2 min). With the best duck, casual C6 is under (by 1.1 min) and every engaged cycle is (by 1.2–2.3 min). The 4-minute target applies to the no-duck run.
+    - Before 2026-10-22, over seeds 1-8 the plain duck's first-run means were 9.9 and 4.0 min. Single seeds are noisy.
+  - **Collecting the duck's 10,000 Rose Pearls** (sim, no duck, 2026-10-22 dials) takes 102, 59 and 53 min of play casual, and 127, 58 and 63 min engaged, at the first helper, the first Fresh Batch and cycle 6. That is far longer than a run, so the stash builds over several Fresh Batches.
     - Selling them would have paid 0.44M-1.5M juice, but Roses are only 0.2-0.6% of income at those points, so keeping costs almost nothing per minute.
     - Measured with every type pooled; a Rose-only pool would collect faster.
-    - **Some rows look odd.** With the duck, casual cycle 6 takes 85 min and engaged's first Fresh Batch 96 min, against 45 and 49 without it. Each row is one 60-second window from a single seed (frenzy, the board fill and the pearl mix at that moment all move it), so single rows are noisy. Averaging several windows or seeds would be needed before using them for tuning.
+    - **Some rows look odd** (measured on the 2026-10-21 dials). With the duck, casual cycle 6 takes 85 min and engaged's first Fresh Batch 96 min, against 45 and 49 without it. Each row is one 60-second window from a single seed (frenzy, the board fill and the pearl mix at that moment all move it), so single rows are noisy. Averaging several windows or seeds would be needed before using them for tuning.
   - Spending that lasts across Fresh Batches is still the natural fix for the empty late-game shelf.
 - **Forge:** the engine and panel are built, with two tiers (dusts, alloys).
   - Only three alloys exist, and only the relics use them. Dusts other than Rose, Blue, Mint and Golden have no use yet.

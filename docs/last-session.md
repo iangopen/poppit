@@ -1,135 +1,129 @@
-Poppit session summary, 2026-10-22: the retune, the Artifacts panel, the shelf and the roll reveal
+Poppit session summary, 2026-10-22: pacing dials (10% Flavors, Black Pearls, the artifact stack)
 
-Rolls are now strong enough to be worth watching, and the panel shows them. Crafting
-again is cheaper for the duck, and every craft opens a full-screen reveal. Owned cards
-show the copy on the pedestal and a shelf of the others, each with a Place button.
-The forge warns before Rose Dust eats the duck's stash. Everything is pushed.
+Three data values changed. Flavors add 10% each instead of 20%. Black Pearls cost 55,000
+base instead of 60,000, and their first-level spawn weight is 0.8 instead of 0.15. The
+Fresh Batch floor did not change. Black now earns in 4 of 6 cycles for both profiles.
+The engaged 4-minute floor still misses. Casual's first run stays at 12.8 min, but
+engaged's moved from 6.2 to 6.0 min; see "Where I could not meet the brief".
+Everything is pushed.
 
 Verification
 - npm run build: built index.html
-- Econ unit tests: 31 of 31 pass
-- Artifacts unit tests: 14 of 14 pass (1 new: the retune; 2 rewritten for repeat costs)
+- Econ unit tests: 32 of 32 pass (1 new: pins the new dials and the sim's two ducks)
+- Artifacts unit tests: 14 of 14 pass
 - Forge unit tests: 21 of 21 pass
 - Page tests: 8 of 8 pass
-- Harness: 258 checks, ALL PASSED (30 new, in tests/reveal_tests.js)
-- Away-bonus sim tests: 2 of 2 pass
-- npm run sim, twice: the two outputs are identical, and identical to the output saved
-  before last session. --duck is unchanged too. The sim never crafts, so the retune
-  cannot move it.
-- New harness checks cover what you listed:
-  - Craft another costs 2,500 (base x repeatFactor) and the card says so;
-  - the disabled reason names what is missing (pearls, Keep, or an alloy);
-  - the odds hint equals the rarity table, and changes when the table changes;
-  - Place on the shelf swaps the active copy, and the pedestal line follows;
-  - the reveal opens for Common, Rare, Epic and Mythic, with perks one by one;
-  - a tap skips, a second tap closes, Escape closes, Place on pedestal works;
-  - the first copy places itself, and its reveal has no Place button;
-  - the stash warning appears and disappears at each threshold, and never blocks.
-- Fixes on the way: no test failed. In Chrome, Mythic particles made the reveal card
-  measure 371 px wide inside 352 px (clipped, not visible). I cut the particle travel to
-  at most 145 px, and it measured clean.
+- Harness: 258 checks, ALL PASSED (the payout-line check now reads x1.68, Flavors x1.2)
+- Away-bonus sim tests: 2 of 2 pass. All 24 sim checkpoints read 0.88 to 1.04 (target
+  0.85 to 1.15).
+- npm run sim, twice: the two outputs are identical.
+- The sim variant oldDials reproduces last report's baseline byte for byte.
 
-Item 1: the retune (data plus one rule)
-- Rarity: Common 55%, Rare 30%, Epic 12%, Mythic 3%.
-- Perk values: Rare x1, Epic x1.5, Mythic x2.5.
-- Caps: payout 20%; shiny, frenzy, away and forge 40%; spawn 20%.
-- New rule: repeatFactor. Later crafts cost base x repeatFactor x costGrowth^(copies - 1).
-  The Pink Duck is 0.25 (10,000, then 2,500 each). Every relic is 1.
-- Saves: no clamp or test needed fixing for the caps. Old values are below the new caps,
-  and a test loads a save at the old caps unchanged. No save version change.
-- Expected duck payout per craft: Common x1.400, Rare x1.409, Epic x1.428,
-  Mythic x1.470. All crafts x1.408. A Monte Carlo of 1,000,000 rolls gives x1.4082.
-- With a payout perk: Rare x1.456, Epic x1.484, Mythic x1.540.
-- Best-case duck: x1.610 (x1.4 with a top Mythic payout perk of +15%).
-  No top roll reaches a cap; the caps only clamp loaded saves.
+Where I could not meet the brief
+- The first Fresh Batch is 12.8 min casual (unchanged) and 6.0 min engaged (was 6.2).
+- No Black combination that passes item 2 keeps engaged at exactly 6.2. Spawning more
+  Blacks shifts the seeded random stream inside run 1, even though Black unlocks after it.
+- 6.0 is inside the 6 to 8 band that item 2 allows. Over seeds 1 to 8 the engaged mean
+  is 5.4 min (5.6 before), casual 12.8 (12.7 before).
+- Only 45,000 with the old weight kept 12.8 / 6.2 exactly. Black then earned in only
+  2 and 1 cycles.
 
-Getting a Mythic duck (same Rose rates as last time: 98, 170, 220 per min casual;
-79, 205, 131 per min engaged, at the first helper, first Fresh Batch and cycle 6)
-- One Mythic: 33.3 crafts on average, 90,833 Rose Pearls (10,000 + 32.3 x 2,500).
-  - casual: 927 min (15.4 h), 534 min (8.9 h), 413 min (6.9 h);
-  - engaged: 1,150 min (19.2 h), 443 min (7.4 h), 693 min (11.6 h).
-- A Mythic with a payout perk: 66.7 crafts, 174,167 Rose Pearls.
-  - casual: 1,777 min (29.6 h), 1,025 min (17.1 h), 792 min (13.2 h);
-  - engaged: 2,205 min (36.7 h), 850 min (14.2 h), 1,330 min (22.2 h).
-- Before: 100 crafts and 1,000,000 Roses for a Mythic (76 to 211 h).
+Item 1: 10% per Flavor (old Black dials, six cycles)
+- casual: 12.8 / 13.4 / 6.7 / 8.0 / 8.8 / 7.1 min (at 20%: 12.8 / 10.8 / 7.7 / 6.6 / 5.9 / 5.8)
+- engaged: 6.2 / 4.5 / 4.2 / 3.4 / 2.9 / 3.0 min (at 20%: 6.2 / 3.5 / 3.1 / 3.1 / 2.1 / 2.4)
 
-One full run through the harness (tests/relic_tests.js "run:" lines)
-- Craft 1: Rose Pearls 20,500 -> 10,500, Common, on the pedestal; a Rose pop 2.04 -> 2.86.
-- Craft 2 (a repeat): 10,500 -> 8,000. Mythic: payout +10%, shiny +25%, frenzy +25%.
-- Swap to it: a Rose pop 2.86 -> 3.14 (x1.100); shiny chance 0.500% -> 0.625%.
-- The rest (alloys, relics, Compass re-timing, away bonus) behaves as before.
+Item 2: Black Pearls
+- Base cost alone, weight 0.15 (first run casual / engaged; cycles with Black income):
+  - 45,000: 12.8 / 6.2; 2 and 1 cycles. Fails: too few.
+  - 35,000: 14.2 / 5.9; 1 and 0. Fails: both first runs out of band.
+  - 28,000: 13.5 / 6.8; 1 and 3. Fails: casual out of band.
+- So I also raised NEW_BASE.black, over a grid of 7 bases x 7 weights (in the report).
+  Black's share is all or nothing per cycle: one pop is 70 to 98% of that cycle.
+- Of your three bases, only 35,000 with weight 1.2 passes: first run 12.9 / 6.5, and Black
+  takes 77% and 58% of all income over 8 seeds.
+- Chosen: base 55,000 with weight 0.8. It is the smallest lowering that passes.
+  - Reference seeds: first run 12.8 / 6.0; Black earns in 4 and 4 cycles.
+  - Over seeds 1 to 8: 3.5 and 3.1 of 6 cycles.
+- Black's income share per cycle (C1..C6, %):
+  - casual: 0 / 80.7 / 86.3 / 92.9 / 0 / 86.7
+  - engaged: 71.6 / 79.2 / 87.3 / 86.2 / 0 / 0
+  - before: 0 in every cycle for both.
 
-Headless Chrome, 390x844, fresh profile (the Chrome extension was not connected)
-- Rolls were forced by the test script, which swapped Math.random in the page for one
-  click. Game code never seeds anything.
-- Common reveal (the first copy): grey frame, small glow, 8 particles, "No perks",
-  "Placed on your pedestal: Every payout x1.4, for good." and one Nice! button.
-- Rare: blue, 16 particles, "Payouts +4%", "Payouts x1.456 vs your current x1.4".
-- Epic: violet, 28 particles, "Shiny chance +16.5%" then "Away bonus +18%", with
-  a compare line for each.
-- Mythic: orange, 44 particles, three perks (payouts +14%, frenzy length +32.5%,
-  forge speed +36.3%); "Payouts x1.596 vs your current x1.4; ...".
-- 150 ms in, no perk had shown yet on Rare, Epic or Mythic; all showed by 2.6 s.
-- Tab, Tab, Shift+Tab: focus went Keep, Place, Keep (trapped). Escape closed the reveal
-  and left the panel open. A backdrop tap skipped a running reveal, and a second closed it.
-- Owned card with a shelf: orange Mythic frame, the duck on a pedestal, an
-  "On pedestal" badge, its perks, "Next copy costs 2,500", Craft another, and a shelf of
-  4. Each shelf row says what placing it changes.
-- Shelf Place on the Epic copy: the pedestal line went from "Payouts x1.596, Frenzy length
-  +32.5%, Forge speed +36.3%" to "Payouts x1.4, Shiny chance +16.5%, Away bonus +18%".
-- Hall of Relics tab: lantern, compass and clock icons at 96 px, alloy cost lines
-  ("2 of 2 Azure Steel", "1 of 1 Rosegold"), reasons such as
-  "Need 1 more Rosegold: make it in the forge".
-- Forge: the Rose Dust row read "Uses 100 of your 4,200 kept Rose Pearls (the Pink Duck
-  needs 10,000)", and Start stayed enabled.
-- With prefers-reduced-motion: every perk showed at once, with no particles.
-- Overflow: scrollWidth equalled clientWidth (390) for the page. No element in the reveal,
-  the Artifacts panel or the Forge panel was wider than its box, in any state.
-- Console: only the favicon 404.
-- Screenshots are in the session scratchpad under shots/: reveal-common-390.png,
-  reveal-rare-390.png, reveal-epic-390.png, reveal-mythic-390.png, card-shelf-390.png,
-  card-shelf2-390.png, relics-tab-390.png, forge-stash-390.png, and -calm versions.
+Final numbers (npm run sim, reference seeds, Fresh Batch taken at once, no duck)
+- casual: first Fresh Batch 12.8 min; cycles 12.8 / 12.9 / 10.2 / 8.6 / 6.6 / 5.4;
+  19 Flavors, payout x2.9 after six cycles (was 15, x4.0).
+- engaged: first Fresh Batch 6.0 min; cycles 6.0 / 3.6 / 3.4 / 3.0 / 2.2 / 2.3;
+  19 Flavors, payout x2.9 (was 13, x3.6).
+- Black earning makes engaged runs shorter: a Black pop jumps run juice past the floor.
+  Over 8 seeds, 35 of 40 engaged later cycles are under 4 min (33 of 40 without Black).
+
+Item 3: Fresh Batch floor scaled by Flavors (floor x (1 + 0.1 x Flavors)), not applied
+- unscaled: casual 12.8 / 12.9 / 10.2 / 8.6 / 6.6 / 5.4; engaged 6.0 / 3.6 / 3.4 / 3.0 / 2.2 / 2.3
+- scaled: casual 12.8 / 12.9 / 10.2 / 8.6 / 7.2 / 5.5; engaged 6.0 / 3.6 / 3.4 / 3.0 / 2.5 / 2.2
+- Not applied: engaged C2 is 3.6 min, under 4, and C6 is not shorter than C5.
+- It barely acts. Runs end on a big pop that clears the scaled floor too, so C1 to C4 are
+  identical; a 20% scale gave the same times. The first run cannot move (0 Flavors).
+
+Item 4: duck off and duck on (not tuned against; the 4-minute target is the no-duck run)
+- no duck: casual 12.8 / 12.9 / 10.2 / 8.6 / 6.6 / 5.4; engaged 6.0 / 3.6 / 3.4 / 3.0 / 2.2 / 2.3
+- plain duck x1.4: casual 11.0 / 8.6 / 6.2 / 5.0 / 4.1 / 4.6; engaged 3.6 / 3.3 / 2.6 / 2.1 / 2.4 / 1.8
+- best duck x1.61: casual 8.9 / 7.4 / 4.6 / 5.1 / 4.8 / 2.9; engaged 2.7 / 2.8 / 2.2 / 1.9 / 2.1 / 1.7
+- Under the floor:
+  - plain duck: no casual cycle; every engaged cycle, by 0.4 to 2.2 min;
+  - best duck: casual C6 by 1.1 min; every engaged cycle, by 1.2 to 2.3 min.
+- New flags: --duck (plain, x1.4) and --duck=best (Mythic, top payout perk, x1.61).
+
+Item 5: waiting to minute 25 (report only)
+- casual: 2,238 Flavors, x224.8 after six cycles (before: 1,827, x366)
+- engaged: 4,871 Flavors, x488.1 (before: 3,567, x714)
+- The multiplier is about a third lower. Black, now 79 to 87% of a long run's income,
+  brings more Flavors. Flavors still explode with waiting.
+
+Targets from the report (new dials, reference seeds)
+- First Fresh Batch 11-13 casual, 6-8 engaged: 12.8 and 6.0. Met.
+- First Fresh Batch unchanged at 12.8 / 6.2: casual met; engaged not met (6.0).
+- First helper 70-90% of the way: 89% casual, 80% engaged. Met.
+- No upgrade group maxed in run 1: met by group.
+  - Read per upgrade: not met (10 and 9 of 18 reach max).
+- Each later cycle shorter: not met. Casual C2 is +0.1 min, engaged C6 is +0.1 min.
+- No cycle under 4 min (no duck): casual met (shortest 5.4); engaged not met (C2 to C6
+  are 2.2 to 3.6).
+- Black earns in at least 3 of 6 cycles: met (4 and 4).
 
 Choices I made without asking
-- Halls are tabs (Hall of Ducks, Hall of Relics), not stacked sections. At 390 px there
-  is little room, so the tabs stay fixed, and the pedestal line, notes and cards scroll
-  together.
-- Rarity colours: Common grey, Rare blue, Epic violet, Mythic orange. Text uses a darker
-  shade of each, for contrast on white.
-- The odds hint shows on every card, owned or not, since the first craft rolls too.
-- A shelf lists copies best rarity first, and scrolls inside the card past 260 px.
-- The reveal's compare line compares with the copy that was on the pedestal before the
-  craft, for each stat that differs. Payout reads as a total (x1.596), others as +%.
-- A tap on a finished reveal closes it and keeps the copy on the shelf, like Escape.
-- Focus starts on Place on pedestal (Nice! for a first copy) and returns afterwards.
-- Perks appear at 0.7 s, then every 0.55 s, driven by the game loop. Particles use fixed
-  angles, so the reveal never draws on Math.random.
-- The chime is a rising arpeggio of 3, 5, 7 or 9 notes using the existing synth, so the
-  Sound setting mutes it. Each perk ticks as it appears. The shatter sound and the craft
-  toast are gone from crafting; the reveal replaces them.
-- The stash warning shows when a Start would leave fewer Roses than the duck's next
-  craft needs, and only when you have enough to start. That covers "the duck is still
-  unaffordable" and also "this Start would make it unaffordable". It names the next
-  craft's cost, so 2,500 once a duck is owned.
-- "Kept" appears in the warning only when Rose Pearls are kept.
+- Item 2's band rule (11-13 / 6-8) won over the exact 12.8 / 6.2, which no passing option
+  could hold.
+- I tried bases outside your list (60,000, 55,000, 50,000, 40,000) and weights up to 1.2.
+  I chose 55,000 / 0.8 over 35,000 / 1.2 (the one passing base on your list). It moves the
+  first run less, and Black dominates income less.
+- 60,000 with weight 1.0 also passed, but it does not unlock Black earlier, which was the
+  point of option A.
+- I checked every candidate over seeds 1 to 8, not only the reference seeds.
+- The best-case duck models payout only (x1.61). A real Mythic also has two other perks.
+- The sim's scaledFloor now follows FLAVOR_BONUS; flavor10 became flavor20 (old value).
+  A new oldDials variant replays the old dials.
+- The sim's newBase lever writes ECON's own NEW_BASE table for the run and restores it.
+  ECON now exports NEW_BASE.
+- The Fresh Batch text now reads "Each Flavor adds 10%" from the constant; it was a
+  hard-coded "20%".
+- The payout table, hits per type, COST_SCALE and the Fresh Batch floor are unchanged.
 
 Commits (pushed to main)
-- Retune artifact rolls. It was built and tested alone (the panel work was stashed).
-- Artifacts panel: tabs, relic icons, owned cards, shelf, Craft another, reveal, warning.
-- Harness: panel, shelf, reveal and stash warning checks.
+- Sim: newBase lever, --duck=best, oldDials and pinkDuckBest variants. Checked to leave
+  npm run sim unchanged at that commit.
+- Pacing dials: 10% Flavors, Black base 55,000 and weight 0.8, the Fresh Batch text, tests.
+- docs/balance-report.md regenerated.
 - CLAUDE.md and this file.
 
 Still open
-- No second duck; the Hall of Ducks has one card.
-- Dusts other than Rose, Blue, Mint and Golden have no use yet.
-- Relic icons are first drawings and could be polished.
-- The shelf has no sell, scrap or sort option, and grows by one row per craft.
-- Untuned beyond this retune: the alloy recipes, the relic costs and bonuses. No sim
-  models crafting.
-- Not checked on a real phone: the reveal, its focus trap, the chime and the panels.
-- Still open from earlier sessions:
-  - the per-Flavor bonus;
-  - a Black Pearl option;
-  - one pearl type dominating income in some cycles;
-  - engaged cycles under 4 minutes;
-  - the noisy Rose collection rows.
+- Engaged later cycles run under 4 min (2.2 to 3.6). This needs a non-data change:
+  Fresh Batch costs growing faster than the multiplier, or a gain curve that does not
+  pay for overshoot.
+- Black now dominates income: one pop is 70 to 93% of a cycle, and 10 of 12 cycles have
+  one type over 60%.
+- Black is tap-only (helpers need power 107), so it earns nothing while away.
+- Flavors still explode when the player waits (x224.8 and x488.1).
+- Casual runs about 2.3x engaged, wider than the bands allow (tap rate and skill).
+- With a duck, every engaged cycle runs under 4 min, by design not tuned against.
+- No second duck; most dusts have no use; relic icons are first drawings.
+- Not checked on a real phone.
