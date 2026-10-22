@@ -2,6 +2,8 @@
 
 Date: 2026-10-21. Status: implemented in the same session; for Ian's review.
 
+Later the same day, owned artifacts became copies (craft again, one active copy on a pedestal, rarity rolls with perks), a Hall of Relics was added, and saves moved to version 6. CLAUDE.md describes the current model; the "owned or not" rules below are the original design.
+
 ## Goal
 
 Add permanent items (artifacts) that the player crafts by spending kept pearls. Artifacts are grouped in themed halls. This session ships the first hall, the Hall of Ducks, and its first duck, the Pink Duck. The forge (crafting materials) comes later; the data model leaves room for it, and nothing of it is built.

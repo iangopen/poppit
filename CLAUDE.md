@@ -23,18 +23,45 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - then `src/tail.html`
   - The JS files share one scope inside the page, so later files use earlier files' top-level names.
   - `tests/harness32.js` repeats this list. Keep the two lists in step with `tools/build.js`.
-- **`src/artifacts.js`** (`ARTS`) holds artifacts, pure with no DOM. It comes first in the concat order because `econ.js` uses it; under node, `econ.js` `require`s it. Design note: `docs/superpowers/specs/2026-10-21-artifacts-hall-of-ducks-design.md`.
-  - `HALLS`: `{ id, name, blurb }` in display order. Today only `ducks` (Hall of Ducks).
-  - `ARTIFACTS`: `{ id, hall, name, description, cost: [{ kind, qty }], bonus: { type, value } }`.
-    - `kind` is an inventory key: a pearl id now, a forge material later. Only normal stacks count, so a shiny Rose (`pearl:s`) is not a Rose Pearl for crafting.
-    - The only bonus type is `payout`: every payout × value.
-  - **Pink Duck:** `pink_duck` in hall `ducks`, costs 10,000 `pearl` (Rose), payout × `PINK_DUCK_PAYOUT` (1.4 since 2026-10-21, was 1.25; one constant).
-  - `canCraft(id, inv, owned)`: false if the artifact is unknown, owned or short.
-  - `craft(id, inv, owned, invV)`: spends exactly the cost and the same share of the stack's stored value, marks it owned, and returns true. Otherwise it changes nothing.
-  - `payoutMult(owned)`: the product of the owned payout bonuses.
-  - Owned artifacts are `state.artifacts` (`id: true`). Add an artifact by adding a table entry and, for its card, an icon in `ART_ICON` (`src/ui.js`). Add a hall by adding a `HALLS` entry.
-  - `stats().artMult = payoutMult(st.artifacts)`. `popValue()` and `helperIdle()` multiply by it, so taps, helpers, shinies, frenzy, auto-sell, backpack value and the away bonus all get it.
-  - The payout line under the juice counter (`payoutLine()`) shows the total and its parts, e.g. "Payouts x1.96 (Flavors 2 x1.4, ducks x1.4)".
+- **`src/artifacts.js`** (`ARTS`) holds artifacts, pure with no DOM. It comes first in the concat order because `econ.js` uses it; under node, `econ.js` `require`s it. Design note: `docs/superpowers/specs/2026-10-21-artifacts-hall-of-ducks-design.md` (the copy model below replaced its "owned or not").
+  - `HALLS`: `{ id, name, blurb }` in display order: `ducks` (Hall of Ducks) and `relics`, named by `RELIC_HALL_NAME` ("Hall of Relics", one string).
+  - `ARTIFACTS`: `{ id, hall, name, description, cost: [{ kind, qty } | { kind: 'material', id, qty }], costGrowth, bonus: { type, value } }`.
+    - A pearl cost line's `kind` is a pearl id; only normal stacks count, so a shiny Rose (`pearl:s`) is not a Rose Pearl. A material line spends dusts or alloys from `state.forge.stock`.
+    - **costGrowth** (default 1): each craft costs `ceil(qty × costGrowth^copies owned)` (`craftCost`). Every artifact is 1 today, so costs are flat.
+    - `bonus.value` is a multiplier. Payout bonuses multiply; every other stat adds `value - 1`.
+  - **Pink Duck:** `pink_duck`, hall `ducks`, 10,000 `pearl` (Rose) per craft, payout × `PINK_DUCK_PAYOUT` (1.4; one constant).
+  - **Hall of Relics** (alloys only, utility only, untuned):
+    - Rose Lantern: 2 Rosegold; frenzy meter fills 25% faster (`meter` x1.25).
+    - Blue Compass: 2 Azure Steel + 1 Rosegold; forge speed x1.3.
+    - Mint Clock: 2 Mintsilver + 1 Azure Steel; away bonus x1.2.
+    - Relics are assembled at the hall, instantly, like the duck. The forge makes only dusts and alloys.
+  - **Copies and the pedestal.** `state.artifacts` is `{ <artifact id>: { copies: [{ id, art, rarity, perks: [{ stat, value }] }], active: <copy id> } }`.
+    - Copy ids are whole numbers, unique across all artifacts (`nextId` = highest + 1).
+    - Every craft adds a copy, owned or not. The first copy of an artifact goes on the pedestal (`active`) by itself; later copies never replace it.
+    - `setActive(arts, id, copyId)` swaps freely, at any time, for nothing. The game hook is `setActiveCopy(id, copyId)` in `src/ui.js` (recalc, refresh, save). No panel calls it yet.
+    - **Only the active copy counts:** its artifact's base bonus plus its perks.
+  - **Rolls** (`roll(rng)`, the rng is injectable; the game uses `Math.random`). The result is stored in the copy, so a load never re-rolls.
+    - `RARITIES`: Common 70% (0 perks), Rare 22% (1), Epic 7% (2, values x1.25), Mythic 1% (3, values x1.6).
+    - `PERKS` (value = added fraction, rolled in min..max, times the rarity's range, never above cap; a copy's perks are distinct stats):
+      - payout 0.02-0.06, cap 0.10 (payouts × (1 + value));
+      - shiny 0.05-0.15, cap 0.25 (shiny chance × (1 + sum));
+      - frenzy 0.05-0.15, cap 0.25 (frenzy length);
+      - away 0.05-0.15, cap 0.25 (away bonus rate);
+      - forge 0.05-0.15, cap 0.25 (forge speed);
+      - spawn 0.03-0.08, cap 0.12 (spawn rate).
+  - `activeBonuses(arts)` is the one function that sums active bonuses: `payout` as one multiplier (the duck's x1.4 times every active payout perk), and `shiny`, `frenzy`, `away`, `forge`, `spawn`, `meter` as added fractions. `payoutMult(arts)` is its payout.
+  - `canCraft(id, inv, arts, stock)`; `craft(id, inv, arts, invV, stock, rng)` spends exactly `craftCost` (and the same share of a pearl stack's stored value) and returns the new copy, or `null` and changes nothing.
+  - `fromSave(d)` clamps a loaded `artifacts`: unknown artifact ids, copies with an unknown rarity or a bad or repeated id are dropped; perks keep known, distinct stats, at most the rarity's count, values clamped to min..cap; an `active` that is not an owned copy falls back to the first copy.
+  - Add an artifact with a table entry and, for its card, an icon in `ART_ICON` (`src/ui.js`). The relics have no icon yet.
+- **Where the active bonuses land:** `stats()` calls `activeBonuses` once and every reader goes through `S`:
+  - `artMult` (payout): `popValue()` and `helperIdle()`, so taps, sweeps, helpers, shinies, frenzy, auto-sell, backpack value and the away bonus;
+  - `shinyBonus`: `shinyChance(L, bonus)` in spawning (`src/world.js`), the shop and pool text, and `helperIdle`;
+  - `frenzySecs` (`FRENZY_SECS × (1 + frenzy)`): `startFrenzy`, the meter bar and `helperIdle`;
+  - `meterMult`: every meter fill (tap 1, helper `HELPER_METER`) and `helperIdle`;
+  - `awayShare` (`AWAY_SHARE` 0.5 × (1 + away)): `awayBonus()`;
+  - `spawnEvery` is divided by (1 + spawn);
+  - `forgeBonus`: `recalc()` passes it to `FORGE.setBonus`, which re-times running jobs.
+  - The payout line under the juice counter reads e.g. "Payouts x1.96 (Flavors 2 x1.4, artifacts x1.4)".
 - **Keep** (`state.keep`, pearl type id → `true`):
   - A kept type covers its shiny stack too (`isKept(kind)` in `src/world.js`).
   - Its pops go to the backpack even with auto-sell on.
@@ -42,21 +69,30 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - The toggles are rows in the backpack's "Keep for crafting" list: one per discovered type, shown even with nothing held. Kept stacks carry a small padlock.
 - **Artifacts panel** (`#arts`, `updateArts()`): a large panel like Pool, with one section per hall and one card per artifact.
   - A card shows "x of 10,000 Rose Pearls kept" with a bar, and a Craft button, disabled until affordable, then "Owned".
-  - The dock button (`#artBtn`, an inked duck) shows once Rose Pearls popped in total (normal + shiny) reach 100, or once an artifact is owned.
+  - One section per hall, so the Hall of Relics shows with no new code. Relic cards show alloy cost lines ("1 of 2 Rosegold").
+  - An owned artifact's card still shows "Owned" and the next craft's cost. The craft-again button, the pedestal swap and the roll reveal are the next session.
+  - The Craft toast names the rolled rarity, e.g. "Pink Duck crafted (Rare)!".
+  - The dock button (`#artBtn`, an inked duck) shows once Rose Pearls popped in total (normal + shiny) reach 100, or once any copy is owned.
   - **Gated dock buttons** use one table, `DOCK_GATES` in `src/ui.js`, keyed by `PANEL_BTN` panel ids (`arts`, `forge`), and `syncDock()` checks them every HUD tick. While a gated button shows, the stage carries its id as a class (`#stage.arts`, `#stage.forge`), which moves the bottom bar right on wide screens.
   - The dock order is pack, tools, book, Artifacts (202 px), Forge (258 px).
-- **`src/forge.js`** (`FORGE`) is the forge engine: pure, no DOM, every number is data. This session built the engine only; there is no panel yet.
-  - `MATERIALS`: one per pearl type, in roster order, `{ id, name, recipe: { kind, qty, secs } }`.
+- **`src/forge.js`** (`FORGE`) is the forge engine: pure, no DOM, every number is data.
+  - Recipes are `{ inputs: [{ kind: 'pearl' | 'material', id, qty }], secs }`. Both tiers are just recipes: jobs, slots, speed, Strike, offline finish and the save format are the same.
+  - `MATERIALS` (dusts): one per pearl type, in roster order, each with one pearl input.
     - Rose Dust (100 Rose, 30 s), Blue Dust (70, 1 min), Mint (45, 2 min), Golden (30, 4 min), Violet (20, 8 min).
     - Coral (14, 16 min), Marble (10, 32 min), Opal (7, 64 min), Ruby (5, 2 h 8 min), Black Dust (3 Black, 4 h 16 min).
     - The quantity falls and the time doubles per position; tests hold those two rules, not the exact numbers.
-  - Forge state is `state.forge = { slots, stock, lv: { speed, slot }, rate, frenzy, strikes }`. The last three are live only and never saved.
-  - A job is `{ mat, start, end }` in ms (`Date.now()`). `start()` takes the recipe's normal pearls at once (and their share of `invV`).
+  - `ALLOYS` (untuned): Rosegold (6 Rose Dust + 2 Blue Dust, 2 min), Azure Steel (4 Blue Dust + 2 Mint Dust, 5 min), Mintsilver (4 Mint Dust + 2 Golden Dust, 10 min).
+  - `ALL` = dusts then alloys. Alloys sit in the same `stock` as dusts; `byId`, `fromSave`, the stock line and `costText` cover both.
+  - `missing(f, matId, inv)`: the first short input `{ kind, id, qty, have, short, name }` (name set for materials), or null. `canStart` uses it.
+  - `fromScratch(matId)`: the pearls and serial forge seconds behind a material at rate 1 (used for the reports).
+  - Forge state is `state.forge = { slots, stock, lv: { speed, slot }, rate, frenzy, bonus, strikes }`. The last four are live only and never saved.
+  - A job is `{ mat, start, end }` in ms (`Date.now()`). `start()` takes every input at once: normal pearls from the backpack (and their share of `invV`), materials from the stock.
   - A job is done when `now >= end`. `finish()` puts one material in `stock` and frees the slot; `collect()` finishes every done job. The game loop (`forgeTick()`) calls `collect` every frame.
-  - **Speed:** `speedFactor(speedLv, frenzy) = (1 + 0.25 × Forge Speed) × (2 while frenzy is on)`. When it changes, `setRate()` re-times the work left in running jobs from now.
+  - **Speed:** `speedFactor(speedLv, frenzy, bonus) = (1 + 0.25 × Forge Speed) × (1 + artifact forge bonus) × (2 while frenzy is on)`. When it changes, `setRate()` re-times the work left in running jobs from now.
+    - `f.bonus` is live only, like `rate`. `setBonus` changes it (from `recalc()`), and `fromSave(d, bonus)` takes the loaded artifacts' bonus, because saved ends were planned at the rate that included it.
   - **Frenzy counts only while the page is open and visible.** `forgeTick()` sets it, the `visibilitychange` (hidden) and `pagehide` handlers clear it, and `toSave()` stores ends at the no-frenzy rate.
   - **Clock safety:** a clock behind a job's start reads progress 0. Re-timing and Strikes measure from the start, so a backwards jump never finishes a job early.
-  - **Strike:** `strike(f, now, slot)` takes `STRIKE_SECS` (1 s) off the running job, at most `STRIKE_CAP` (5) per `STRIKE_WINDOW_MS` (1000 ms), and never into the past. The panel will call it.
+  - **Strike:** `strike(f, now, slot)` takes `STRIKE_SECS` (1 s) off the running job, at most `STRIKE_CAP` (5) per `STRIKE_WINDOW_MS` (1000 ms), and never into the past. The Forge panel's Strike button calls it.
   - **Slots:** `BASE_SLOTS` (1) + Extra Slot level.
   - **Upgrades** (`UPG`, bought with juice, cost `ceil(base × grow^level)`):
     - Forge Speed: base 20,000, grow 2.8, max 10.
@@ -72,12 +108,14 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
     - Strike works on `pointerdown` (touch and mouse), plus keyboard clicks.
     - It names its slot to the engine, which allows 1 s off per press and at most 5 presses per second; refused presses shake the button.
     - The button is at least 76×52 px and shows a "-1s" float.
-  - **Recipes:** one row per discovered pearl type. Each shows the cost, the time at the current speed, the Roses (or other pearls) in the backpack, the material in stock, a Keep toggle and a Start button that uses the first free slot.
+    - A mouse or touch press sends pointerdown then a click with `detail` 1, which is ignored, so one press is one Strike. Checked in headless Chrome: one real click, Enter, Space and a touch tap each took exactly 1 s, with one engine call each.
+  - **Recipes:** one row per discovered pearl type, then one per alloy whose dusts all come from found types (no pearl picture, no Keep toggle). Each shows the cost, the time at the current speed, the Roses (or other pearls) in the backpack, the material in stock, a Keep toggle and a Start button that uses the first free slot.
   - **Start explains itself:** `startReason()` gives the first cause that applies:
     - "The forge slot is busy" / "All forge slots are busy";
     - short with auto-sell on and the type not kept: "Turn on Keep for Rose Pearls, or turn off auto-sell";
     - kept but not spawning: "... are not spawning right now: unlock them in the shop or add them to your pool";
-    - otherwise "Need N more ... in your backpack".
+    - otherwise "Need N more ... in your backpack";
+    - for an alloy: "Need N more Blue Dust: make it in the forge" (the first missing dust).
   - **Keep and auto-sell:** the forge spends normal pearls from the backpack, kept or not.
     - With auto-sell on, only kept types ever reach the backpack, so Keep is how to feed the forge.
     - The recipe's Keep toggle calls `setKeep`, the same state as the backpack Keep list.
@@ -85,7 +123,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **Materials and Forge upgrades:** the stock line, then Forge Speed and Extra Slot as shop-style `.up` cards (level, effect, price, flash on buy).
   - The Artifacts panel shows the same stock line (`#artMats`).
   - **Refreshes in place:** rows are rebuilt only when the structure changes (slot count, running slots, discovered types). Bars, text and buttons update every HUD tick. Finished jobs, purchases, Keep changes, Fresh Batch, loads and imports reset the panel's cache.
-  - **Artifact costs** can name materials: `{ kind: 'material', id, qty }` is checked against and spent from `state.forge.stock`. No real artifact uses one yet; tests use a fixture.
+  - **Artifact costs** can name materials: `{ kind: 'material', id, qty }` is checked against and spent from `state.forge.stock`. The relics use alloy lines; a test fixture also mixes a dust line and a pearl line.
 - **`src/econ.js`** holds the pure economy and no DOM:
   - upgrades: `UPG`, buy `ORDER`, `TOOLS`;
   - **tool unique upgrades:** a `TOOLS` entry can carry `unique: { id, name, desc, base, grow, max, effect }`. It is bought on that tool's page in the Tools panel and priced by `uniqueCost(i, lvl)` (`base × COST_SCALE × grow^lvl`). Its level lives at `state.toolUp[i].u`, next to `p` and `s`, and Fresh Batch wipes it like the others. `stats()` merges `effect(level)` in only for the **equipped** tool with level > 0, so the upgrade works only while that tool is in hand.
@@ -114,14 +152,14 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - **Fresh Batch:**
   - Code: the `collapseBtn` handler, `finishCollapse()` and `resetRun()` in `src/ui.js`.
   - **Wipes:** juice, run juice, all upgrade levels, tools and tool upgrades, the backpack stacks that are not kept (`clearUnkept()`), and the board.
-  - **Keeps:** Flavors (`echoes`), `collapses`, `lifetime`, discoveries (`col`), the pool, settings, owned artifacts, the Keep set, kept stacks (normal and shiny) and the whole forge (jobs keep running, stock, forge upgrades). Reset save wipes all of it.
+  - **Keeps:** Flavors (`echoes`), `collapses`, `lifetime`, discoveries (`col`), the pool, settings, every artifact copy and pedestal, the Keep set, kept stacks (normal and shiny) and the whole forge (jobs keep running, dusts and alloys, forge upgrades). Reset save wipes all of it.
 - **Save storage:**
   - The `localStorage` key is `poppit.v1`. **Never rename it**: every existing player's save lives there. The key name is not the format version.
-  - The JSON inside carries `version`. The current version is `SAVE_VERSION = 5` in `src/save.js`. `serialize()` and `loadState()` live in `src/ui.js`.
+  - The JSON inside carries `version`. The current version is `SAVE_VERSION = 6` in `src/save.js`. `serialize()` and `loadState()` live in `src/ui.js`.
   - The game saves every 5 s, after purchases, on `visibilitychange` to hidden, and on `pagehide` (iOS Safari does not reliably fire `visibilitychange` when a tab is closed).
 - **Versioning rules:**
   - A save without `version` is version 1.
-  - `MIGRATIONS[n]` turns a version n save into version n + 1. `migrateSave` runs every step from the save's version up to `SAVE_VERSION`. The v1 → v2 step grants Blue, marks unlocked and seen types as found, and pools them. The v2 → v3 step refunds Chain Reaction into `sparks` and moves Wide Swing: the refund is the sum of chain's v2 prices for each level below the saved one (base 110, grow 2.5, max 8, COST_SCALE 6, frozen in the step), and `lv.sweep` moves to `toolUp[0].u`. Both `lv.chain` and `lv.sweep` are removed. Run juice and lifetime are not changed. The v3 → v4 step adds `artifacts: {}` and `keep: {}` (keeping objects that are already there). The v4 → v5 step adds an empty forge (`{ slots: [null], stock: {}, lv: { speed: 0, slot: 0 } }`).
+  - `MIGRATIONS[n]` turns a version n save into version n + 1. `migrateSave` runs every step from the save's version up to `SAVE_VERSION`. The v1 → v2 step grants Blue, marks unlocked and seen types as found, and pools them. The v2 → v3 step refunds Chain Reaction into `sparks` and moves Wide Swing: the refund is the sum of chain's v2 prices for each level below the saved one (base 110, grow 2.5, max 8, COST_SCALE 6, frozen in the step), and `lv.sweep` moves to `toolUp[0].u`. Both `lv.chain` and `lv.sweep` are removed. Run juice and lifetime are not changed. The v3 → v4 step adds `artifacts: {}` and `keep: {}` (keeping objects that are already there). The v4 → v5 step adds an empty forge (`{ slots: [null], stock: {}, lv: { speed: 0, slot: 0 } }`). The v5 → v6 step turns each `id: true` artifact into one Common copy with no perks, active (copy ids 1, 2, ... in key order), so an old duck pays exactly as before.
   - To change the format: bump `SAVE_VERSION`, add one migration step, and **never edit a step that has shipped**.
   - A save with a version newer than `SAVE_VERSION` is refused with a toast. If it is the stored save, `saveBlocked` stops autosave from overwriting it. Reset save, an import or a restore clears the block.
   - A version that is not an integer ≥ 1, or a save that is not an object, is refused as invalid.
@@ -133,8 +171,8 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - Booleans must be real booleans. `musicVol` must be finite, otherwise it becomes 0.5.
   - The pool keeps only real, discovered pearl ids, without duplicates, and is never empty (it falls back to `pearl`).
   - `col` entries are rebuilt in their known shape, and unknown keys are ignored.
-  - `artifacts` keeps only known artifact ids set to `true`, and `keep` only known pearl type ids set to `true`. Anything else, including a non-object, is dropped. `serialize()` writes both, so save codes, files, the import backup and Restore carry them.
-  - `forge` goes through `FORGE.fromSave`: levels are clamped to their max, `stock` keeps known materials with whole counts above 0, and the slot count follows the Extra Slot level. Jobs with an unknown material or bad timestamps are dropped, and an end beyond the start plus the recipe time is clamped.
+  - `artifacts` goes through `ARTS.fromSave` (see the copies model above). `keep` keeps only known pearl type ids set to `true`. Anything else, including a non-object, is dropped. `serialize()` writes both, so save codes, files, the import backup and Restore carry them.
+  - `forge` goes through `FORGE.fromSave` (after the artifacts, for their forge bonus): levels are clamped to their max, `stock` keeps known dusts and alloys with whole counts above 0, and the slot count follows the Extra Slot level. Jobs with an unknown material or bad timestamps are dropped, and an end beyond the start plus the recipe time is clamped.
   - **Offline:** `awayBonus()` (at boot, and on return to a hidden tab) first finishes every job whose end has passed. The toast adds "and N forge jobs finished", or says only that when there is no juice.
 - **Save codes:**
   - Format: `POPPIT2:` + base64 of the UTF-8 JSON + `.` + 8 hex digits of FNV-1a over the base64 text. Whitespace is ignored.
@@ -156,9 +194,9 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - `npm run build`: runs `node tools/build.js`, which concatenates into `build/all.js` (gitignored), syntax-checks it with `vm.Script`, and writes `index.html`. **This is the gate.**
 - `npm test`:
   - `tests/econ32.test.js`: `node:test` unit tests of `ECON` and `fmt`.
-  - `tests/artifacts.test.js`: the artifacts module and the duck's payout bonus.
-  - `tests/artifact_tests.js` (pulled in by the harness): artifacts, Keep and save v4 in the real game.
-  - `tests/forge.test.js`: the forge engine. `tests/forge_tests.js` (pulled in by the harness): the forge in the real game, with `Date.now` pinned.
+  - `tests/artifacts.test.js`: the artifacts module: copies, costGrowth, rolls (rarity distribution over 200,000 seeded rolls), perks, the pedestal, the relics, every `stats()` hook, the v5 → v6 step and `fromSave`.
+  - `tests/artifact_tests.js` (pulled in by the harness): artifacts, Keep and save v4 in the real game. `tests/relic_tests.js`: copies, rolls, swaps, alloys, relics, the away bonus and helper pops with perks, save round trips, Fresh Batch and Reset in the real game; it prints one full run as `run:` lines.
+  - `tests/forge.test.js`: the forge engine, dusts and alloys. `tests/forge_tests.js` (pulled in by the harness): the forge in the real game, with `Date.now` pinned.
   - `tests/page.test.js`: checks that the built `index.html` is a standalone page (doctype, charset, viewport, `[hidden]` rule, head/body structure) and was built from the current `head.html` / `tail.html`. **Run `npm run build` before `npm test`.**
   - `tests/harness32.js`: runs the real concatenated game against stubbed DOM APIs and drives it like a player. It prints PASS/FAIL lines and ends with `ALL PASSED`. It pulls in `tests/pearl_tests.js`.
   - `tests/away.test.js`: runs the sim's checkpoints (about 15 s) and checks the away bonus against the measured helper-only hour. It `require`s `tools/sim32.js`, which runs its CLI only when called directly.
@@ -174,7 +212,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 ## State: real and verified (2026-10-21)
 
 - **Build:** the Node build replaced `build.sh`, and its output is byte-identical to the old build.
-- **Tests:** 31 econ unit tests, 6 artifacts unit tests, 13 forge unit tests, 8 page tests, 202 harness checks (`tests/forge_ui_tests.js` adds the forge panel checks) and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
+- **Tests:** 31 econ unit tests, 13 artifacts unit tests, 21 forge unit tests, 8 page tests, 228 harness checks (`tests/relic_tests.js` adds the copies, rolls, alloys and relics) and 2 away-bonus sim tests pass. They cover save codes, versions, the v3 migration, clamping, backup/restore, unreadable saves, `pagehide`, unique upgrades, the Helpers gate, the auto-sell defaults, `frenzyNeed`, the derived payout table, `fmtX`, the away bonus at three tool powers and on a pool of unhittable types, and the book and pool payout strings.
 - **Unique upgrades, Helpers and auto-sell (2026-10-18), checked in Chrome:**
   - a new game earns juice from pops with an empty backpack;
   - the Tools panel shows Wide Swing on the Steel Pin page and the muted line on the Awl page;
@@ -217,6 +255,12 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - no text overflows in the Artifacts panel or the backpack, and the backpack fits inside the board;
   - console: only the favicon 404 and Chrome's autoplay and vibrate notices.
 
+- **Artifact copies, rolls and the Hall of Relics (2026-10-21):** engine, data, save v6 and tests; the panels only keep working.
+  - Harness run: two duck crafts took Rose Pearls 20,500 → 10,500 → 500. The first rolled Common and went on the pedestal; the second rolled Mythic (payout +6.4%, shiny +16%, frenzy +16%) and waited. Swapping to it raised a Rose pop from 2.86 to 3.04 (x1.064), and swapping back restored 2.86.
+  - Two Rosegold jobs took 12 Rose Dust and 4 Blue Dust and no pearls; the Rose Lantern took the 2 Rosegold. The Blue Compass re-timed a running job from 30 s to 23.08 s left.
+  - A Mint Clock with a +10% away perk raised a 1 h away bonus x1.3 (8,791 → 11,428).
+  - In headless Chrome at 390×844: the Artifacts panel shows both halls with alloy cost lines, the forge lists Rosegold with "Need 1 more Blue Dust: make it in the forge", no overflow, no console errors.
+  - `npm run sim` and `--duck` print exactly what they printed before (an owned duck is one Common copy).
 - **Forge UI (2026-10-21), checked in headless Chrome at 390×844** (the extension was not connected), from a fresh profile:
   - with default settings, 100 Rose pops showed the Forge button, and Start read "Turn on Keep for Rose Pearls, or turn off auto-sell";
   - Keep from the panel turned the backpack row to Kept;
@@ -247,8 +291,15 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - They always put the bottom bar (combo, tool label, frenzy meter) above the dock, and move the start hint above it.
   - With the longest tool name and a combo showing, nothing overlaps or scrolls sideways at 360, 390 and 430 px, and all five dock buttons sit inside the board.
   - At 360 the combo multiplier is clipped and the frenzy meter shrinks to about 35 px.
-- **Artifacts:** only the Hall of Ducks and the Pink Duck exist.
-  - Not built: other ducks, other halls, and bonus types other than payout. Material costs are supported, but no artifact uses one yet.
+- **Artifacts:** the Hall of Ducks (Pink Duck) and the Hall of Relics (three relics) exist.
+  - **Next session (the panel):** a craft-again button, the pedestal swap (calling `setActiveCopy`), the roll reveal, and a duck stash warning on the forge's Rose Dust Start button. Today an owned card only says "Owned".
+  - The relics have no card icons yet.
+  - Rarity weights, perk ranges and caps, relic and alloy costs and the relic bonuses are untuned data.
+  - **Rolls in numbers** (`PINK_DUCK_PAYOUT` 1.4, perk stats equally likely):
+    - Expected duck payout per craft: Common x1.400, Rare x1.409, Epic x1.423, Mythic x1.445; all crafts x1.404 (+0.3%). A Monte Carlo of 1,000,000 rolls agrees.
+    - With a payout perk: Rare x1.456 (1.428-1.484), Epic x1.470 (1.435-1.505), Mythic x1.490 (1.445-1.534).
+    - One Mythic takes 100 crafts on average: 1,000,000 Rose Pearls, or 76-211 hours of play at the sim's Rose rates. A Mythic with a payout perk takes 200 crafts.
+  - **Relics from scratch** (one slot, Forge Speed 0): Rosegold 740 pearls and 7 min, Azure Steel 370 and 13 min, Mintsilver 240 and 26 min. Rose Lantern 1,480 pearls and 14 min, Blue Compass 1,480 and 33 min, Mint Clock 850 and 65 min. Collecting the pearls takes far longer than the forge time.
   - The duck's x1.4 lives in one constant (`PINK_DUCK_PAYOUT`).
   - The sim cannot keep or craft. `--duck` owns the duck from minute 0. At x1.4 the first Fresh Batch is 11.2 min casual and 3.6 min engaged on the reference seeds (12.8 and 6.2 without).
     - Over seeds 1-8 the means are 9.9 and 4.0 min (12.7 and 5.6 without, 10.6 and 4.7 at x1.25).
@@ -258,9 +309,9 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
     - Measured with every type pooled; a Rose-only pool would collect faster.
     - **Some rows look odd.** With the duck, casual cycle 6 takes 85 min and engaged's first Fresh Batch 96 min, against 45 and 49 without it. Each row is one 60-second window from a single seed (frenzy, the board fill and the pearl mix at that moment all move it), so single rows are noisy. Averaging several windows or seeds would be needed before using them for tuning.
   - Spending that lasts across Fresh Batches is still the natural fix for the empty late-game shelf.
-- **Forge:** the engine and panel are built.
-  - Materials have no real use yet: no artifact costs one.
-  - No second duck and no second hall.
+- **Forge:** the engine and panel are built, with two tiers (dusts, alloys).
+  - Only three alloys exist, and only the relics use them. Dusts other than Rose, Blue, Mint and Golden have no use yet.
+  - No second duck.
   - The recipe numbers and the Forge Speed and Extra Slot prices are untuned first guesses; no sim models the forge.
   - The forge and the Pink Duck both draw on kept Rose Pearls. Nothing guards the duck's stash: one Rose Dust start takes 100 of them.
 - **Raw numbers:** the Fresh Batch button and the Flavors line print raw integers (`+6666 Flavors`, `x3238.4`). They fit today, but they don't use `fmt`.
