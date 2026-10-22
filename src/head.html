@@ -182,7 +182,8 @@ body {
 .slot .lk .lock { display: block; }
 /* Artifacts panel: one section per hall, a grid of cards in each */
 #arts { left: 6px; right: 6px; top: 6px; bottom: 6px; width: auto; transform-origin: center; }
-#artHalls { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 2px 4px 4px 2px; }
+#artBody { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 4px 4px 2px; } /* the summary, notes and cards scroll together; the tabs stay put */
+#artHalls { display: flex; flex-direction: column; gap: 14px; }
 .hall h4 { margin: 0 0 2px; font: 400 26px/1.1 var(--font-brand); color: var(--fg); }
 .hallGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
 .acard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 12px 12px; text-align: center; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
@@ -225,6 +226,8 @@ body {
 .frc { font-variant-numeric: tabular-nums; }
 .frw { color: var(--accent); font-weight: 700; }
 .frw:empty { display: none; }
+.frd { color: #a0620a; font-weight: 700; } /* the duck stash warning: informs, never blocks */
+.frd:empty { display: none; }
 .fra { display: flex; justify-content: flex-end; gap: 8px; }
 .fstart { min-width: 88px; min-height: 36px; }
 .fstart:disabled { opacity: 0.5; cursor: default; }
@@ -232,7 +235,54 @@ body {
 .matLine { color: var(--fg); }
 .acard .craft { min-width: 120px; }
 .acard .craft:disabled { opacity: 0.55; cursor: default; }
-.acard.own .craft:disabled { opacity: 1; background: var(--gold); color: #3a2e1c; border-color: #3a2e1c; }
+/* rarities: --rc frames and glows, --rt is the text colour (darker, for contrast on white) */
+.r-common { --rc: #9aa2b1; --rt: #5e6470; --go: 0.3; --gl: 10px; }
+.r-rare { --rc: #2aa8ee; --rt: #1170ad; --go: 0.45; --gl: 18px; }
+.r-epic { --rc: #a35ce8; --rt: #7433bd; --go: 0.6; --gl: 28px; }
+.r-mythic { --rc: #ff9a1f; --rt: #c25a00; --go: 0.85; --gl: 44px; }
+.artSum { margin: 0 0 6px; padding: 8px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; font: 700 13px/1.35 var(--font-ui); color: var(--fg); }
+.atabs { display: flex; gap: 8px; margin: 0 0 6px; flex-wrap: wrap; }
+.atab { min-height: 36px; padding: 6px 14px; font-size: 13px; }
+.atab.on { background: var(--fg); color: #fff; border-color: var(--fg); }
+.acard.own { box-shadow: 0 0 0 3px var(--rc) inset, 0 0 var(--gl) -4px var(--rc); }
+.acard .ped { display: block; width: 110px; height: 24px; margin-top: -10px; }
+.abadge { font: 800 10.5px var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: #fff; background: var(--rc); border-radius: 999px; padding: 3px 9px; }
+.arar { margin: 0; font: 800 12px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--rt); }
+.aperks { margin: 0; padding: 0; list-style: none; font: 700 13px/1.4 var(--font-ui); color: var(--rt); }
+.anone, .anext { margin: 0; font: 600 12px var(--font-ui); color: var(--muted); }
+.anext { margin-top: 4px; }
+.aodds { font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+.areason { font: 700 12px/1.3 var(--font-ui); color: var(--accent); }
+.shelf { width: 100%; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.shelf h6 { margin: 0; font: 400 20px/1 var(--font-brand); color: var(--fg); text-align: left; }
+.scopy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; text-align: left; padding: 6px 8px; border-radius: 10px; border-left: 4px solid var(--rc); background: #fbf8f0; }
+.sct { min-width: 0; font: 700 12.5px/1.3 var(--font-ui); color: var(--fg); }
+.srar { color: var(--rt); font-weight: 800; margin-right: 6px; }
+.schg { grid-column: 1; font: 600 11.5px/1.3 var(--font-ui); color: var(--muted); }
+.splace { grid-column: 2; grid-row: 1 / span 2; min-height: 36px; min-width: 64px; }
+/* the roll reveal */
+.reveal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(34, 26, 14, 0.74); cursor: pointer; }
+.rvBox { position: relative; width: min(360px, 100%); padding: 22px 18px 16px; text-align: center; background: var(--panel-solid); border: 3px solid var(--rc); border-radius: 22px; box-shadow: 0 0 var(--gl) var(--rc), 0 24px 50px -20px rgba(0, 0, 0, 0.6); animation: rvIn 420ms cubic-bezier(.2, 1.4, .4, 1); overflow: hidden; }
+.rvGlow { position: absolute; left: 50%; top: 78px; width: 260px; height: 260px; margin: -130px 0 0 -130px; border-radius: 50%; background: radial-gradient(circle, var(--rc) 0, rgba(255, 255, 255, 0) 66%); opacity: var(--go); animation: rvGlow 1.8s ease-out; pointer-events: none; }
+.rvParts i { position: absolute; left: 50%; top: 78px; width: 9px; height: 9px; margin: -4.5px; border-radius: 50%; background: var(--rc); opacity: 0; animation: rvPart 950ms ease-out var(--t) forwards; pointer-events: none; }
+.rvIcon { position: relative; }
+.rvIcon svg { display: block; width: 112px; height: 112px; margin: 0 auto; }
+.rvName { position: relative; margin: 6px 0 0; font: 700 14px var(--font-ui); color: var(--muted); }
+.rvRar { position: relative; margin: 2px 0 8px; font: 400 46px/1 var(--font-brand); color: var(--rt); animation: rvRar 560ms cubic-bezier(.2, 1.6, .4, 1); }
+.rvPerks { position: relative; margin: 0 0 8px; padding: 0; list-style: none; min-height: 22px; font: 800 15px/1.5 var(--font-ui); color: var(--rt); }
+.rvPerks li { animation: rvPerk 380ms cubic-bezier(.2, 1.5, .4, 1); }
+.rvPerks .none { color: var(--muted); font-weight: 600; }
+.rvCmp { position: relative; margin: 0 0 12px; min-height: 18px; font: 700 12.5px/1.35 var(--font-ui); color: var(--fg); }
+.rvBtns { position: relative; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.rvBtns .chip { min-height: 44px; min-width: 128px; font-size: 13.5px; }
+.rvBtns .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rvSkip { position: relative; margin: 10px 0 0; font: 600 11.5px var(--font-ui); color: var(--muted); }
+.reveal.skip .rvParts i, .reveal.skip .rvGlow { animation: none; }
+@keyframes rvIn { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rvGlow { 0% { transform: scale(0.2); opacity: 1; } 100% { transform: none; } }
+@keyframes rvPart { 0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); } 100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(0.4); } }
+@keyframes rvRar { from { transform: scale(0.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rvPerk { from { transform: translateY(8px) scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
 .prow .pc { font: 400 34px/1 var(--font-brand); min-width: 0; text-align: center; }
 .prow .why { min-height: 14px; }
 .prow .tgl { min-width: 96px; }
@@ -392,6 +442,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #combo { overflow: hidden; gap: 6px; } #combo .lbl, #comboBar { display: none; } /* the count and multiplier fit beside the tool label */
 }
 @media (prefers-reduced-motion: reduce) {
+  .reveal *, .rvBox { animation: none !important; }
+  .rvParts { display: none; }
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
 }
 </style>
@@ -499,9 +551,13 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
     </button>
     <section class="panel" id="arts" hidden aria-label="Artifacts">
       <header><h3>Artifacts</h3><button class="x" type="button" data-close="arts" aria-label="Close artifacts">&#10005;</button></header>
-      <p class="hint2">Craft artifacts from pearls you keep. They are yours for good, through every Fresh Batch.</p>
-      <p class="hint2 matLine" id="artMats"></p>
-      <div id="artHalls"></div>
+      <div class="atabs" id="artTabs" role="tablist" aria-label="Halls"></div>
+      <div id="artBody">
+        <p class="artSum" id="artSum"></p>
+        <p class="hint2">Craft artifacts from pearls you keep. They are yours for good, through every Fresh Batch.</p>
+        <p class="hint2 matLine" id="artMats"></p>
+        <div id="artHalls"></div>
+      </div>
     </section>
     <button id="forgeBtn" class="dock" type="button" aria-expanded="false" aria-controls="forge" aria-label="Forge" hidden>
       <svg viewBox="0 0 64 64" width="54" height="54" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
@@ -562,6 +618,19 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <button class="big" id="collapseBtn" type="button" disabled>Fresh Batch</button>
     </div>
   </aside>
+</div>
+<div id="reveal" class="reveal" hidden role="dialog" aria-modal="true" aria-labelledby="rvRar" aria-describedby="rvCmp">
+  <div class="rvBox">
+    <div class="rvGlow" aria-hidden="true"></div>
+    <div class="rvParts" id="rvParts" aria-hidden="true"></div>
+    <div class="rvIcon" id="rvIcon"></div>
+    <p class="rvName" id="rvName"></p>
+    <h3 class="rvRar" id="rvRar"></h3>
+    <ul class="rvPerks" id="rvPerks" aria-live="polite"></ul>
+    <p class="rvCmp" id="rvCmp"></p>
+    <div class="rvBtns"><button type="button" class="chip hot" id="rvPlace" data-rv="place">Place on pedestal</button><button type="button" class="chip" id="rvKeep" data-rv="keep">Keep on shelf</button></div>
+    <p class="rvSkip" id="rvSkip">Tap to skip</p>
+  </div>
 </div>
 
 <script>

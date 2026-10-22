@@ -144,6 +144,13 @@ const Snd = (() => {
       const k = Math.min(10, 4 + Math.round(n / 4));
       for (let i = 0; i < k; i++) tone({ f: hz(7 + (i * 2) % 9), type: 'triangle', dur: 0.3, gain: 0.1, at: 0.14 + i * 0.045, echo: 0.7 });
     },
+    // the roll reveal: a short rising chime, longer and higher with rarity (0 Common .. 3 Mythic); silent when Sound is off
+    chime(level) {
+      if (!allow(1)) return;
+      const k = Math.max(0, Math.min(3, level | 0)), steps = [4, 5, 6, 7, 8, 9, 10, 11, 12].slice(0, 3 + 2 * k); // pentatonic ladder steps
+      steps.forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.4 + 0.1 * k, gain: 0.1, at: i * 0.07, echo: 0.6 + 0.1 * k }));
+      if (k >= 2) tone({ f: hz(15), dur: 0.9, gain: 0.06, at: steps.length * 0.07, echo: 0.9 });
+    },
     tick() { tone({ f: hz(9), type: 'triangle', dur: 0.12, gain: 0.05, echo: 0.3 }); },
     frenzy() { [3, 5, 7, 9, 12, 14].forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.4, gain: 0.12, at: i * 0.05, echo: 0.7 })); },
     batch() {

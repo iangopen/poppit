@@ -298,44 +298,204 @@ const DUCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-w
   '<path d="M45 18.5 C49.5 17.5 54.5 18.5 55.5 21 C55 23.5 50 24.5 45.5 23.5" fill="#f5b020"/>' +
   '<path d="M21 38.5 C26 35 34 35.5 38.5 40.5"/><circle cx="39.5" cy="17.5" r="1.7" fill="#3a2e1c" stroke="none"/>' +
   '<path d="M33 15.5 q2 -2.5 4.5 -2.5" stroke="#fff" stroke-width="2" opacity="0.85"/></svg>';
-const ART_ICON = { pink_duck: DUCK_SVG };
-let artSig = '';
+// the relics' card icons: simple inked drawings in the duck's style
+const LANTERN_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M26 13 C25 6.5 39 6.5 38 13"/><path d="M21.5 13.5 L42.5 13.5 L40.5 19.5 L23.5 19.5 Z" fill="#c9737f"/>' +
+  '<path d="M24 19.5 C19.5 28 19.5 41 24 49.5 L40 49.5 C44.5 41 44.5 28 40 19.5 Z" fill="#ffe0ea"/>' +
+  '<path d="M32 26 C26.5 32 27.5 41 32 43 C36.5 41 37.5 32 32 26 Z" fill="#ff8a3d"/><path d="M32 33 C30.5 36 31 39.5 32 40.5 C33 39.5 33.5 36 32 33 Z" fill="#f5b020" stroke-width="1.6"/>' +
+  '<path d="M26.5 24 C25 31 25 39 26.5 45" stroke="#fff" stroke-width="2" opacity="0.85"/><path d="M20.5 49.5 L43.5 49.5 L46 56 L18 56 Z" fill="#c9737f"/></svg>';
+const COMPASS_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M28 12.5 L28 8.5 C28 6 36 6 36 8.5 L36 12.5" fill="#9aa2b1"/><circle cx="32" cy="35" r="22" fill="#8fc7e8"/><circle cx="32" cy="35" r="16" fill="#fffdf6"/>' +
+  '<path d="M32 20.5 L32 23 M46.5 35 L44 35 M32 49.5 L32 47 M17.5 35 L20 35" stroke-width="2.2"/>' +
+  '<path d="M32 22.5 L36.5 35 L27.5 35 Z" fill="#f0286c"/><path d="M32 47.5 L36.5 35 L27.5 35 Z" fill="#9aa2b1"/><circle cx="32" cy="35" r="2" fill="#3a2e1c" stroke="none"/>' +
+  '<path d="M17 27 C19 21.5 23.5 17.5 29 16.5" stroke="#fff" stroke-width="2" opacity="0.85"/></svg>';
+const CLOCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M12.5 21 C11 13.5 18.5 9 24.5 13.5 Z" fill="#9aa2b1"/><path d="M51.5 21 C53 13.5 45.5 9 39.5 13.5 Z" fill="#9aa2b1"/>' +
+  '<path d="M21 52 L17 58 M43 52 L47 58"/><circle cx="32" cy="35" r="20" fill="#9fe3c4"/><circle cx="32" cy="35" r="14.5" fill="#fffdf6"/>' +
+  '<path d="M32 35 L32 25.5 M32 35 L39 39"/><circle cx="32" cy="35" r="1.8" fill="#3a2e1c" stroke="none"/>' +
+  '<path d="M32 22.5 L32 24 M44.5 35 L43 35 M32 47.5 L32 46 M19.5 35 L21 35" stroke-width="2"/><path d="M18 29 C19.5 24.5 23 21.5 27 20.5" stroke="#fff" stroke-width="2" opacity="0.85"/></svg>';
+const ART_ICON = { pink_duck: DUCK_SVG, rose_lantern: LANTERN_SVG, blue_compass: COMPASS_SVG, mint_clock: CLOCK_SVG };
+// the small plinth an active copy stands on
+const PEDESTAL_SVG = '<svg class="ped" viewBox="0 0 120 26" fill="none" stroke="#3a2e1c" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M22 3 L98 3 L93 9.5 L27 9.5 Z" fill="#fff4d6"/><path d="M31 9.5 L89 9.5 L89 17 L31 17 Z" fill="#f2e4c2"/><path d="M18 17 L102 17 L105 23.5 L15 23.5 Z" fill="#e2cf9f"/></svg>';
+// plain words for stats: a perk's name from the data, and the one base-only stat
+const statName = (s) => (ARTS.perkById(s) || { name: s === 'meter' ? 'Frenzy meter speed' : s }).name;
+const pctTxt = (v) => +(v * 100).toFixed(1) + '%';
+const statTxt = (s, v) => (s === 'payout' ? 'x' + +v.toFixed(3) : '+' + pctTxt(v));
+const perkText = (p) => statName(p.stat) + ' +' + pctTxt(p.value);
+// what one copy of an artifact gives: payout as a multiplier (base x every payout perk), other stats as added fractions
+function copyStats(a, c) {
+  const o = {}; if (!c) return o;
+  if (a.bonus.type === 'payout') o.payout = a.bonus.value; else o[a.bonus.type] = a.bonus.value - 1;
+  for (const p of c.perks) { if (p.stat === 'payout') o.payout = (o.payout || 1) * (1 + p.value); else o[p.stat] = (o[p.stat] || 0) + p.value; }
+  return o;
+}
+const zeroOf = (s) => (s === 'payout' ? 1 : 0);
+// the stats that differ between two copies of one artifact, in ARTS.STATS order: [{ stat, from, to }]
+function statDiff(a, from, to) {
+  const f = copyStats(a, from), t = copyStats(a, to);
+  return ARTS.STATS.filter((s) => s in f || s in t).map((s) => ({ stat: s, from: s in f ? f[s] : zeroOf(s), to: s in t ? t[s] : zeroOf(s) })).filter((d) => Math.abs(d.from - d.to) > 1e-9);
+}
+// "Placing it: Payouts x1.4 → x1.49, Shiny chance +16% → +0%"
+const placeText = (a, from, to) => { const d = statDiff(a, from, to); return d.length ? 'Placing it: ' + d.map((x) => statName(x.stat) + ' ' + statTxt(x.stat, x.from) + ' → ' + statTxt(x.stat, x.to)).join(', ') : 'Placing it changes no stats'; };
+// the odds line, built from the rarity table
+function oddsText() { const tot = ARTS.RARITIES.reduce((n, r) => n + r.weight, 0); return 'Each craft rolls ' + ARTS.RARITIES.map((r) => r.name + ' ' + pctTxt(r.weight / tot)).join(', '); }
+// why the next craft cannot happen, naming the first missing item ('' = it can)
+function craftReason(id) {
+  if (collapse) return 'Wait for the Fresh Batch to finish';
+  const miss = ARTS.craftCost(id, state.artifacts).find((c) => ARTS.have(c, state.inv, state.forge.stock) < c.qty);
+  if (!miss) return '';
+  const short = whole2(miss.qty - ARTS.have(miss, state.inv, state.forge.stock));
+  if (ARTS.isMat(miss)) return 'Need ' + short + ' more ' + matName(miss.id) + ': make it in the forge';
+  const nm = pearlName(miss.kind) + 's';
+  if (state.autoSell && !isKept(miss.kind)) return 'Need ' + short + ' more ' + nm + ': turn on Keep for them in your backpack';
+  return 'Need ' + short + ' more ' + nm + ' in your backpack';
+}
+const copyView = (c) => ({ id: c.id, rarity: c.rarity, rarityName: ARTS.rarityById(c.rarity).name, perks: c.perks.map(perkText) });
+// rarity rank: 0 for the first (Common) up to the last (Mythic)
+const rarityRank = (id) => Math.max(0, ARTS.RARITIES.findIndex((r) => r.id === id));
+// the top line: every active pedestal and what they do together
+function pedestalLine() {
+  const on = ARTS.ARTIFACTS.map((a) => ({ a, c: ARTS.activeCopy(state.artifacts, a.id) })).filter((x) => x.c);
+  if (!on.length) return 'Nothing on a pedestal yet. Craft an artifact and it goes on one by itself.';
+  const b = ARTS.activeBonuses(state.artifacts);
+  const fx = ARTS.STATS.filter((s) => (s === 'payout' ? Math.abs(b.payout - 1) > 1e-9 : b[s] > 1e-9)).map((s) => statName(s) + ' ' + statTxt(s, b[s]));
+  return 'On your pedestals: ' + on.map((x) => x.a.name + ' (' + ARTS.rarityById(x.c.rarity).name + ')').join(', ') + '. Together: ' + fx.join(', ') + '.';
+}
+let artSig = '', artTab = ARTS.HALLS[0].id;
 function artView() {
-  return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
-    id: a.id, name: a.name, desc: a.description, owned: ARTS.count(state.artifacts, a.id) > 0, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
-    cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
-      : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
-  })) }));
+  return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => {
+    const n = ARTS.count(state.artifacts, a.id), act = ARTS.activeCopy(state.artifacts, a.id), reason = craftReason(a.id);
+    return {
+      id: a.id, name: a.name, desc: a.description, owned: n > 0, count: n, can: !reason, reason, odds: oddsText(),
+      cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
+        : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
+      active: act ? copyView(act) : null,
+      shelf: n ? state.artifacts[a.id].copies.filter((c) => c !== act).sort((x, y) => rarityRank(y.rarity) - rarityRank(x.rarity) || x.id - y.id)
+        .map((c) => Object.assign(copyView(c), { change: placeText(a, act, c) })) : [],
+    };
+  }) }));
 }
 const whole2 = (n) => Math.floor(n).toLocaleString('en-US');
-function updateArts() {
-  if ($('arts').hidden) return;
-  const v = artView(), sig = JSON.stringify(v) + materialLine();
-  if (sig === artSig) return; artSig = sig;
-  $('artMats').textContent = materialLine();
-  $('artHalls').innerHTML = v.map((h) => '<section class="hall"><h4>' + h.name + '</h4><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map((a) =>
-    '<div class="acard' + (a.owned ? ' own' : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div><h5>' + a.name + '</h5><p class="ad">' + a.desc + '</p>' +
+function artCard(a) {
+  const r = a.active;
+  return '<div class="acard' + (a.owned ? ' own r-' + r.rarity : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div>' +
+    (a.owned ? PEDESTAL_SVG + '<span class="abadge">On pedestal</span>' : '') + '<h5>' + a.name + '</h5>' +
+    (a.owned ? '<p class="arar">' + r.rarityName + ' copy</p>' : '') + '<p class="ad">' + (a.owned ? 'Base: ' : '') + a.desc + '</p>' +
+    (a.owned ? (r.perks.length ? '<ul class="aperks">' + r.perks.map((t) => '<li>' + t + '</li>').join('') + '</ul>' : '<p class="anone">No perks</p>') : '') +
+    (a.owned ? '<p class="anext">Next copy costs</p>' : '') +
     a.cost.map((c) => '<div class="acost"><span>' + (c.mat ? c.text : whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit) + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
       (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
-    (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
-    '</div>').join('') + '</div></section>').join('');
+    '<small class="aodds">' + a.odds + '</small>' + (a.reason ? '<small class="areason">' + a.reason + '</small>' : '') +
+    '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + (a.reason ? ' title="' + a.reason + '"' : '') + '>' + (a.owned ? 'Craft another' : 'Craft') + '</button>' +
+    (a.shelf.length ? '<div class="shelf"><h6>On the shelf (' + a.shelf.length + ')</h6>' + a.shelf.map((c) =>
+      '<div class="scopy r-' + c.rarity + '"><div class="sct"><span class="srar">' + c.rarityName + '</span><span class="sperk">' + (c.perks.length ? c.perks.join(', ') : 'No perks') + '</span></div>' +
+      '<small class="schg">' + c.change + '</small><button type="button" class="chip splace" data-place="' + a.id + ':' + c.id + '">Place</button></div>').join('') + '</div>' : '') +
+    '</div>';
 }
-// crafts a copy (rng is for tests; the game rolls with Math.random) and returns it, or null
+function updateArts() {
+  if ($('arts').hidden) return;
+  const v = artView(), sig = JSON.stringify(v) + materialLine() + artTab;
+  if (sig === artSig) return; artSig = sig;
+  $('artMats').textContent = materialLine();
+  $('artSum').textContent = pedestalLine();
+  $('artTabs').innerHTML = v.map((h) => '<button type="button" class="chip atab' + (h.id === artTab ? ' on' : '') + '" role="tab" aria-selected="' + (h.id === artTab) + '" data-tab="' + h.id + '">' + h.name + '</button>').join('');
+  $('artHalls').innerHTML = v.filter((h) => h.id === artTab).map((h) => '<section class="hall" role="tabpanel" aria-label="' + h.name + '"><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map(artCard).join('') + '</div></section>').join('');
+}
+function setArtTab(id) { if (!ARTS.HALLS.some((h) => h.id === id)) return false; artTab = id; artSig = ''; updateArts(); return true; }
+// crafts a copy (rng is for tests; the game rolls with Math.random), shows the reveal and returns the copy, or null
 function craftArtifact(id, rng) {
+  const prev = ARTS.activeCopy(state.artifacts, id);
   const c = collapse ? null : ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock, rng);
   if (!c) return null;
-  recalc(); const a = ARTS.byId(id);
-  toast(a.name + ' crafted (' + ARTS.rarityById(c.rarity).name + ')! ' + a.description); Snd.golden(); addShake(1.5);
+  recalc(); Snd.chime(rarityRank(c.rarity)); addShake(1 + rarityRank(c.rarity) * 0.6);
+  openReveal(id, c, prev);
   artSig = ''; forgeSig = ''; updateArts(); updateForge(); updatePack(); updateHud(0.016); save(); return c;
 }
-// puts an owned copy on its artifact's pedestal (the swap is free); the next session's panel calls it
+// puts an owned copy on its artifact's pedestal (the swap is free)
 function setActiveCopy(id, copyId) {
   if (!ARTS.setActive(state.artifacts, id, copyId)) return false;
   recalc(); artSig = ''; forgeSig = ''; updateArts(); updateForge(); updateHud(0.016); save(); return true;
 }
-$('artHalls').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); } });
+$('artHalls').addEventListener('click', (e) => {
+  const pl = e.target.closest && e.target.closest('[data-place]');
+  if (pl) { const [id, cid] = pl.dataset.place.split(':'); Snd.click(); if (setActiveCopy(id, +cid)) toast(ARTS.byId(id).name + ' (' + ARTS.rarityById(ARTS.activeCopy(state.artifacts, id).rarity).name + ') is on your pedestal'); return; }
+  const b = e.target.closest && e.target.closest('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); }
+});
+$('artTabs').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-tab]'); if (b) { Snd.click(); setArtTab(b.dataset.tab); } });
+
+/* ----- the roll reveal: a full-screen card after every craft; perks appear one by one, a tap skips, Escape keeps it on the shelf ----- */
+const REVEAL_PARTS = [8, 16, 28, 44]; // particles by rarity rank (Common .. Mythic); calm (reduced motion) shows none
+const REVEAL_FIRST = 0.7, REVEAL_GAP = 0.55; // seconds to the first perk, then between perks
+let rv = null, rvFocus = null;
+function revealView() {
+  if (!rv) return null;
+  const a = ARTS.byId(rv.id), c = rv.c, diff = statDiff(a, rv.prev, c);
+  return {
+    art: a.name, rarity: c.rarity, rarityName: ARTS.rarityById(c.rarity).name, first: rv.first, done: rv.done,
+    perks: c.perks.map(perkText), shown: rv.shown,
+    compare: rv.first ? 'Placed on your pedestal: ' + a.description
+      : diff.length ? diff.map((d) => statName(d.stat) + ' ' + statTxt(d.stat, d.to) + ' vs your current ' + statTxt(d.stat, d.from)).join('; ') : 'The same stats as the copy on your pedestal',
+  };
+}
+function paintReveal() {
+  const v = revealView(), el = $('reveal'); if (!v) return;
+  ARTS.RARITIES.forEach((r) => el.classList.toggle('r-' + r.id, r.id === v.rarity));
+  el.classList.toggle('done', v.done);
+  $('rvPerks').innerHTML = v.perks.length ? v.perks.slice(0, v.shown).map((t) => '<li>' + t + '</li>').join('') : '<li class="none">No perks</li>';
+  $('rvCmp').textContent = v.done ? v.compare : '';
+  $('rvSkip').hidden = v.done;
+}
+function openReveal(id, c, prev) {
+  const first = ARTS.count(state.artifacts, id) === 1, a = ARTS.byId(id), n = c.perks.length;
+  rv = { id, c, prev, first, t: 0, shown: calm ? n : 0, done: calm || n === 0 };
+  const el = $('reveal'), k = rarityRank(c.rarity), parts = calm ? 0 : REVEAL_PARTS[Math.min(k, REVEAL_PARTS.length - 1)];
+  $('rvIcon').innerHTML = ART_ICON[id] || '';
+  $('rvName').textContent = a.name;
+  $('rvRar').textContent = ARTS.rarityById(c.rarity).name;
+  // particles on fixed angles (no Math.random, so a seeded roll in a test stays the only draw); at most 145 px out, inside the card
+  $('rvParts').innerHTML = Array.from({ length: parts }, (_, i) => '<i style="--a:' + Math.round(i * 137.5) % 360 + 'deg;--d:' + (50 + (i * 37) % 60 + k * 12) + 'px;--t:' + (i * 23) % 400 + 'ms"></i>').join('');
+  $('rvPlace').hidden = first; $('rvKeep').textContent = first ? 'Nice!' : 'Keep on shelf';
+  if (el.hidden) rvFocus = document.activeElement || null;
+  el.hidden = false; paintReveal();
+  const f = first ? $('rvKeep') : $('rvPlace'); if (f.focus) f.focus();
+}
+// the main loop advances the perks one by one
+function revealTick(dt) {
+  if (!rv || rv.done) return;
+  rv.t += dt;
+  const n = rv.c.perks.length, shown = Math.min(n, rv.t < REVEAL_FIRST ? 0 : 1 + Math.floor((rv.t - REVEAL_FIRST) / REVEAL_GAP));
+  if (shown === rv.shown) return;
+  rv.shown = shown; rv.done = shown >= n; Snd.tick(); paintReveal(); // repaint only on a change, so each perk animates in once
+}
+function skipReveal() { if (!rv || rv.done) return false; rv.shown = rv.c.perks.length; rv.done = true; $('reveal').classList.add('skip'); paintReveal(); return true; }
+function closeReveal() {
+  if (!rv) return false;
+  rv = null; const el = $('reveal'); el.hidden = true; el.classList.remove('skip'); $('rvParts').innerHTML = '';
+  if (rvFocus && rvFocus.focus) rvFocus.focus(); rvFocus = null; return true;
+}
+function placeFromReveal() {
+  if (!rv) return false;
+  const id = rv.id, c = rv.c; closeReveal();
+  if (!setActiveCopy(id, c.id)) return false;
+  toast(ARTS.byId(id).name + ' (' + ARTS.rarityById(c.rarity).name + ') is on your pedestal'); return true;
+}
+$('reveal').addEventListener('click', (e) => {
+  const b = e.target && e.target.closest && e.target.closest('[data-rv]');
+  if (b) { Snd.click(); if (b.dataset.rv === 'place') placeFromReveal(); else closeReveal(); return; }
+  if (!skipReveal()) closeReveal(); // a tap skips the animation, the next one closes (the copy stays on the shelf)
+});
+// focus stays inside the reveal; Escape closes it and nothing behind it
+$('reveal').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { if (e.stopPropagation) e.stopPropagation(); if (e.preventDefault) e.preventDefault(); closeReveal(); return; }
+  if (e.key !== 'Tab') return;
+  const list = [$('rvPlace'), $('rvKeep')].filter((b) => !b.hidden);
+  const i = list.indexOf(document.activeElement), n = list.length;
+  if (e.preventDefault) e.preventDefault();
+  const next = list[((i < 0 ? (e.shiftKey ? 0 : -1) : i) + (e.shiftKey ? -1 : 1) + n) % n]; if (next && next.focus) next.focus();
+});
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { Snd.click(); $(b.dataset.close).hidden = true; $(PANEL_BTN[b.dataset.close]).setAttribute('aria-expanded', 'false'); }));
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rv) { closeReveal(); return; } if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
 const resetTools = () => { state.owned = [true, false, false, false, false, false]; state.equip = -1; state.toolUp = {}; toolView = 0; };
 const zeroInv = () => { INV_IDS.forEach((id) => { state.inv[id] = 0; state.invV[id] = 0; }); };
 const clearUnkept = () => { INV_IDS.forEach((id) => { if (!isKept(id)) { state.inv[id] = 0; state.invV[id] = 0; } }); }; // Fresh Batch
@@ -738,6 +898,16 @@ function startReason(m) {
   if (!spawning) return nm + ' are not spawning right now: unlock them in the shop or add them to your pool';
   return 'Need ' + whole2(miss.short) + ' more ' + nm + ' in your backpack';
 }
+// the duck stash warning: a Start that would leave fewer pearls than an artifact's next craft needs says so (it never blocks)
+function stashWarn(m) {
+  const p = m.recipe.inputs.find((i) => i.kind === 'pearl'); if (!p) return '';
+  const have = state.inv[p.id] || 0; if (have < p.qty) return '';
+  for (const a of ARTS.ARTIFACTS) {
+    const line = ARTS.craftCost(a.id, state.artifacts).find((c) => !ARTS.isMat(c) && c.kind === p.id);
+    if (line && have - p.qty < line.qty) return 'Uses ' + whole2(p.qty) + ' of your ' + whole2(have) + (isKept(p.id) ? ' kept ' : ' ') + pearlName(p.id) + 's (the ' + a.name + ' needs ' + whole2(line.qty) + ')';
+  }
+  return '';
+}
 const forgeSpeedText = () => { const f = state.forge; return 'Forge speed x' + +f.rate.toFixed(2) + ': level ' + f.lv.speed + (f.frenzy ? ', frenzy x' + FORGE.FRENZY_FACTOR : ''); };
 const FORGE_UPG_DESC = {
   speed: (f) => '+' + Math.round(FORGE.SPEED_PER_LEVEL * 100) + '% forge speed per level (now x' + +FORGE.speedFactor(f.lv.speed, false).toFixed(2) + ')',
@@ -751,7 +921,7 @@ function forgeView() {
     recipes: FORGE.MATERIALS.filter((m) => state.col[recipePearl(m)] && state.col[recipePearl(m)].found).concat(FORGE.ALLOYS.filter(alloyShown)).map((m) => {
       const reason = startReason(m), kind = recipePearl(m);
       const have = m.recipe.inputs.map((i) => (i.kind === 'pearl' ? whole2(state.inv[i.id] || 0) : whole2(f.stock[i.id] || 0) + ' ' + matName(i.id))).join(', ');
-      return { id: m.id, name: m.name, kind, alloy: !kind, cost: m.recipe.inputs.map(inputText).join(' + '), time: durTxt(m.recipe.secs / f.rate), have, stock: f.stock[m.id] || 0, kept: !!kind && isKept(kind), can: !reason, reason };
+      return { id: m.id, name: m.name, kind, alloy: !kind, stash: stashWarn(m), cost: m.recipe.inputs.map(inputText).join(' + '), time: durTxt(m.recipe.secs / f.rate), have, stock: f.stock[m.id] || 0, kept: !!kind && isKept(kind), can: !reason, reason };
     }),
     stock: FORGE.ALL.filter((m) => f.stock[m.id] > 0).map((m) => ({ id: m.id, name: m.name, n: f.stock[m.id] })),
     upg: Object.keys(FORGE.UPG).map((id) => { const u = FORGE.UPG[id], lvl = f.lv[id], maxed = lvl >= u.max, cost = maxed ? 0 : FORGE.upgCost(id, lvl);
@@ -787,11 +957,11 @@ function updateForge() {
     $('fRecipes').innerHTML = ''; fRows.recipes = v.recipes.map((m) => {
       const r = document.createElement('div'); r.className = 'frec';
       r.innerHTML = '<div class="frh"><canvas width="64" height="64"' + (m.alloy ? ' hidden' : ' data-art="' + m.kind + '"') + '></canvas><span class="frn">' + m.name + '</span><span class="frs"></span></div>' +
-        '<div class="frc"></div><small class="frw"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false"' + (m.alloy ? ' hidden' : '') + '>' + LOCK_SVG + '<span>Keep</span></button>' +
+        '<div class="frc"></div><small class="frw"></small><small class="frd"></small><div class="fra"><button type="button" class="chip keepT" data-fkeep="' + m.kind + '" aria-pressed="false"' + (m.alloy ? ' hidden' : '') + '>' + LOCK_SVG + '<span>Keep</span></button>' +
         '<button type="button" class="chip hot fstart" data-fstart="' + m.id + '">Start</button></div>';
       $('fRecipes').appendChild(r);
       const cv = r.querySelector('canvas'); if (!m.alloy && cv.getContext && spr.pearl[m.kind]) { const x = cv.getContext('2d'); x.drawImage(bigSprite(m.kind), -5, -5, 74, 74); }
-      return { el: r, s: r.querySelector('.frs'), c: r.querySelector('.frc'), w: r.querySelector('.frw'), k: r.querySelector('.keepT'), b: r.querySelector('.fstart'), cache: {} };
+      return { el: r, s: r.querySelector('.frs'), c: r.querySelector('.frc'), w: r.querySelector('.frw'), k: r.querySelector('.keepT'), b: r.querySelector('.fstart'), d: r.querySelector('.frd'), cache: {} };
     });
   }
   setLbl('fSpeed', v.speed);
@@ -800,7 +970,7 @@ function updateForge() {
     const r = fRows.recipes[i]; if (!r) return;
     setText(r, 's', r.s, m.stock ? m.stock + ' in stock' : '');
     setText(r, 'c', r.c, m.cost + ' · ' + m.time + ' · you have ' + m.have);
-    setText(r, 'w', r.w, m.reason);
+    setText(r, 'w', r.w, m.reason); setText(r, 'd', r.d, m.stash);
     r.b.disabled = !m.can; r.b.title = m.reason || 'Start ' + m.name;
     r.k.classList.toggle('on', m.kept); r.k.setAttribute('aria-pressed', String(m.kept)); setText(r, 'k', r.k.lastElementChild, m.kept ? 'Kept' : 'Keep');
   });
@@ -977,6 +1147,7 @@ function frame(ts) {
   if (hitStop > 0) hitStop -= dt;
   else { acc += dt; while (acc >= DT) { step(DT); acc -= DT; } }
   hudT += dt; saveT += dt;
+  revealTick(dt);
   forgeTick(); // before the HUD, so the speed line and slots show this frame's frenzy and finished jobs
   if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); updateForge(); hudT = 0; }
   if (saveT > 5) { save(); saveT = 0; }
