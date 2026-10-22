@@ -3,7 +3,8 @@
 //   node tools/sim32.js --variant=NAME  one tuning option from VARIANTS below (nothing in src/ changes)
 //   node tools/sim32.js --wait=25       the player keeps playing until minute 25 even if Fresh Batch is ready sooner
 //   node tools/sim32.js --compare       one summary line per variant, profile and player policy
-//   node tools/sim32.js --duck                the player owns the Pink Duck from the start (no ducks by default)
+//   node tools/sim32.js --duck          the player owns a plain Pink Duck (Common, x1.4) from the start (no ducks by default)
+//   node tools/sim32.js --duck=best     the best-case duck instead: a Mythic copy with a top payout perk (+15%), x1.61
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
 const E = require('../src/econ.js'), A = require('../src/artifacts.js');
 const CELLS = [120, 252, 440];
@@ -18,16 +19,22 @@ function mulberry32(a) {
 
 // Tuning options for docs/balance-report.md. Each overrides only the levers it names; the sim never edits src/econ.js.
 // minRun may depend on Flavors (echoes); gain replaces collapseGain(run); base and max override an upgrade's base cost or max level;
-// flavorBonus replaces FLAVOR_BONUS (what each Flavor adds to every payout); artifacts lists artifact ids owned from the start.
+// flavorBonus replaces FLAVOR_BONUS (what each Flavor adds to every payout); artifacts lists artifact ids owned from the start;
+// newBase overrides first-level spawn weights in NEW_BASE (set on ECON's own table for the run, then restored).
 const VARIANTS = {
   baseline: {},
-  scaledFloor: { minRun: (e) => E.COLLAPSE_MIN_RUN * (1 + 0.2 * e) }, // the floor rises with the Flavor payout multiplier
+  oldDials: { flavorBonus: 0.2, base: { black: 60000 }, newBase: { black: 0.15 } }, // the dials before 2026-10-22, for before / after
+  scaledFloor: { minRun: (e) => E.COLLAPSE_MIN_RUN * (1 + E.FLAVOR_BONUS * e) }, // the floor rises with the Flavor payout multiplier
   moreFlavors: { gain: (run) => Math.floor(Math.sqrt(run / 312500)) }, // 4 Flavors at the floor instead of 2
   moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12 } },
-  flavor10: { flavorBonus: 0.1 }, // each Flavor adds 10% instead of 20%
+  flavor20: { flavorBonus: 0.2 }, // each Flavor adds 20% (the old value) instead of 10%
   flavor5: { flavorBonus: 0.05 },
-  pinkDuck: { artifacts: ['pink_duck'] }, // same as --duck
+  pinkDuck: { duck: 'plain' }, // same as --duck
+  pinkDuckBest: { duck: 'best' }, // same as --duck=best
 };
+// the duck the duck flags give: plain is one Common copy (x1.4); best is a Mythic copy whose payout perk is at its top roll (x1.61).
+// Only payout is modelled: a real Mythic also carries two other perks.
+const DUCKS = { plain: { rarity: 'common', perks: [] }, best: { rarity: 'mythic', perks: [{ stat: 'payout', value: 0.15 }] } };
 
 // The economy the sim plays: ECON itself, with a variant's levers swapped in.
 // The cost formulas are copies of src/econ.js; checkCopies() fails loudly if they drift.
@@ -206,9 +213,14 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
 }
 
 function play(v, profile, verbose, measure) {
+  const nb = Object.assign({}, E.NEW_BASE); Object.assign(E.NEW_BASE, v.newBase || {});
+  try { return playRun(v, profile, verbose, measure); } finally { Object.assign(E.NEW_BASE, nb); }
+}
+function playRun(v, profile, verbose, measure) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
   const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {} };
   for (const id of v.artifacts || []) A.addCopy(st.artifacts, id, 'common', []); // one Common copy on its pedestal; artifacts are never wiped by Fresh Batch
+  if (v.duck) A.addCopy(st.artifacts, 'pink_duck', DUCKS[v.duck].rarity, DUCKS[v.duck].perks);
   const out = [];
   for (let c = 0; c < CYCLES; c++) { const r = cycle(X, st, rng, taps, skill, verbose, v.waitMin, measure ? 1000 * seed + 10 * c : 0); out.push(r); if (r.ready == null) break; }
   return out;
@@ -217,7 +229,7 @@ function play(v, profile, verbose, measure) {
 const f1 = (x) => (x == null ? '-' : x.toFixed(1));
 const big = (x) => (x >= 1e6 ? (x / 1e6).toFixed(x >= 1e8 ? 0 : 1) + 'M' : x >= 1e4 ? (x / 1e3).toFixed(0) + 'K' : Math.round(x).toString());
 function report(name, v, verbose) {
-  console.log('# variant: ' + name + (v.artifacts && v.artifacts.length ? ', owns ' + v.artifacts.join(', ') : '') + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready'));
+  console.log('# variant: ' + name + (v.artifacts && v.artifacts.length ? ', owns ' + v.artifacts.join(', ') : '') + (v.duck ? ', owns a ' + v.duck + ' Pink Duck (x' + +A.payoutMult({ pink_duck: { copies: [Object.assign({ id: 1 }, DUCKS[v.duck])], active: 1 } }).toFixed(3) + ')' : '') + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready'));
   for (const p of PROFILES) {
     const rs = play(v, p, verbose, !v.waitMin), cols = rs.map((_, i) => 'C' + (i + 1));
     console.log('\n## ' + p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + ', seed ' + p[3] + ')\n');
@@ -263,9 +275,9 @@ function compare() {
 }
 
 checkCopies();
-module.exports = { play, PROFILES, VARIANTS, econ, helperHour }; // tests/away.test.js
+module.exports = { play, PROFILES, VARIANTS, DUCKS, econ, helperHour }; // tests/away.test.js
 if (require.main === module) {
   const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
   if (arg('compare')) compare();
-  else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}, arg('duck') ? { artifacts: ['pink_duck'] } : {}), !!arg('log')); }
+  else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}, arg('duck') ? { duck: arg('duck') === 'best' ? 'best' : 'plain' } : {}), !!arg('log')); }
 }

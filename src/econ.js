@@ -162,7 +162,7 @@ const ECON = (() => {
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 
