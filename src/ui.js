@@ -25,7 +25,7 @@ const META = {
   opal:   { name: 'Opal Pearls', desc: () => typeDesc('opal', blurb('opal', 'Unlocks opal pearls')) },
   ruby:   { name: 'Ruby Pearls', desc: () => typeDesc('ruby', blurb('ruby', 'Unlocks ruby pearls')) },
   black:  { name: 'Black Pearls', desc: () => typeDesc('black', blurb('black', 'Unlocks black pearls')) },
-  shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
+  shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv, S.shinyBonus) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
 };
 const rows = {};
 let toastTimer = 0;
@@ -114,7 +114,7 @@ function updateHud(dt) {
   }
   const mt = $('meter'), fr = frenzyT > 0;
   mt.classList.toggle('hot', fr);
-  mt.firstElementChild.style.transform = 'scaleX(' + (fr ? frenzyT / ECON.FRENZY_SECS : clamp(meter / S.frenzyNeed, 0, 1)).toFixed(3) + ')';
+  mt.firstElementChild.style.transform = 'scaleX(' + (fr ? frenzyT / S.frenzySecs : clamp(meter / S.frenzyNeed, 0, 1)).toFixed(3) + ')';
   $('meterLbl').textContent = fr ? 'Frenzy!' : 'Frenzy meter';
 }
 
@@ -281,7 +281,7 @@ const rosesPopped = () => state.col.pearl.popped + state.col.pearl.sPopped;
 const forgeUsed = () => state.forge.slots.some(Boolean) || Object.keys(state.forge.stock).length > 0 || state.forge.lv.speed > 0 || state.forge.lv.slot > 0;
 // dock buttons behind a gate, keyed by their PANEL_BTN panel id; the stage gets the panel id as a class while its button shows
 const DOCK_GATES = {
-  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => state.artifacts[a.id]),
+  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0),
   forge: () => rosesPopped() >= ART_DOCK_ROSES || forgeUsed(), // a loaded save with forge work keeps its button
 };
 function syncDock() {
@@ -302,8 +302,8 @@ const ART_ICON = { pink_duck: DUCK_SVG };
 let artSig = '';
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
-    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
-    cost: a.cost.map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
+    id: a.id, name: a.name, desc: a.description, owned: ARTS.count(state.artifacts, a.id) > 0, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
+    cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
       : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
   })) }));
 }
@@ -320,11 +320,18 @@ function updateArts() {
     (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
     '</div>').join('') + '</div></section>').join('');
 }
-function craftArtifact(id) {
-  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock)) return false;
+// crafts a copy (rng is for tests; the game rolls with Math.random) and returns it, or null
+function craftArtifact(id, rng) {
+  const c = collapse ? null : ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock, rng);
+  if (!c) return null;
   recalc(); const a = ARTS.byId(id);
-  toast(a.name + ' crafted! ' + a.description); Snd.golden(); addShake(1.5);
-  artSig = ''; updateArts(); updatePack(); updateHud(0.016); save(); return true;
+  toast(a.name + ' crafted (' + ARTS.rarityById(c.rarity).name + ')! ' + a.description); Snd.golden(); addShake(1.5);
+  artSig = ''; forgeSig = ''; updateArts(); updateForge(); updatePack(); updateHud(0.016); save(); return c;
+}
+// puts an owned copy on its artifact's pedestal (the swap is free); the next session's panel calls it
+function setActiveCopy(id, copyId) {
+  if (!ARTS.setActive(state.artifacts, id, copyId)) return false;
+  recalc(); artSig = ''; forgeSig = ''; updateArts(); updateForge(); updateHud(0.016); save(); return true;
 }
 $('artHalls').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); } });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { Snd.click(); $(b.dataset.close).hidden = true; $(PANEL_BTN[b.dataset.close]).setAttribute('aria-expanded', 'false'); }));
@@ -337,7 +344,7 @@ const multTxt = (m) => 'x' + +m.toFixed(2);
 function payoutLine() {
   const e = state.echoes, a = S.artMult;
   if (a <= 1) return e > 0 ? 'Flavors ' + e + ' (payouts ' + multTxt(S.echoMult) + ')' : '';
-  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'ducks ' + multTxt(a) + ')';
+  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'artifacts ' + multTxt(a) + ')';
 }
 
 
@@ -350,7 +357,7 @@ function poolView() {
       const i = ECON.PEARLS.indexOf(t), nx = ECON.PEARLS[i + 1], locked = !ECON.canToggleOff(t.id, state.lv);
       return { id: t.id, name: t.name, unlocked: ECON.isUnlocked(t.id, state.lv), inPool: eff.includes(t.id), locked, need: locked ? META[ECON.unlockUpg(nx.id)].name : '', p: ch[t.id] || 0, pay: 'x' + fmtX(t.mult) + ' payout' };
     }),
-    shinyOn: state.shinyOn, shiny: ECON.shinyChance(state.lv),
+    shinyOn: state.shinyOn, shiny: ECON.shinyChance(state.lv, S.shinyBonus),
   };
 }
 function togglePool(id) {
@@ -679,10 +686,10 @@ function loadState(raw) {
   const ids = ECON.PEARLS.map((t) => t.id), ok = (k) => ids.includes(k) && state.col[k].found;
   state.pool = Array.isArray(d.pool) ? [...new Set(d.pool)].filter(ok) : ids.filter(ok); // locked types are ignored by poolChances, so a re-buy after a Fresh Batch spawns them again
   if (!state.pool.length) state.pool = ['pearl'];
-  const da = objOf(d.artifacts), dk = objOf(d.keep); // only known ids set to true; anything else is dropped
-  state.artifacts = {}; for (const a of ARTS.ARTIFACTS) if (da[a.id] === true) state.artifacts[a.id] = true;
+  const dk = objOf(d.keep); // only known ids set to true; anything else is dropped
+  state.artifacts = ARTS.fromSave(d.artifacts); // copies and pedestals, clamped: rarities, perks, active copy, known ids
   state.keep = {}; for (const t of ECON.PEARLS) if (dk[t.id] === true) state.keep[t.id] = true;
-  state.forge = FORGE.fromSave(d.forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
+  state.forge = FORGE.fromSave(d.forge, ARTS.activeBonuses(state.artifacts).forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
   syncTop();
   return 'ok';
 }
@@ -690,7 +697,7 @@ function loadState(raw) {
 function awayBonus(secs) {
   recalc();
   const jobs = forgeCatchUp(), helped = S.autoRate > 0 && secs >= 20; // secs >= 20 also refuses NaN from a broken save time
-  const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5 : 0; // what helpers alone would earn, halved
+  const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * S.awayShare : 0; // what helpers alone would earn, halved (more with an away bonus artifact)
   if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; }
   const done = jobs + (jobs === 1 ? ' forge job' : ' forge jobs') + ' finished';
   if (gain > 0) toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice' + (jobs ? ' and ' + done : '') + ' while you were away');

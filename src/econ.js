@@ -80,8 +80,9 @@ const ECON = (() => {
     for (const id of ids) w[id] /= tot;
     return w;
   }
-  const shinyChance = (L) => 0.005 + 0.0025 * (L.shiny || 0);
+  const shinyChance = (L, bonus) => (0.005 + 0.0025 * (L.shiny || 0)) * (1 + (bonus || 0)); // bonus: the active artifacts' shiny bonus (stats().shinyBonus)
   const FRENZY_SECS = 7, HELPER_METER = 0.25; // frenzy length; a helper pop fills the meter this much (a tap fills 1)
+  const AWAY_SHARE = 0.5; // the away bonus pays this share of what helpers alone would earn (before artifact bonuses)
   const FLAVOR_BONUS = 0.2; // each Flavor adds this much to every payout
   const COST_SCALE = 2.5; // global dial: how long each upgrade takes to afford
   const COLLAPSE_MIN_RUN = 5000000; // run juice needed before a Fresh Batch
@@ -106,12 +107,19 @@ const ECON = (() => {
     const eq = (st.equip == null || st.equip < 0) ? L.tool : st.equip; // the tool in hand, not necessarily the best one owned
     const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0, u: 0 };
     const ul = uniqueLevel(eq, up);
+    const B = ART.activeBonuses(st.artifacts); // only the active copy of each artifact counts: its base bonus plus its perks
     return Object.assign({
       echoMult,
-      artMult: ART.payoutMult(st.artifacts), // owned artifacts' payout bonus (the Pink Duck)
+      art: B,
+      artMult: B.payout, // payout: the duck's base x1.4 times every active payout perk
+      shinyBonus: B.shiny, // the rest add up: +0.1 = +10%
+      frenzySecs: FRENZY_SECS * (1 + B.frenzy),
+      meterMult: 1 + B.meter,
+      awayShare: AWAY_SHARE * (1 + B.away),
+      forgeBonus: B.forge,
       toolIdx: eq, toolName: TOOLS[eq].name, power: toolPower(eq, up.p), toolSpeed: toolSpeed(eq, up.s),
       popBase: 2 + L.sharp,
-      spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)),
+      spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)) / (1 + B.spawn),
       comboWindow: 1.1 + 0.15 * L.combo,
       sweep: false, brush: 0, // only the equipped tool's unique upgrade turns these on
       autoRate: L.auto / autoCd,
@@ -138,7 +146,7 @@ const ECON = (() => {
   // - so pops/s = helper hits / mean hits per pop, unless the board runs dry: then pops/s = the spawn rate;
   // - helper pops fill the frenzy meter, so a share of the time is frenzy: double pay, rare types twice as likely, 4x spawns.
   function helperIdle(S, pool, L, shinyOn) {
-    const shiny = shinyOn === false ? 1 : 1 + shinyChance(L) * (SHINY_MULT - 1);
+    const shiny = shinyOn === false ? 1 : 1 + shinyChance(L, S.shinyBonus) * (SHINY_MULT - 1);
     const phase = (frenzy) => {
       const ch = poolChances(pool, L, frenzy), mix = {};
       for (const id in ch) { const k = helperCanHit(id, S.power) ? id : 'pearl'; mix[k] = (mix[k] || 0) + ch[id]; }
@@ -149,12 +157,12 @@ const ECON = (() => {
     };
     const normal = phase(false), fr = phase(true);
     // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds
-    const frenzyShare = normal.pops > 0 ? Math.min(1, FRENZY_SECS * normal.pops * HELPER_METER / S.frenzyNeed) : 0;
+    const frenzyShare = normal.pops > 0 ? Math.min(1, (S.frenzySecs || FRENZY_SECS) * normal.pops * HELPER_METER * (S.meterMult || 1) / S.frenzyNeed) : 0;
     return Object.assign({}, normal, { frenzy: fr, frenzyShare, rate: (1 - frenzyShare) * normal.rate + frenzyShare * fr.rate });
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 

@@ -113,21 +113,21 @@ test('saves: ends are stored at the no-frenzy speed, and loading clamps', () => 
   assert.deepStrictEqual(two.slots, [null, { mat: 'rose_dust', start: 5, end: 5 + 30 * S }], 'an end beyond the recipe is clamped');
   assert.deepStrictEqual(F.fromSave(undefined).slots, [null]); assert.deepStrictEqual(F.fromSave([1, 2]).lv, { speed: 0, slot: 0 });
 });
-test('artifact costs accept material lines (fixture artifact, not a real duck)', () => {
+test('artifact costs accept material lines (fixture artifact, not a real one)', () => {
   const fx = { id: 'test_fixture', hall: 'ducks', name: 'Fixture', description: 'test only', cost: [{ kind: 'material', id: 'rose_dust', qty: 2 }, { kind: 'pearl', qty: 50 }], bonus: { type: 'payout', value: 1 } };
-  A.ARTIFACTS.push(fx);
+  const n0 = A.ARTIFACTS.length; A.ARTIFACTS.push(fx);
   try {
     const inv = { pearl: 80 }, stock = { rose_dust: 1 }, owned = {};
     assert.strictEqual(A.canCraft('test_fixture', inv, owned, stock), false, 'one Rose Dust short');
     assert.strictEqual(A.canCraft('test_fixture', inv, owned), false, 'no stock passed');
     stock.rose_dust = 3;
-    assert.strictEqual(A.craft('test_fixture', inv, owned, undefined, stock), true);
-    assert.deepStrictEqual([inv, stock, owned], [{ pearl: 30 }, { rose_dust: 1 }, { test_fixture: true }]);
-    assert.strictEqual(A.craft('test_fixture', { pearl: 999 }, owned, undefined, { rose_dust: 9 }), false, 'owned');
+    assert.ok(A.craft('test_fixture', inv, owned, undefined, stock));
+    assert.deepStrictEqual([inv, stock, A.count(owned, 'test_fixture')], [{ pearl: 30 }, { rose_dust: 1 }, 1]);
+    assert.strictEqual(A.craft('test_fixture', { pearl: 999 }, owned, undefined, { rose_dust: 1 }), null, 'short again');
     stock.rose_dust = 2; inv.pearl = 50; const o2 = {}; A.craft('test_fixture', inv, o2, undefined, stock);
     assert.deepStrictEqual(stock, {}, 'a spent-out material leaves the stock');
   } finally { A.ARTIFACTS.splice(A.ARTIFACTS.indexOf(fx), 1); }
-  assert.strictEqual(A.byId('test_fixture'), null); assert.strictEqual(A.ARTIFACTS.length, 1);
+  assert.strictEqual(A.byId('test_fixture'), null); assert.strictEqual(A.ARTIFACTS.length, n0);
 });
 
 // ---- alloys: the second tier, made from dusts ----

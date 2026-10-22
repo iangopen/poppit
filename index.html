@@ -566,43 +566,143 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
 
 <script>
 
-/* ---------- Artifacts: permanent items crafted from kept pearls, grouped in halls. Pure, no DOM. ---------- */
+/* ---------- Artifacts: permanent items crafted from kept pearls or forge alloys, grouped in halls. Pure, no DOM. ---------- */
+// Every craft makes a copy: { id, art, rarity, perks: [{ stat, value }] }. state.artifacts holds, per artifact id,
+// { copies: [...], active: <copy id> }. Only the active copy (the one on its pedestal) counts: its artifact's base bonus
+// plus its own perks. The first copy goes on the pedestal by itself; later copies wait until setActive puts them there.
+// A copy's roll is stored in the save, so loading never re-rolls.
 const ARTS = (() => {
   const PINK_DUCK_PAYOUT = 1.4; // Ian's value (was 1.25); may change again
+  const RELIC_HALL_NAME = 'Hall of Relics'; // one string, easy to rename
   // halls in display order; the Artifacts panel draws one section per hall
-  const HALLS = [{ id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make every pop pay more.' }];
-  // cost lines: { kind: <pearl id>, qty } spends normal pearls from the backpack; { kind: 'material', id, qty } spends forge
-  // materials from the forge stock. bonus: { type: 'payout', value } multiplies every payout.
-  const ARTIFACTS = [
-    { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
+  const HALLS = [
+    { id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make every pop pay more.' },
+    { id: 'relics', name: RELIC_HALL_NAME, blurb: 'Relics assembled from forge alloys. They help the game run, not the payouts.' },
   ];
+  // cost lines: { kind: <pearl id>, qty } spends normal pearls from the backpack; { kind: 'material', id, qty } spends forge
+  // materials (dusts or alloys) from the forge stock. Each craft costs ceil(qty x costGrowth^copies owned); costGrowth 1 = flat.
+  // bonus: { type, value }, value is a multiplier. Payout bonuses multiply together; every other stat adds (value - 1).
+  // Bonus types (and perk stats): payout, shiny (shiny chance), frenzy (frenzy length), away (away bonus rate),
+  // forge (forge speed), spawn (spawn rate), meter (how fast the frenzy meter fills).
+  const ARTIFACTS = [
+    { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], costGrowth: 1, bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
+    { id: 'rose_lantern', hall: 'relics', name: 'Rose Lantern', description: 'The frenzy meter fills 25% faster.', cost: [{ kind: 'material', id: 'rosegold', qty: 2 }], costGrowth: 1, bonus: { type: 'meter', value: 1.25 } },
+    { id: 'blue_compass', hall: 'relics', name: 'Blue Compass', description: 'Forge speed x1.3.', cost: [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }], costGrowth: 1, bonus: { type: 'forge', value: 1.3 } },
+    { id: 'mint_clock', hall: 'relics', name: 'Mint Clock', description: 'Away bonus x1.2.', cost: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }], costGrowth: 1, bonus: { type: 'away', value: 1.2 } },
+  ];
+  // each craft rolls a rarity by weight; perks = how many distinct perks it gets, range = what their rolled values are multiplied by
+  const RARITIES = [
+    { id: 'common', name: 'Common', weight: 70, perks: 0, range: 1 },
+    { id: 'rare', name: 'Rare', weight: 22, perks: 1, range: 1 },
+    { id: 'epic', name: 'Epic', weight: 7, perks: 2, range: 1.25 },
+    { id: 'mythic', name: 'Mythic', weight: 1, perks: 3, range: 1.6 },
+  ];
+  // the perk pool: value = an added fraction (0.05 = +5%), rolled in min..max, times the rarity's range, never above cap.
+  // A payout perk multiplies payouts by (1 + value); the others add to their stat's other bonuses.
+  const PERKS = [
+    { stat: 'payout', name: 'Payouts', min: 0.02, max: 0.06, cap: 0.1 },
+    { stat: 'shiny', name: 'Shiny chance', min: 0.05, max: 0.15, cap: 0.25 },
+    { stat: 'frenzy', name: 'Frenzy length', min: 0.05, max: 0.15, cap: 0.25 },
+    { stat: 'away', name: 'Away bonus', min: 0.05, max: 0.15, cap: 0.25 },
+    { stat: 'forge', name: 'Forge speed', min: 0.05, max: 0.15, cap: 0.25 },
+    { stat: 'spawn', name: 'Spawn rate', min: 0.03, max: 0.08, cap: 0.12 },
+  ];
+  const STATS = ['payout', 'shiny', 'frenzy', 'away', 'forge', 'spawn', 'meter'];
   const byId = (id) => ARTIFACTS.find((a) => a.id === id) || null;
+  const rarityById = (id) => RARITIES.find((r) => r.id === id) || null;
+  const perkById = (stat) => PERKS.find((p) => p.stat === stat) || null;
   const isMat = (c) => c.kind === 'material';
+  const entry = (arts, id) => (arts && arts[id] && Array.isArray(arts[id].copies) ? arts[id] : null);
+  const count = (arts, id) => { const e = entry(arts, id); return e ? e.copies.length : 0; };
+  const activeCopy = (arts, id) => { const e = entry(arts, id); return (e && e.copies.find((c) => c.id === e.active)) || null; };
   // how many of a cost line's item the player has: pearls from inv, materials from the forge stock
   const have = (c, inv, stock) => (isMat(c) ? (stock && stock[c.id]) || 0 : (inv && inv[c.kind]) || 0);
-  function canCraft(id, inv, owned, stock) {
-    const a = byId(id);
-    if (!a || (owned && owned[id] === true)) return false;
-    return a.cost.every((c) => have(c, inv, stock) >= c.qty);
+  // the cost of the next craft, which grows with the copies already owned
+  function craftCost(id, arts) {
+    const a = byId(id); if (!a) return [];
+    const g = Math.pow(a.costGrowth == null ? 1 : a.costGrowth, count(arts, id));
+    return a.cost.map((c) => Object.assign({}, c, { qty: Math.ceil(+(c.qty * g).toPrecision(12)) })); // toPrecision: 10000 x 1.1^2 is 12,100, not 12,101
   }
-  // consumes exactly the cost (and the matching share of each pearl stack's stored value) and marks it owned
-  function craft(id, inv, owned, invV, stock) {
-    if (!canCraft(id, inv, owned, stock)) return false;
-    for (const c of byId(id).cost) {
-      if (isMat(c)) { stock[c.id] -= c.qty; if (!stock[c.id]) delete stock[c.id]; continue; }
-      const have = inv[c.kind];
-      if (invV && invV[c.kind] != null) invV[c.kind] = have - c.qty > 0 ? invV[c.kind] * (have - c.qty) / have : 0;
-      inv[c.kind] = have - c.qty;
+  const canCraft = (id, inv, arts, stock) => !!byId(id) && craftCost(id, arts).every((c) => have(c, inv, stock) >= c.qty);
+  const round3 = (x) => Math.round(x * 1000) / 1000;
+  // a rarity and its distinct perks from rng (any function returning 0 <= x < 1)
+  function roll(rng) {
+    rng = rng || Math.random;
+    const total = RARITIES.reduce((s, r) => s + r.weight, 0);
+    let x = rng() * total, rar = RARITIES[RARITIES.length - 1];
+    for (const r of RARITIES) { if (x < r.weight) { rar = r; break; } x -= r.weight; }
+    const pool = PERKS.slice(), perks = [];
+    for (let i = 0; i < rar.perks && pool.length; i++) {
+      const p = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+      perks.push({ stat: p.stat, value: Math.min(p.cap, round3((p.min + rng() * (p.max - p.min)) * rar.range)) });
     }
-    owned[id] = true;
-    return true;
+    return { rarity: rar.id, perks };
   }
-  function payoutMult(owned) {
-    let m = 1;
-    if (owned) for (const a of ARTIFACTS) if (owned[a.id] === true && a.bonus.type === 'payout') m *= a.bonus.value;
-    return m;
+  const nextId = (arts) => { let n = 0; for (const k in arts) { const e = entry(arts, k); if (e) for (const c of e.copies) n = Math.max(n, c.id); } return n + 1; };
+  // adds a copy; the first copy of an artifact goes on its pedestal, later ones never replace it
+  function addCopy(arts, id, rarity, perks) {
+    if (!entry(arts, id)) arts[id] = { copies: [], active: null };
+    const c = { id: nextId(arts), art: id, rarity, perks: perks || [] };
+    arts[id].copies.push(c);
+    if (arts[id].copies.length === 1) arts[id].active = c.id;
+    return c;
   }
-  return { PINK_DUCK_PAYOUT, HALLS, ARTIFACTS, byId, isMat, have, canCraft, craft, payoutMult };
+  // consumes exactly the cost (and the matching share of each pearl stack's stored value), rolls the copy and returns it; null = not crafted
+  function craft(id, inv, arts, invV, stock, rng) {
+    if (!canCraft(id, inv, arts, stock)) return null;
+    for (const c of craftCost(id, arts)) {
+      if (isMat(c)) { stock[c.id] -= c.qty; if (!stock[c.id]) delete stock[c.id]; continue; }
+      const h = inv[c.kind];
+      if (invV && invV[c.kind] != null) invV[c.kind] = h - c.qty > 0 ? invV[c.kind] * (h - c.qty) / h : 0;
+      inv[c.kind] = h - c.qty;
+    }
+    const r = roll(rng);
+    return addCopy(arts, id, r.rarity, r.perks);
+  }
+  // puts an owned copy on its artifact's pedestal; free, at any time
+  function setActive(arts, id, copyId) {
+    const e = entry(arts, id);
+    if (!e || !e.copies.some((c) => c.id === copyId)) return false;
+    e.active = copyId; return true;
+  }
+  // every active bonus: payout as one multiplier, every other stat as an added fraction (0.25 = +25%)
+  function activeBonuses(arts) {
+    const b = {}; for (const s of STATS) b[s] = 0; b.payout = 1;
+    for (const a of ARTIFACTS) {
+      const c = activeCopy(arts, a.id); if (!c) continue;
+      if (a.bonus.type === 'payout') b.payout *= a.bonus.value; else b[a.bonus.type] += a.bonus.value - 1;
+      for (const p of c.perks) { if (p.stat === 'payout') b.payout *= 1 + p.value; else b[p.stat] += p.value; }
+    }
+    return b;
+  }
+  const payoutMult = (arts) => activeBonuses(arts).payout;
+  // untrusted input (a save) -> valid artifacts: unknown artifacts and copies with an unknown rarity or a bad or repeated id
+  // are dropped; perks keep known, distinct stats (as many as the rarity allows) with values clamped to min..cap; the active
+  // copy must be an owned one, otherwise the first copy goes on the pedestal
+  function fromSave(d) {
+    const out = {}, src = d && typeof d === 'object' && !Array.isArray(d) ? d : {}, ids = new Set();
+    for (const a of ARTIFACTS) {
+      const e = src[a.id]; if (!e || typeof e !== 'object' || !Array.isArray(e.copies)) continue;
+      const copies = [];
+      for (const c of e.copies) {
+        if (!c || typeof c !== 'object') continue;
+        const rar = rarityById(c.rarity);
+        if (!rar || !Number.isInteger(c.id) || c.id < 1 || ids.has(c.id)) continue;
+        const perks = [], seen = new Set();
+        for (const p of Array.isArray(c.perks) ? c.perks : []) {
+          const def = p && perkById(p.stat);
+          if (!def || seen.has(def.stat) || typeof p.value !== 'number' || !Number.isFinite(p.value) || perks.length >= rar.perks) continue;
+          seen.add(def.stat); perks.push({ stat: def.stat, value: Math.min(def.cap, Math.max(def.min, p.value)) });
+        }
+        ids.add(c.id); copies.push({ id: c.id, art: a.id, rarity: rar.id, perks });
+      }
+      if (!copies.length) continue;
+      out[a.id] = { copies, active: copies.some((c) => c.id === e.active) ? e.active : copies[0].id };
+    }
+    return out;
+  }
+  return { PINK_DUCK_PAYOUT, RELIC_HALL_NAME, HALLS, ARTIFACTS, RARITIES, PERKS, STATS, byId, rarityById, perkById, isMat, have, count, activeCopy,
+    craftCost, canCraft, roll, addCopy, craft, setActive, activeBonuses, payoutMult, fromSave };
 })();
 if (typeof module !== 'undefined') module.exports = ARTS;
 /* ---------- Forge: pearls become dusts, and dusts become alloys, over time. Pure, no DOM; every number is data. ---------- */
@@ -848,8 +948,9 @@ const ECON = (() => {
     for (const id of ids) w[id] /= tot;
     return w;
   }
-  const shinyChance = (L) => 0.005 + 0.0025 * (L.shiny || 0);
+  const shinyChance = (L, bonus) => (0.005 + 0.0025 * (L.shiny || 0)) * (1 + (bonus || 0)); // bonus: the active artifacts' shiny bonus (stats().shinyBonus)
   const FRENZY_SECS = 7, HELPER_METER = 0.25; // frenzy length; a helper pop fills the meter this much (a tap fills 1)
+  const AWAY_SHARE = 0.5; // the away bonus pays this share of what helpers alone would earn (before artifact bonuses)
   const FLAVOR_BONUS = 0.2; // each Flavor adds this much to every payout
   const COST_SCALE = 2.5; // global dial: how long each upgrade takes to afford
   const COLLAPSE_MIN_RUN = 5000000; // run juice needed before a Fresh Batch
@@ -874,12 +975,19 @@ const ECON = (() => {
     const eq = (st.equip == null || st.equip < 0) ? L.tool : st.equip; // the tool in hand, not necessarily the best one owned
     const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0, u: 0 };
     const ul = uniqueLevel(eq, up);
+    const B = ART.activeBonuses(st.artifacts); // only the active copy of each artifact counts: its base bonus plus its perks
     return Object.assign({
       echoMult,
-      artMult: ART.payoutMult(st.artifacts), // owned artifacts' payout bonus (the Pink Duck)
+      art: B,
+      artMult: B.payout, // payout: the duck's base x1.4 times every active payout perk
+      shinyBonus: B.shiny, // the rest add up: +0.1 = +10%
+      frenzySecs: FRENZY_SECS * (1 + B.frenzy),
+      meterMult: 1 + B.meter,
+      awayShare: AWAY_SHARE * (1 + B.away),
+      forgeBonus: B.forge,
       toolIdx: eq, toolName: TOOLS[eq].name, power: toolPower(eq, up.p), toolSpeed: toolSpeed(eq, up.s),
       popBase: 2 + L.sharp,
-      spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)),
+      spawnEvery: Math.max(0.14, 0.8 * Math.pow(0.9, L.spawn)) / (1 + B.spawn),
       comboWindow: 1.1 + 0.15 * L.combo,
       sweep: false, brush: 0, // only the equipped tool's unique upgrade turns these on
       autoRate: L.auto / autoCd,
@@ -906,7 +1014,7 @@ const ECON = (() => {
   // - so pops/s = helper hits / mean hits per pop, unless the board runs dry: then pops/s = the spawn rate;
   // - helper pops fill the frenzy meter, so a share of the time is frenzy: double pay, rare types twice as likely, 4x spawns.
   function helperIdle(S, pool, L, shinyOn) {
-    const shiny = shinyOn === false ? 1 : 1 + shinyChance(L) * (SHINY_MULT - 1);
+    const shiny = shinyOn === false ? 1 : 1 + shinyChance(L, S.shinyBonus) * (SHINY_MULT - 1);
     const phase = (frenzy) => {
       const ch = poolChances(pool, L, frenzy), mix = {};
       for (const id in ch) { const k = helperCanHit(id, S.power) ? id : 'pearl'; mix[k] = (mix[k] || 0) + ch[id]; }
@@ -917,12 +1025,12 @@ const ECON = (() => {
     };
     const normal = phase(false), fr = phase(true);
     // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds
-    const frenzyShare = normal.pops > 0 ? Math.min(1, FRENZY_SECS * normal.pops * HELPER_METER / S.frenzyNeed) : 0;
+    const frenzyShare = normal.pops > 0 ? Math.min(1, (S.frenzySecs || FRENZY_SECS) * normal.pops * HELPER_METER * (S.meterMult || 1) / S.frenzyNeed) : 0;
     return Object.assign({}, normal, { frenzy: fr, frenzyShare, rate: (1 - frenzyShare) * normal.rate + frenzyShare * fr.rate });
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 
@@ -977,7 +1085,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 5;
+const SAVE_VERSION = 6;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -1007,6 +1115,13 @@ const MIGRATIONS = {
   3: (d) => Object.assign({}, d, { version: 4, artifacts: isObj(d.artifacts) ? d.artifacts : {}, keep: isObj(d.keep) ? d.keep : {} }),
   // v4 had no forge: one empty slot, no materials, no forge upgrades
   4: (d) => Object.assign({}, d, { version: 5, forge: isObj(d.forge) ? d.forge : { slots: [null], stock: {}, lv: { speed: 0, slot: 0 } } }),
+  // v5 artifacts were id: true. Now each is a list of copies with one on its pedestal: an owned artifact becomes one
+  // Common copy with no perks, active, so it pays exactly as before. Copy ids count from 1 in the order the ids appear.
+  5: (d) => {
+    const src = isObj(d.artifacts) ? d.artifacts : {}, artifacts = {}; let n = 0;
+    for (const k of Object.keys(src)) if (src[k] === true) { n++; artifacts[k] = { copies: [{ id: n, art: k, rarity: 'common', perks: [] }], active: n }; }
+    return Object.assign({}, d, { version: 6, artifacts });
+  },
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
@@ -1274,7 +1389,7 @@ function discover(id, shiny) {
   toast('New pearl: ' + t.name + ' (added to your pool)'); return true;
 }
 let S = ECON.stats(state);
-const recalc = () => { S = ECON.stats(state); };
+const recalc = () => { S = ECON.stats(state); FORGE.setBonus(state.forge, S.forgeBonus, Date.now()); }; // an artifact forge bonus re-times running jobs
 
 // fruit palette: strawberry, passion fruit, kiwi, mint, blueberry (hue, saturation, lightness)
 const PAL = [[340, 92, 58]]; // one pink for now
@@ -1402,7 +1517,7 @@ function trySpawn() {
   for (const id in ch) { r -= ch[id]; if (r < 0) { kind = id; break; } }
   const cap = ECON.PEARLS.find((t) => t.id === kind).cap;
   if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind && p.st === 'live').length >= cap) kind = 'pearl';
-  spawnAt(cell, kind, state.shinyOn && Math.random() < ECON.shinyChance(state.lv));
+  spawnAt(cell, kind, state.shinyOn && Math.random() < ECON.shinyChance(state.lv, S.shinyBonus));
 }
 function pearlPos(p) { return [p.cell.x, p.cell.y]; }
 // effect tiers by kind (independent of how many hits a pearl takes): FXW = juice weight, big = glints + larger body, heavy = marble-class bursts
@@ -1435,7 +1550,7 @@ function popPearl(p, src, opts) {
     const val = ECON.popValue(S, manual ? combo : (src === 'auto' ? 0 : combo), frenzyT > 0, p.kind) * (p.shiny ? ECON.SHINY_MULT : 1);
     award(val, x, y, col, (isBig(p.kind) && !isHeavy(p.kind)) || p.shiny, p.kind + (p.shiny ? ':s' : ''));
     if (p.shiny) { state.col[p.kind].sPopped++; discover(p.kind, true); Snd.shimmer(); sparkle(x, y); } else { state.col[p.kind].popped++; discover(p.kind, false); }
-    meter += manual ? 1 : ECON.HELPER_METER;
+    meter += (manual ? 1 : ECON.HELPER_METER) * S.meterMult;
     if (meter >= S.frenzyNeed && frenzyT <= 0) startFrenzy();
   }
   // juice: droplets, a stain on the board, and a quick membrane ring
@@ -1498,7 +1613,7 @@ function hitPearl(p, dmg, src, opts) {
 }
 function swing() { tool.sw = 0.04; tool.heat = Math.min(6, tool.heat + 1); } // every player hit restarts the swing; the more recent hits, the faster it plays
 function startFrenzy() {
-  meter = 0; frenzyT = ECON.FRENZY_SECS; Snd.frenzy(); addShake(3);
+  meter = 0; frenzyT = S.frenzySecs; Snd.frenzy(); addShake(3);
   toast('Frenzy! Pearls pop in 4x faster and pay double');
   $('surge').classList.add('on');
 }
@@ -1976,7 +2091,7 @@ const META = {
   opal:   { name: 'Opal Pearls', desc: () => typeDesc('opal', blurb('opal', 'Unlocks opal pearls')) },
   ruby:   { name: 'Ruby Pearls', desc: () => typeDesc('ruby', blurb('ruby', 'Unlocks ruby pearls')) },
   black:  { name: 'Black Pearls', desc: () => typeDesc('black', blurb('black', 'Unlocks black pearls')) },
-  shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
+  shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv, S.shinyBonus) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
 };
 const rows = {};
 let toastTimer = 0;
@@ -2065,7 +2180,7 @@ function updateHud(dt) {
   }
   const mt = $('meter'), fr = frenzyT > 0;
   mt.classList.toggle('hot', fr);
-  mt.firstElementChild.style.transform = 'scaleX(' + (fr ? frenzyT / ECON.FRENZY_SECS : clamp(meter / S.frenzyNeed, 0, 1)).toFixed(3) + ')';
+  mt.firstElementChild.style.transform = 'scaleX(' + (fr ? frenzyT / S.frenzySecs : clamp(meter / S.frenzyNeed, 0, 1)).toFixed(3) + ')';
   $('meterLbl').textContent = fr ? 'Frenzy!' : 'Frenzy meter';
 }
 
@@ -2232,7 +2347,7 @@ const rosesPopped = () => state.col.pearl.popped + state.col.pearl.sPopped;
 const forgeUsed = () => state.forge.slots.some(Boolean) || Object.keys(state.forge.stock).length > 0 || state.forge.lv.speed > 0 || state.forge.lv.slot > 0;
 // dock buttons behind a gate, keyed by their PANEL_BTN panel id; the stage gets the panel id as a class while its button shows
 const DOCK_GATES = {
-  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => state.artifacts[a.id]),
+  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0),
   forge: () => rosesPopped() >= ART_DOCK_ROSES || forgeUsed(), // a loaded save with forge work keeps its button
 };
 function syncDock() {
@@ -2253,8 +2368,8 @@ const ART_ICON = { pink_duck: DUCK_SVG };
 let artSig = '';
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => ({
-    id: a.id, name: a.name, desc: a.description, owned: state.artifacts[a.id] === true, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
-    cost: a.cost.map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
+    id: a.id, name: a.name, desc: a.description, owned: ARTS.count(state.artifacts, a.id) > 0, can: ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock),
+    cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
       : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
   })) }));
 }
@@ -2271,11 +2386,18 @@ function updateArts() {
     (a.owned ? '<button type="button" class="chip craft" disabled>Owned</button>' : '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + '>Craft</button>') +
     '</div>').join('') + '</div></section>').join('');
 }
-function craftArtifact(id) {
-  if (collapse || !ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock)) return false;
+// crafts a copy (rng is for tests; the game rolls with Math.random) and returns it, or null
+function craftArtifact(id, rng) {
+  const c = collapse ? null : ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock, rng);
+  if (!c) return null;
   recalc(); const a = ARTS.byId(id);
-  toast(a.name + ' crafted! ' + a.description); Snd.golden(); addShake(1.5);
-  artSig = ''; updateArts(); updatePack(); updateHud(0.016); save(); return true;
+  toast(a.name + ' crafted (' + ARTS.rarityById(c.rarity).name + ')! ' + a.description); Snd.golden(); addShake(1.5);
+  artSig = ''; forgeSig = ''; updateArts(); updateForge(); updatePack(); updateHud(0.016); save(); return c;
+}
+// puts an owned copy on its artifact's pedestal (the swap is free); the next session's panel calls it
+function setActiveCopy(id, copyId) {
+  if (!ARTS.setActive(state.artifacts, id, copyId)) return false;
+  recalc(); artSig = ''; forgeSig = ''; updateArts(); updateForge(); updateHud(0.016); save(); return true;
 }
 $('artHalls').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); } });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { Snd.click(); $(b.dataset.close).hidden = true; $(PANEL_BTN[b.dataset.close]).setAttribute('aria-expanded', 'false'); }));
@@ -2288,7 +2410,7 @@ const multTxt = (m) => 'x' + +m.toFixed(2);
 function payoutLine() {
   const e = state.echoes, a = S.artMult;
   if (a <= 1) return e > 0 ? 'Flavors ' + e + ' (payouts ' + multTxt(S.echoMult) + ')' : '';
-  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'ducks ' + multTxt(a) + ')';
+  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'artifacts ' + multTxt(a) + ')';
 }
 
 
@@ -2301,7 +2423,7 @@ function poolView() {
       const i = ECON.PEARLS.indexOf(t), nx = ECON.PEARLS[i + 1], locked = !ECON.canToggleOff(t.id, state.lv);
       return { id: t.id, name: t.name, unlocked: ECON.isUnlocked(t.id, state.lv), inPool: eff.includes(t.id), locked, need: locked ? META[ECON.unlockUpg(nx.id)].name : '', p: ch[t.id] || 0, pay: 'x' + fmtX(t.mult) + ' payout' };
     }),
-    shinyOn: state.shinyOn, shiny: ECON.shinyChance(state.lv),
+    shinyOn: state.shinyOn, shiny: ECON.shinyChance(state.lv, S.shinyBonus),
   };
 }
 function togglePool(id) {
@@ -2630,10 +2752,10 @@ function loadState(raw) {
   const ids = ECON.PEARLS.map((t) => t.id), ok = (k) => ids.includes(k) && state.col[k].found;
   state.pool = Array.isArray(d.pool) ? [...new Set(d.pool)].filter(ok) : ids.filter(ok); // locked types are ignored by poolChances, so a re-buy after a Fresh Batch spawns them again
   if (!state.pool.length) state.pool = ['pearl'];
-  const da = objOf(d.artifacts), dk = objOf(d.keep); // only known ids set to true; anything else is dropped
-  state.artifacts = {}; for (const a of ARTS.ARTIFACTS) if (da[a.id] === true) state.artifacts[a.id] = true;
+  const dk = objOf(d.keep); // only known ids set to true; anything else is dropped
+  state.artifacts = ARTS.fromSave(d.artifacts); // copies and pedestals, clamped: rarities, perks, active copy, known ids
   state.keep = {}; for (const t of ECON.PEARLS) if (dk[t.id] === true) state.keep[t.id] = true;
-  state.forge = FORGE.fromSave(d.forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
+  state.forge = FORGE.fromSave(d.forge, ARTS.activeBonuses(state.artifacts).forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
   syncTop();
   return 'ok';
 }
@@ -2641,7 +2763,7 @@ function loadState(raw) {
 function awayBonus(secs) {
   recalc();
   const jobs = forgeCatchUp(), helped = S.autoRate > 0 && secs >= 20; // secs >= 20 also refuses NaN from a broken save time
-  const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * 0.5 : 0; // what helpers alone would earn, halved
+  const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * S.awayShare : 0; // what helpers alone would earn, halved (more with an away bonus artifact)
   if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; }
   const done = jobs + (jobs === 1 ? ' forge job' : ' forge jobs') + ' finished';
   if (gain > 0) toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice' + (jobs ? ' and ' + done : '') + ' while you were away');

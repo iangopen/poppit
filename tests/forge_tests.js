@@ -58,7 +58,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     ok('importing another code backs up the forge, Restore brings it back', G.checkImport(G.encodeSave({ version: 5, sparks: 1 })) === 'ok' && G.applyImport() === true && st.forge.stock.rose_dust === undefined && store['poppit.backup'] === rawF &&
       G.restoreBackup() === 'ok' && JSON.stringify(F.toSave(st.forge, now)) === keep);
     const m4 = G.migrateSave({ version: 4, sparks: 2 }).save;
-    ok('a v4 save migrates to an empty forge', m4.version === 5 && JSON.stringify(m4.forge) === '{"slots":[null],"stock":{},"lv":{"speed":0,"slot":0}}' && G.loadState({ version: 4 }) === 'ok' && st.forge.slots.length === 1 && !st.forge.slots[0]);
+    ok('a v4 save migrates to an empty forge', m4.version === G.SAVE_VERSION && JSON.stringify(m4.forge) === '{"slots":[null],"stock":{},"lv":{"speed":0,"slot":0}}' && G.loadState({ version: 4 }) === 'ok' && st.forge.slots.length === 1 && !st.forge.slots[0]);
     ok('loaded forge values are clamped', G.loadState({ version: 5, forge: { slots: [{ mat: 'nope', start: 1, end: 2 }], stock: { rose_dust: -1, ruby_dust: 3 }, lv: { speed: 50, slot: -2 } } }) === 'ok' &&
       JSON.stringify(F.toSave(st.forge, now)) === '{"slots":[null],"stock":{"ruby_dust":3},"lv":{"speed":10,"slot":0}}');
     ok('Reset save forgets the forge', (els.resetBtn.fire('click', {}), els.resetBtn.fire('click', {}), JSON.stringify(F.toSave(st.forge, now)) === '{"slots":[null],"stock":{},"lv":{"speed":0,"slot":0}}'));

@@ -24,7 +24,7 @@ function discover(id, shiny) {
   toast('New pearl: ' + t.name + ' (added to your pool)'); return true;
 }
 let S = ECON.stats(state);
-const recalc = () => { S = ECON.stats(state); };
+const recalc = () => { S = ECON.stats(state); FORGE.setBonus(state.forge, S.forgeBonus, Date.now()); }; // an artifact forge bonus re-times running jobs
 
 // fruit palette: strawberry, passion fruit, kiwi, mint, blueberry (hue, saturation, lightness)
 const PAL = [[340, 92, 58]]; // one pink for now
@@ -152,7 +152,7 @@ function trySpawn() {
   for (const id in ch) { r -= ch[id]; if (r < 0) { kind = id; break; } }
   const cap = ECON.PEARLS.find((t) => t.id === kind).cap;
   if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind && p.st === 'live').length >= cap) kind = 'pearl';
-  spawnAt(cell, kind, state.shinyOn && Math.random() < ECON.shinyChance(state.lv));
+  spawnAt(cell, kind, state.shinyOn && Math.random() < ECON.shinyChance(state.lv, S.shinyBonus));
 }
 function pearlPos(p) { return [p.cell.x, p.cell.y]; }
 // effect tiers by kind (independent of how many hits a pearl takes): FXW = juice weight, big = glints + larger body, heavy = marble-class bursts
@@ -185,7 +185,7 @@ function popPearl(p, src, opts) {
     const val = ECON.popValue(S, manual ? combo : (src === 'auto' ? 0 : combo), frenzyT > 0, p.kind) * (p.shiny ? ECON.SHINY_MULT : 1);
     award(val, x, y, col, (isBig(p.kind) && !isHeavy(p.kind)) || p.shiny, p.kind + (p.shiny ? ':s' : ''));
     if (p.shiny) { state.col[p.kind].sPopped++; discover(p.kind, true); Snd.shimmer(); sparkle(x, y); } else { state.col[p.kind].popped++; discover(p.kind, false); }
-    meter += manual ? 1 : ECON.HELPER_METER;
+    meter += (manual ? 1 : ECON.HELPER_METER) * S.meterMult;
     if (meter >= S.frenzyNeed && frenzyT <= 0) startFrenzy();
   }
   // juice: droplets, a stain on the board, and a quick membrane ring
@@ -248,7 +248,7 @@ function hitPearl(p, dmg, src, opts) {
 }
 function swing() { tool.sw = 0.04; tool.heat = Math.min(6, tool.heat + 1); } // every player hit restarts the swing; the more recent hits, the faster it plays
 function startFrenzy() {
-  meter = 0; frenzyT = ECON.FRENZY_SECS; Snd.frenzy(); addShake(3);
+  meter = 0; frenzyT = S.frenzySecs; Snd.frenzy(); addShake(3);
   toast('Frenzy! Pearls pop in 4x faster and pay double');
   $('surge').classList.add('on');
 }

@@ -5,7 +5,7 @@
 //   node tools/sim32.js --compare       one summary line per variant, profile and player policy
 //   node tools/sim32.js --duck                the player owns the Pink Duck from the start (no ducks by default)
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
-const E = require('../src/econ.js');
+const E = require('../src/econ.js'), A = require('../src/artifacts.js');
 const CELLS = [120, 252, 440];
 const CAP = {}; E.PEARLS.forEach((p) => { CAP[p.id] = p.cap; });
 const CYCLES = 6, MAX_CYCLE_MIN = 120;
@@ -81,7 +81,7 @@ function helperHour(X, st, board, cells, seed) {
       const ch = X.poolChances(ids, st.lv, frenzy > 0); let kind = 'pearl', r = rng();
       for (const id in ch) { r -= ch[id]; if (r < 0) { kind = id; break; } }
       if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind).length >= CAP[kind]) kind = 'pearl';
-      pearls.push({ kind, dmg: 0, hp: X.KIND[kind].hp, sh: rng() < X.shinyChance(st.lv), last: -9, claimed: false });
+      pearls.push({ kind, dmg: 0, hp: X.KIND[kind].hp, sh: rng() < X.shinyChance(st.lv, S.shinyBonus), last: -9, claimed: false });
     }
     for (const p of pearls) if (p.dmg > 0 && t - p.last > 2.2) p.dmg = Math.max(0, p.dmg - dt * 1.1);
     acc += dt * S.autoRate;
@@ -96,7 +96,7 @@ function helperHour(X, st, board, cells, seed) {
       if (p.dmg < p.hp) continue;
       pearls.splice(pearls.indexOf(p), 1);
       juice += X.popValue(S, 0, frenzy > 0, p.kind) * (p.sh ? X.SHINY_MULT : 1);
-      meter += X.HELPER_METER; if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = X.FRENZY_SECS; }
+      meter += X.HELPER_METER * S.meterMult; if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = S.frenzySecs; }
     }
   }
   return juice;
@@ -149,7 +149,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
         if (black.at != null) { black.spawnsAfter++; black.expected += ch.black || 0; }
         if (kind !== 'pearl' && pearls.filter((p) => p.kind === kind).length >= CAP[kind]) { if (kind === 'black') black.capped++; kind = 'pearl'; } // per-type cap, as trySpawn in src/world.js
         if (kind === 'black') black.spawned++;
-        pearls.push({ kind, dmg: 0, hp: X.KIND[kind].hp, sh: rng() < X.shinyChance(st.lv) });
+        pearls.push({ kind, dmg: 0, hp: X.KIND[kind].hp, sh: rng() < X.shinyChance(st.lv, S.shinyBonus) });
       }
     }
     let gain = 0;
@@ -161,7 +161,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
       gain += val; income[p.kind] += val; if (val > top.pop) top.pop = val;
       if (p.kind === 'black') black[manual ? 'byTap' : 'byHelper']++;
       if (p.kind === 'pearl' && !p.sh) roseWin.push([t, val]);
-      if (manual) meter += 1;
+      if (manual) meter += S.meterMult;
     };
     tapAcc += dt * tapsPerSec * S.toolSpeed * (S.sweep ? 2 : 1);
     while (tapAcc >= 1 && pearls.length) {
@@ -173,7 +173,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     }
     autoAcc += dt * S.autoRate;
     while (autoAcc >= 1 && pearls.length) { autoAcc -= 1; const c = pearls.filter((p) => p.hp <= S.power * 3); if (c.length) hit(c[Math.floor(rng() * c.length)], S.power, false); }
-    if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = X.FRENZY_SECS; }
+    if (meter >= S.frenzyNeed && frenzy <= 0) { meter = 0; frenzy = S.frenzySecs; }
     sparks += gain; runEarned += gain; earnedWin += gain;
     if (gain > 0) win.push([t, gain]);
     while (win.length && win[0][0] <= t - 60) win.shift();
@@ -187,8 +187,8 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     const left = candidates(); if (left.every((c) => c.c <= sparks)) satiated += dt;
     if (left.every((c) => c.n === 'sharp' || c.c <= sparks)) satiatedX += dt;
     for (const c of left) if (c.c > top.cost) top.cost = c.c;
-    // awayBonus() in src/ui.js for a 1 hour absence: idle rate at the pool's expected payout, half rate
-    const away1h = () => X.idleRate(X.stats(st), X.PEARLS.map((p) => p.id), st.lv) * 3600 * 0.5;
+    // awayBonus() in src/ui.js for a 1 hour absence: idle rate at the pool's expected payout, times AWAY_SHARE (half)
+    const away1h = () => X.idleRate(X.stats(st), X.PEARLS.map((p) => p.id), st.lv) * 3600 * X.stats(st).awayShare;
     if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); roseHelper = roseSnap(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
     if (black.at == null && st.lv.black > 0) { black.at = t / 60; black.hitsAtUnlock = X.hitsNeeded('black', X.stats(st).power); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
@@ -208,7 +208,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
 function play(v, profile, verbose, measure) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
   const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {} };
-  for (const id of v.artifacts || []) st.artifacts[id] = true; // artifacts are never wiped by Fresh Batch
+  for (const id of v.artifacts || []) A.addCopy(st.artifacts, id, 'common', []); // one Common copy on its pedestal; artifacts are never wiped by Fresh Batch
   const out = [];
   for (let c = 0; c < CYCLES; c++) { const r = cycle(X, st, rng, taps, skill, verbose, v.waitMin, measure ? 1000 * seed + 10 * c : 0); out.push(r); if (r.ready == null) break; }
   return out;
