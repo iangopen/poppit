@@ -1,19 +1,16 @@
-Session: CI confirmed on GitHub (green on main, red proof observed)
+Session: /doctor health check
 
-- Push: the CI commits were already on origin/main (git push said Everything up-to-date).
-  Head is 1ef7e6d.
-- Main run: CI run 40004144501 on that push, "completed success", job "check" 1m36s.
-  The pages build and deployment run beside it also succeeded.
-- Red check, observed: a branch push alone starts no run, because ci.yml fires only on push
-  to main and on pull requests. I left the workflow alone and opened a draft PR (#1) from a
-  throwaway branch with a one-line change to src/ui.js and no rebuild.
-  - Run 40004747052 failed in 8 s at the step "index.html is up to date".
-  - The log shows the diff stat "index.html | 1 +, 1 file changed, 1 insertion(+)" and the
-    error "index.html is stale. Run npm run build and commit it."
-  - The Test step was skipped after it.
-- Cleanup: PR #1 closed unmerged, branch ci-red-check deleted on GitHub and locally,
-  remote tracking ref pruned. Only main remains.
-- Badge: the README badge SVG for main reads "passing".
-- Annotations only, no failures: GitHub warns that actions/checkout@v4 and setup-node@v4
-  target Node 20 (forced to Node 24), and that ubuntu-latest moves to Ubuntu 26. Not changed.
-- No game code touched this session.
+- Install: native 2.1.309 is current and first on PATH. A stale npm global 2.1.131 sits in
+  /usr/local/lib/node_modules (root-owned). Harmless; remove it yourself if you like with
+  "! npm -g uninstall @anthropic-ai/claude-code" (may need sudo). I did not touch it.
+- Settings files all parse. No hooks are slow (SessionStart 84-239 ms). No denials recorded.
+- Changed in ~/.claude/settings.json: plugins design@synced and napkin-math@synced set to
+  false (0 uses), and permissions.defaultMode set to "auto".
+  - Undo: delete those keys, or ask me. Backup of the old file is in the temp dir.
+- Changed in the repo (uncommitted, review with git diff): the dated "State: real and
+  verified (2026-10-21)" section moved from CLAUDE.md to the end of docs/history.md,
+  word for word. CLAUDE.md went from 57,247 to about 47,600 chars (about 2.4k est. tokens
+  saved per session). It is still over the ~40k warning size; the Artifacts and Forge
+  detail (about 20k chars) is the only big block left to move, and I left it for you.
+- /usage tips (advice): end long sessions, /clear when switching tasks, /context to see usage.
+- No game code changed; index.html rebuild matches the committed one.
