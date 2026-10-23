@@ -1,37 +1,19 @@
-Session: CI check on GitHub (not pushed yet: blocked)
+Session: CI confirmed on GitHub (green on main, red proof observed)
 
-BLOCKER
-- git push to main was rejected: the stored GitHub token has no "workflow" scope, so it
-  cannot create .github/workflows/ci.yml.
-- Fix (either): run "gh auth refresh -s workflow" or make a new token with the workflow
-  scope, then run "git push origin main". Or add ci.yml through the GitHub web UI.
-- Because of this, nothing was pushed, so no Actions run exists. I could not confirm green
-  and could not run the red-branch proof (it needs the same push). gh is not installed here.
-
-Done locally (2 commits + docs commit, unpushed)
-- .github/workflows/ci.yml: on push to main and pull requests. Node 22, no install (no
-  dependencies). Build, fail if git diff shows index.html changed (prints diff stat), npm test,
-  then npm run sim twice and diff.
-- .gitattributes: LF for index.html, js, html, json, md, yml; mp3 binary. No history rewrite.
-- README.md: CI badge on top.
-- CLAUDE.md: new CI section. Pages setting and deploy untouched; no deploy step.
-
-Browser: the page tests do not start Chrome (they read index.html as text), so nothing is
-downloaded and nothing is skipped.
-Sim: 12 s per run locally, so the determinism step stays in.
-
-Verification (local)
-- npm run build: built index.html
-- 32 econ pass, 19 artifacts pass, 21 forge pass, 8 page pass
-- harness: ALL PASSED
-- away sim tests: 2 pass
-- npm run sim twice: outputs identical
-
-Conservative choices
-- Node 22 (current LTS), pinned rather than "latest".
-- Read-only permissions for the workflow; 10 minute timeout.
-- Freshness check runs right after build, before tests.
-
-Next step for Ian
-- Fix the token scope, push, then ask me to confirm the run and do the throwaway-branch
-  red check.
+- Push: the CI commits were already on origin/main (git push said Everything up-to-date).
+  Head is 1ef7e6d.
+- Main run: CI run 40004144501 on that push, "completed success", job "check" 1m36s.
+  The pages build and deployment run beside it also succeeded.
+- Red check, observed: a branch push alone starts no run, because ci.yml fires only on push
+  to main and on pull requests. I left the workflow alone and opened a draft PR (#1) from a
+  throwaway branch with a one-line change to src/ui.js and no rebuild.
+  - Run 40004747052 failed in 8 s at the step "index.html is up to date".
+  - The log shows the diff stat "index.html | 1 +, 1 file changed, 1 insertion(+)" and the
+    error "index.html is stale. Run npm run build and commit it."
+  - The Test step was skipped after it.
+- Cleanup: PR #1 closed unmerged, branch ci-red-check deleted on GitHub and locally,
+  remote tracking ref pruned. Only main remains.
+- Badge: the README badge SVG for main reads "passing".
+- Annotations only, no failures: GitHub warns that actions/checkout@v4 and setup-node@v4
+  target Node 20 (forced to Node 24), and that ubuntu-latest moves to Ubuntu 26. Not changed.
+- No game code touched this session.

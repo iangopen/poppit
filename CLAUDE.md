@@ -233,6 +233,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - Deploy is unchanged: Pages "Deploy from a branch" on `main`. CI has no deploy step and does not gate Pages.
 - `.gitattributes` keeps `index.html` and the sources on LF (Windows and Mac checkouts).
 - A push that touches `.github/workflows/` needs a token with the `workflow` scope.
+- **Observed (2026-10-23):** the run on `main` (40004144501) finished green and the README badge reads passing. The red check was also seen: a draft PR from a throwaway branch with a `src/` change and no rebuild failed at "index.html is up to date" (run 40004747052), with the diff stat in the log. A branch push alone starts no run (only `main` pushes and PRs do), so test CI with a PR; close it unmerged and delete the branch.
 
 ## Commands (Windows PowerShell and macOS alike, no bash needed)
 
