@@ -223,6 +223,17 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **Unreadable stored save:** at boot, `loadStored()` copies a stored save that is not JSON (or not a loadable save) to `poppit.backup` before the fresh game's first save replaces it, and shows a toast. If `poppit.backup` already holds a good save, the raw text goes to `poppit.unreadable` instead, so a good backup is never pushed out.
   - When the backup cannot be loaded, the Restore row says "Your last save could not be read". Restore then shows the raw text, selected, in the read-only box so the player can copy it, and keeps the backup.
 
+## CI (GitHub Actions)
+
+- `.github/workflows/ci.yml` runs on push to `main` and on pull requests (Node 22, no dependencies to install). Steps, in order, each failing the job:
+  - `npm run build`;
+  - `git diff --exit-code --stat -- index.html`: fails with the diff stat if `index.html` is stale (a forgotten rebuild);
+  - `npm test` (no browser needed: the page tests read `index.html` as text);
+  - `npm run sim` twice, then `diff` of the two outputs (sim determinism; the sim takes about 12 s).
+- Deploy is unchanged: Pages "Deploy from a branch" on `main`. CI has no deploy step and does not gate Pages.
+- `.gitattributes` keeps `index.html` and the sources on LF (Windows and Mac checkouts).
+- A push that touches `.github/workflows/` needs a token with the `workflow` scope.
+
 ## Commands (Windows PowerShell and macOS alike, no bash needed)
 
 - `npm run build`: runs `node tools/build.js`, which concatenates into `build/all.js` (gitignored), syntax-checks it with `vm.Script`, and writes `index.html`. **This is the gate.**
