@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # package.json declares no dependencies, so there is nothing to install.
+      - name: Build
+        run: npm run build
+      - name: index.html is up to date
+        run: |
+          if ! git diff --exit-code --stat -- index.html; then
+            echo "::error::index.html is stale. Run npm run build and commit it."
+            exit 1
+          fi
+      - name: Test
+        run: npm test
+      - name: Sim is deterministic
+        run: |
+          npm run sim > sim1.txt
+          npm run sim > sim2.txt
+          diff sim1.txt sim2.txt
