@@ -5,6 +5,7 @@
 //   node tools/sim32.js --compare       one summary line per variant, profile and player policy
 //   node tools/sim32.js --duck          the player owns a plain Pink Duck (Common, x1.4) from the start (no ducks by default)
 //   node tools/sim32.js --duck=best     the best-case duck instead: a Mythic copy with a top payout perk (+15%), x1.61
+//   node tools/sim32.js --early         the early beats of run 1 (first purchase, tool, tool upgrade, helper, Fresh Batch) against the rule of thumb
 //   node tools/sim32.js --ducks         the Hall of Ducks report: per-type pop rates, suggested duck costs, cycle times with ducks
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
 const E = require('../src/econ.js'), A = require('../src/artifacts.js');
@@ -128,7 +129,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
   const typeWin = [], typeSnap = () => { const span = Math.min(TYPE_WIN, t), o = {}; X.PEARLS.forEach((p) => { o[p.id] = 0; }); for (const w of typeWin) if (w[0] > t - TYPE_WIN) o[w[1]]++; for (const k in o) o[k] *= 60 / span; return o; };
   let typeHelper = null, typeReady = null;
   const black = { at: null, spawnsAfter: 0, expected: 0, spawned: 0, capped: 0, byTap: 0, byHelper: 0, hitsAtUnlock: null, hitsAtEnd: null, powerAtEnd: null };
-  const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200];
+  const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200], early = { buy: null, tool: null, toolUp: null };
   const fill = () => CELLS[st.lv.board];
   for (let i = 0; i < Math.max(3, Math.round(fill() * 0.3)); i++) pearls.push({ kind: 'pearl', dmg: 0, hp: X.KIND.pearl.hp, sh: false });
   const bestOwned = () => { let b = 0; st.owned.forEach((o, i) => { if (o) b = i; }); return b; };
@@ -195,7 +196,9 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     while (typeWin.length && typeWin[0][0] <= t - TYPE_WIN) typeWin.shift();
     const cands = candidates();
     let best = null; for (const c of cands) if (c.c <= sparks && (!best || c.s < best.s)) best = c;
-    if (best) { sparks -= best.c; best.f(); if (best.n.startsWith('buy')) bought.push(best.n.slice(4) + '@' + (t / 60).toFixed(1)); }
+    if (best) { sparks -= best.c; best.f(); if (best.n.startsWith('buy')) bought.push(best.n.slice(4) + '@' + (t / 60).toFixed(1));
+      // the early beats (--early): first purchase of anything, first tool bought, first tool upgrade (power, speed or the tool's own)
+      if (early.buy == null) early.buy = t; if (early.tool == null && best.n.startsWith('buy')) early.tool = t; if (early.toolUp == null && /^(pow|spd|uniq)/.test(best.n)) early.toolUp = t; }
     st.lv.tool = bestOwned();
     // nothing left to want: every upgrade still on offer is already affordable (or there is nothing left at all)
     // also without Sharp: at max 99 it always has a next level, so it alone keeps the first measure near zero
@@ -217,7 +220,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
-  return { furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { early, furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose, measure) {
@@ -312,6 +315,20 @@ function duckReport() {
     for (const p of PROFILES) { const rs = name === 'no ducks' ? runs[PROFILES.indexOf(p)] : play(v, p, false, false); console.log(padE(name, 28) + padE(p[0], 9) + rs.map((r) => (r.ready == null ? '>' + MAX_CYCLE_MIN : f1(r.minutes))).join(' / ') + '   Flavors ' + rs[rs.length - 1].echoes + ', global payout x ' + rs[rs.length - 1].mult.toFixed(1)); }
   }
 }
+// The early beats of run 1 (seconds) against the usual rule of thumb: first upgrade within about 60 s, first automation (a helper)
+// about 3 min, first prestige (Fresh Batch) 10 to 15 min. Report only. The reference seed, then the mean of seeds 1-8.
+function earlyReport() {
+  const f0 = (x) => (x == null ? '-' : Math.round(x) + ' s'), fm = (x) => (x == null ? '-' : (x / 60).toFixed(1) + ' min');
+  const beats = (r) => ({ buy: r.early.buy, tool: r.early.tool, toolUp: r.early.toolUp, helper: r.helperAt == null ? null : r.helperAt * 60, ready: r.ready });
+  const line = (b) => 'first purchase ' + f0(b.buy) + ', first tool ' + f0(b.tool) + ', first tool upgrade ' + f0(b.toolUp) + ', first helper ' + fm(b.helper) + ', first Fresh Batch ready ' + fm(b.ready);
+  console.log('# Early beats, run 1 (rule of thumb: first upgrade within about 60 s, first automation about 3 min, first prestige 10-15 min)\n');
+  for (const p of PROFILES) {
+    console.log(p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + '), reference seed ' + p[3] + ': ' + line(beats(play({}, p, false, false)[0])));
+    const all = [1, 2, 3, 4, 5, 6, 7, 8].map((sd) => beats(play({}, [p[0], p[1], p[2], sd], false, false)[0])), mean = {};
+    for (const k of ['buy', 'tool', 'toolUp', 'helper', 'ready']) { const v = all.map((b) => b[k]).filter((x) => x != null); mean[k] = v.length ? v.reduce((a, x) => a + x, 0) / v.length : null; }
+    console.log(p[0] + ', mean of seeds 1-8: ' + line(mean));
+  }
+}
 function compare() {
   console.log('| variant | profile | taken min C1..C6 | Flavors total | payout x | upgrades maxed in C1 | nothing-to-want ignoring Sharp, min C1..C6 | furthest pearl C1..C6 |');
   console.log('|---|---|---|---|---|---|---|---|');
@@ -328,5 +345,6 @@ if (require.main === module) {
   const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
   if (arg('compare')) compare();
   else if (arg('ducks')) duckReport();
+  else if (arg('early')) earlyReport();
   else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}, arg('duck') ? { duck: arg('duck') === 'best' ? 'best' : 'plain' } : {}), !!arg('log')); }
 }
