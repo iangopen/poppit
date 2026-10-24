@@ -20,7 +20,7 @@ test('the Pink Duck: hall ducks, costs 10,000 Rose Pearls then a quarter of that
 });
 test('the Hall of Relics: three relics costing alloys only, utility bonuses only', () => {
   assert.deepStrictEqual(A.HALLS.map((h) => h.id), ['ducks', 'relics']);
-  assert.strictEqual(A.HALLS[1].name, A.RELIC_HALL_NAME); assert.strictEqual(A.RELIC_HALL_NAME, 'Hall of Relics');
+  assert.strictEqual(A.HALLS[1].name, A.RELIC_HALL_NAME); assert.strictEqual(A.RELIC_HALL_NAME, 'Hall of Artifacts');
   const relics = A.ARTIFACTS.filter((a) => a.hall === 'relics'), F = require('../src/forge.js');
   const line = (a) => a.cost.map((c) => c.qty + ' ' + c.id).join(' + ') + ' -> ' + a.bonus.type + ' x' + a.bonus.value;
   assert.deepStrictEqual(relics.map((a) => a.name + ': ' + line(a)), [

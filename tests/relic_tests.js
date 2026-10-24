@@ -60,7 +60,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     rosePay(); const dm = G.getMeter() - meter0;
     ok('and the frenzy meter now fills 25% faster', near(dm, 1.25), dm);
     const relicHall = G.artView()[1];
-    ok('the Artifacts panel shows the Hall of Relics with alloy cost lines', relicHall.name === 'Hall of Relics' && relicHall.items.map((a) => a.id).join() === 'rose_lantern,blue_compass,mint_clock' &&
+    ok('the Artifacts panel shows the Hall of Relics with alloy cost lines', relicHall.name === 'Hall of Artifacts' && relicHall.items.map((a) => a.id).join() === 'rose_lantern,blue_compass,mint_clock' &&
       relicHall.items[1].cost.map((c) => c.text).join(' / ') === '0 of 2 Azure Steel / 0 of 1 Rosegold' && relicHall.items[0].owned, relicHall.items[1].cost.map((c) => c.text).join(' / '));
 
     // ---- the Blue Compass speeds the forge and re-times a running job ----

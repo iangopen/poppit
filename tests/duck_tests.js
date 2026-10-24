@@ -22,9 +22,9 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     ok('the Hall of Ducks lists ten ducks, the Pink Duck first, each with its own pearl recipe', hall.items.length === 10 && hall.items[0].id === 'pink_duck' &&
       hall.items.slice(1).every((a, i) => a.name === A.TYPE_DUCKS[i].name && a.cost.length === 1 && a.cost[0].kind === A.TYPE_DUCKS[i].pearl && a.cost[0].qty === A.TYPE_DUCKS[i].qty),
       hall.items.map((a) => a.name + ' ' + a.cost[0].qty).join(', '));
-    G.setArtTab('ducks'); els.arts.hidden = false; G.updateArts();
-    const html = els.artHalls.innerHTML;
-    ok('every duck card shows its name and recipe line', A.TYPE_DUCKS.every((d) => html.includes('<h5>' + d.name + '</h5>') && html.includes(' of ' + d.qty.toLocaleString('en-US') + ' ' + d.pearls + 's kept')), '');
+    for (const t of E.PEARLS) st.col[t.id].found = true; G.setArtTab('ducks'); els.arts.hidden = false; G.updateArts();
+    const html = G.hallHTML();
+    ok('every duck pedestal shows its name and recipe line once its type is found', A.TYPE_DUCKS.every((d) => html.includes('<h5 class="plabel">' + d.name + '</h5>') && html.includes(' of ' + d.qty.toLocaleString('en-US') + ' ' + d.pearls + 's kept')), '');
 
     // ---- a Blue Duck: Blue pops pay x1.4, Rose pops do not change ----
     const blue0 = pay('blue'), rose0 = pay('pearl'), blueH0 = pay('blue', 'auto'), blueS0 = pay('blue', 'tap', true), away0 = G.awayBonus(3600).gain;

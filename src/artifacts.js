@@ -6,7 +6,7 @@
 const ARTS = (() => {
   const PINK_DUCK_PAYOUT = 1.4; // Ian's value (was 1.25); may change again
   const TYPE_DUCK_PAYOUT = 1.4; // each type duck's base: the payouts of its own pearl type only
-  const EQUIP_SLOTS = 5; // how many artifacts from a hall with slots (the Hall of Relics) can be equipped at once
+  const EQUIP_SLOTS = 5; // how many artifacts from a hall with slots (the Hall of Artifacts) can be equipped at once
   // one duck per pearl type after Rose. qty: the first craft's cost in kept pearls of that type, from "node tools/sim32.js --ducks"
   // (2026-10-23): about 2 hours of that type's normal pops (the geometric mean of six checkpoint rates), at least 5, falling with
   // rarity. Untuned starting points: the sim cannot keep pearls, so these come from pop rates.
@@ -22,12 +22,12 @@ const ARTS = (() => {
     { pearl: 'black', name: 'Black Duck', pearls: 'Black Pearl', qty: 10 },
   ];
   const REFUND_SHARE = 0.4; // scrapping a shelf copy refunds floor(this x what it cost when it was crafted), line by line
-  const RELIC_HALL_NAME = 'Hall of Relics'; // one string, easy to rename
+  const RELIC_HALL_NAME = 'Hall of Artifacts'; // one string, easy to rename (was 'Hall of Relics'); its items are still called relics
   // halls in display order; the Artifacts panel draws one section per hall. slots: its artifacts work only while equipped
   // (at most EQUIP_SLOTS at once); a hall without slots works as soon as it has a copy on the pedestal
   const HALLS = [
     { id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make pops pay more: the Pink Duck every pop, the others their own pearl type.' },
-    { id: 'relics', name: RELIC_HALL_NAME, blurb: 'Relics assembled from forge alloys. They help the game run, not the payouts. Up to ' + EQUIP_SLOTS + ' can be equipped at once.', slots: true },
+    { id: 'relics', name: RELIC_HALL_NAME, blurb: 'Relics assembled from forge alloys. They help the game run, not the payouts. Only equipped relics work, up to ' + EQUIP_SLOTS + ' at once.', slots: true },
   ];
   // cost lines: { kind: <pearl id>, qty } spends normal pearls from the backpack; { kind: 'material', id, qty } spends forge
   // materials (dusts or alloys) from the forge stock. The first craft costs qty; every later one costs

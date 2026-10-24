@@ -19,7 +19,7 @@ const FORGE = (() => {
     { id: 'ruby_dust', name: 'Ruby Dust', recipe: { inputs: [P('ruby', 5)], secs: 7680 } },
     { id: 'black_dust', name: 'Black Dust', recipe: { inputs: [P('black', 3)], secs: 15360 } }, // 4 h 16 min
   ];
-  // alloys: the second tier, made from dusts; relics in the Hall of Relics cost alloys. Untuned.
+  // alloys: the second tier, made from dusts; relics in the Hall of Artifacts cost alloys. Untuned.
   const ALLOYS = [
     { id: 'rosegold', name: 'Rosegold', recipe: { inputs: [M('rose_dust', 6), M('blue_dust', 2)], secs: 120 } },
     { id: 'azure_steel', name: 'Azure Steel', recipe: { inputs: [M('blue_dust', 4), M('mint_dust', 2)], secs: 300 } },

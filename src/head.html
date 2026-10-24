@@ -55,7 +55,9 @@ body {
 @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.1); } 100% { transform: scale(1); } }
 #rate { font: 400 20px var(--font-brand); color: var(--muted); font-variant-numeric: tabular-nums; opacity: 0.55; transition: opacity 200ms ease, color 200ms ease; }
 #rate.live { opacity: 1; color: var(--accent); }
-#echoes { font: 700 12px var(--font-ui); color: var(--fg); margin-top: 4px; }
+#echoes { display: block; pointer-events: auto; min-height: 44px; margin: -8px 0 -12px -4px; padding: 0 4px; background: none; border: 0; text-align: left; font: 700 12px var(--font-ui); color: var(--fg); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; } /* links to the Artifacts panel */
+#echoes:disabled { text-decoration: none; cursor: default; }
+#echoes:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
 .chip {
   font: 700 12px var(--font-ui); color: var(--fg); background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 1px 0 rgba(100, 80, 40, 0.08), 0 6px 16px -8px rgba(100, 80, 40, 0.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -185,7 +187,6 @@ body {
 #artBody { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 4px 4px 2px; } /* the summary, notes and cards scroll together; the tabs stay put */
 #artHalls { display: flex; flex-direction: column; gap: 14px; }
 .hall h4 { margin: 0 0 2px; font: 400 26px/1.1 var(--font-brand); color: var(--fg); }
-.hallGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
 .acard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 12px 12px; text-align: center; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
 .acard.own { box-shadow: 0 0 0 2.5px var(--gold) inset; }
 .aicon svg { display: block; width: 96px; height: 96px; }
@@ -234,6 +235,49 @@ body {
 #fUpg .up { margin: 0; }
 .matLine { color: var(--fg); }
 .acard .craft { min-width: 120px; }
+/* Gallery: one pedestal at a time, its neighbours peeking in at the sides. The track moves by translateX in % of the view
+   (makeGallery in src/ui.js); touch-action pan-y leaves vertical scrolling to the browser and horizontal drags to the gallery */
+.gal { position: relative; max-width: 560px; margin: 6px auto 0; outline: none; }
+.galNav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.galArrow { min-width: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; }
+.galArrow svg { display: block; }
+.galArrow:disabled { opacity: 0.3; cursor: default; }
+.galDots { flex: 1; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; min-width: 0; }
+.galDots i { width: 8px; height: 8px; border-radius: 50%; background: #fffdf6; border: 1.5px solid #3a2e1c; opacity: 0.55; }
+.galDots i.on { background: var(--accent); opacity: 1; transform: scale(1.3); }
+.galView { overflow: hidden; overflow: clip; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.galTrack { display: flex; align-items: flex-start; gap: 10px; transition: transform 300ms cubic-bezier(.2, .8, .2, 1); }
+.gal.dragging .galTrack { transition: none; }
+.galSlide { flex: 0 0 86%; box-sizing: border-box; transition: opacity 200ms ease; }
+.galSlide:not(.on) { max-height: 330px; overflow: hidden; opacity: 0.45; }
+@media (prefers-reduced-motion: reduce) { .galTrack, .galSlide { transition: none; } }
+/* a pedestal: the artifact (or its silhouette), the plinth and the label under it */
+.pstage { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px 8px 8px; border-radius: 12px; }
+.pstage.own { box-shadow: 0 0 0 3px var(--rc) inset, 0 0 var(--gl) -4px var(--rc); }
+.pstage.dim { opacity: 0.4; filter: grayscale(0.6); }
+.pstage .ped { display: block; width: 110px; height: 24px; margin-top: -10px; }
+.plabel { margin: 2px 0 0; font: 400 26px/1 var(--font-brand); color: var(--fg); }
+.pempty { font: 800 10.5px var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.sil { opacity: 0.6; }
+.sil svg * { stroke: var(--sc); }
+.sil svg [fill]:not([fill="none"]) { fill: var(--sc); }
+.pnf { margin: 0; font: 400 22px/1.1 var(--font-brand); color: var(--muted); }
+.galSlide .craft, .galSlide .pequip { min-height: 44px; }
+.pkeep { min-height: 44px; min-width: 0; padding: 4px 14px; }
+.aslot.off { color: var(--accent); opacity: 1; }
+/* the equip row: five slots for relics */
+.equip { max-width: 560px; margin: 4px auto 0; }
+.ehead { margin: 0 0 4px; font: 800 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.erow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.eslot { min-width: 0; min-height: 66px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px; border: 2px dashed var(--line); border-radius: 12px; background: #fbf8f0; font: 700 10.5px/1.15 var(--font-ui); color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+button.eslot { appearance: none; -webkit-appearance: none; border: 2px solid #3a2e1c; background: var(--panel-solid); color: var(--fg); cursor: pointer; }
+button.eslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eslot svg { display: block; width: 30px; height: 30px; }
+/* the in-page chooser (swap a relic out when all slots are full) */
+.chList { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 10px; }
+.chOpt { min-height: 48px; display: flex; align-items: center; gap: 10px; justify-content: flex-start; text-align: left; padding: 6px 12px; }
+.chOpt svg { display: block; width: 32px; height: 32px; }
+.chOpt small { display: block; font-weight: 600; color: var(--muted); }
 .acard .craft:disabled { opacity: 0.55; cursor: default; }
 /* rarities: --rc frames and glows, --rt is the text colour (darker, for contrast on white) */
 .r-common { --rc: #9aa2b1; --rt: #5e6470; --go: 0.3; --gl: 10px; }
@@ -242,7 +286,8 @@ body {
 .r-mythic { --rc: #ff9a1f; --rt: #c25a00; --go: 0.85; --gl: 44px; }
 .artSum { margin: 0 0 6px; padding: 8px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; font: 700 13px/1.35 var(--font-ui); color: var(--fg); }
 .atabs { display: flex; gap: 8px; margin: 0 0 6px; flex-wrap: wrap; }
-.atab { min-height: 36px; padding: 6px 14px; font-size: 13px; }
+.atab { min-height: 44px; padding: 6px 14px; font-size: 13px; }
+#arts .x { min-width: 44px; min-height: 44px; } /* touch-sized close on the Artifacts panel */
 .atab.on { background: var(--fg); color: #fff; border-color: var(--fg); }
 .acard.own { box-shadow: 0 0 0 3px var(--rc) inset, 0 0 var(--gl) -4px var(--rc); }
 .acard .ped { display: block; width: 110px; height: 24px; margin-top: -10px; }
@@ -479,7 +524,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <div class="lbl">Juice</div>
       <div id="sparks">0</div>
       <div id="rate">0 / s</div>
-      <div id="echoes" hidden></div>
+      <button type="button" id="echoes" hidden></button>
     </div>
     <div class="hud hud-tr">
       <button class="chip cog pooli" id="poolBtn" type="button" aria-expanded="false" aria-controls="pool" aria-label="Pearl pool" title="Pearl pool"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 12.6 C8 13.2 16 13.2 20.8 12.6 C20.6 17 17 20 12 20 C7 20 3.4 17 3.2 12.6 Z"/><circle cx="8.3" cy="8.6" r="2.3"/><circle cx="15.6" cy="8.3" r="2.3"/><circle cx="12" cy="5.2" r="0.2"/></svg></button>
@@ -579,7 +624,25 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <p class="artSum" id="artSum"></p>
         <p class="hint2">Craft artifacts from pearls you keep. They are yours for good, through every Fresh Batch.</p>
         <p class="hint2 matLine" id="artMats"></p>
-        <div id="artHalls"></div>
+        <div id="artHalls">
+          <section class="hall" id="hall-ducks" role="tabpanel" aria-label="Hall of Ducks">
+            <p class="hint2" id="hallBlurb-ducks"></p>
+          <div class="gal" id="gal-ducks" role="region" aria-roledescription="gallery" aria-label="Hall of Ducks pedestals" tabindex="-1">
+            <div class="galNav"><button type="button" class="chip galArrow" id="gal-ducksPrev" aria-label="Previous pedestal"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button><div class="galDots" id="gal-ducksDots" aria-hidden="true"></div><button type="button" class="chip galArrow" id="gal-ducksNext" aria-label="Next pedestal"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5 L16 12 L9 19"/></svg></button></div>
+            <div class="galView" id="gal-ducksView"><div class="galTrack" id="gal-ducksTrack"></div></div>
+            <p class="vh" id="gal-ducksLive" aria-live="polite"></p>
+          </div>
+          </section>
+          <section class="hall" id="hall-relics" role="tabpanel" aria-label="Hall of Artifacts" hidden>
+            <p class="hint2" id="hallBlurb-relics"></p>
+            <div class="equip" id="equipRow"></div>
+          <div class="gal" id="gal-relics" role="region" aria-roledescription="gallery" aria-label="Hall of Artifacts pedestals" tabindex="-1">
+            <div class="galNav"><button type="button" class="chip galArrow" id="gal-relicsPrev" aria-label="Previous pedestal"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button><div class="galDots" id="gal-relicsDots" aria-hidden="true"></div><button type="button" class="chip galArrow" id="gal-relicsNext" aria-label="Next pedestal"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5 L16 12 L9 19"/></svg></button></div>
+            <div class="galView" id="gal-relicsView"><div class="galTrack" id="gal-relicsTrack"></div></div>
+            <p class="vh" id="gal-relicsLive" aria-live="polite"></p>
+          </div>
+          </section>
+        </div>
       </div>
     </section>
     <button id="forgeBtn" class="dock" type="button" aria-expanded="false" aria-controls="forge" aria-label="Forge" hidden>
@@ -647,6 +710,14 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
     <h3 id="cfTitle"></h3>
     <p id="cfText"></p>
     <div class="cfBtns"><button type="button" class="chip" id="cfCancel" data-cf="cancel">Cancel</button><button type="button" class="chip hot" id="cfOk" data-cf="ok">Scrap</button></div>
+  </div>
+</div>
+<div id="chooser" class="cfm" hidden role="dialog" aria-modal="true" aria-labelledby="chTitle" aria-describedby="chText">
+  <div class="cfBox">
+    <h3 id="chTitle"></h3>
+    <p id="chText"></p>
+    <div class="chList" id="chList"></div>
+    <div class="cfBtns"><button type="button" class="chip" id="chCancel" data-ch="cancel">Cancel</button></div>
   </div>
 </div>
 <div id="reveal" class="reveal" hidden role="dialog" aria-modal="true" aria-labelledby="rvRar" aria-describedby="rvCmp">

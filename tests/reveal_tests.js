@@ -21,10 +21,10 @@ module.exports = ({ G, ok, frames, E, els }) => {
   // ---- Craft another: the repeat factor, the reason, the odds ----
   G.updateArts();
   const d = duck();
-  ok('Craft another costs base x repeatFactor: 2,500 Rose Pearls', d.owned && d.cost[0].qty === 2500 && /2,500 of 2,500 Rose Pearls kept/.test(els.artHalls.innerHTML) && /data-craft="pink_duck">Craft another</.test(els.artHalls.innerHTML), d.cost[0].qty);
+  ok('Craft another costs base x repeatFactor: 2,500 Rose Pearls', d.owned && d.cost[0].qty === 2500 && /2,500 of 2,500 Rose Pearls kept/.test(G.hallHTML()) && /data-craft="pink_duck">Craft another</.test(G.hallHTML()), d.cost[0].qty);
   st.inv.pearl = 1000; G.updateArts();
   ok('short: the button is disabled and the reason names what is missing', G.craftReason('pink_duck') === 'Need 1,500 more Rose Pearls in your backpack' &&
-    /data-craft="pink_duck" disabled title="Need 1,500 more Rose Pearls in your backpack">Craft another/.test(els.artHalls.innerHTML), G.craftReason('pink_duck'));
+    /data-craft="pink_duck" disabled title="Need 1,500 more Rose Pearls in your backpack">Craft another/.test(G.hallHTML()), G.craftReason('pink_duck'));
   st.autoSell = true;
   ok('with auto-sell on and Roses not kept, the reason says to keep them', G.craftReason('pink_duck') === 'Need 1,500 more Rose Pearls: turn on Keep for them in your backpack', G.craftReason('pink_duck'));
   st.forge.stock = { rosegold: 1 };
@@ -64,22 +64,22 @@ module.exports = ({ G, ok, frames, E, els }) => {
   // ---- the shelf: Place swaps the active copy and updates the stat line ----
   G.setActiveCopy('pink_duck', c1.id); G.updateArts();
   const line0 = els.artSum.textContent, shelf = duck().shelf, mOnShelf = shelf.find((c) => c.id === m.id);
-  ok('the owned card shows the active copy on its pedestal and the others on a shelf, best first', /On pedestal/.test(els.artHalls.innerHTML) && /Common copy/.test(els.artHalls.innerHTML) &&
+  ok('the owned card shows the active copy on its pedestal and the others on a shelf, best first', /On pedestal/.test(G.hallHTML()) && /Common copy/.test(G.hallHTML()) &&
     shelf.length === A.count(st.artifacts, 'pink_duck') - 1 && shelf[0].rarity === 'mythic' && shelf[shelf.length - 1].rarity === 'common', shelf.map((c) => c.rarity).join());
   ok('each shelf copy says which stats change when placed', mOnShelf.change.startsWith('Placing it: Payouts x1.4 → x' + +(1.4 * (1 + pv)).toFixed(3) + ', Shiny chance +0% → +') && shelf.find((c) => c.rarity === 'common').change === 'Placing it changes no stats', mOnShelf.change);
   ok('the top line sums the pedestals', line0 === 'On your pedestals: Pink Duck (Common). Together: Payouts x1.4.', line0);
   tap(els.artHalls, 'data-sact', 'place', { art: 'pink_duck', copy: String(m.id) });
   const line1 = els.artSum.textContent;
   ok('Place swaps the active copy and the stat line follows', st.artifacts.pink_duck.active === m.id && line1.startsWith('On your pedestals: Pink Duck (Mythic). Together: Payouts x' + +(1.4 * (1 + pv)).toFixed(3) + ', Shiny chance +') &&
-    /Mythic copy/.test(els.artHalls.innerHTML), line1);
+    /Mythic copy/.test(G.hallHTML()), line1);
   A.addCopy(st.artifacts, 'rose_lantern', 'rare', [{ stat: 'away', value: 0.1 }]); G.equipArt('rose_lantern'); G.updateArts();
   ok('relics join the top line with their own effects', /Rose Lantern \(Rare\)\. Together: .*Away bonus \+10%, Frenzy meter speed \+25%\.$/.test(els.artSum.textContent), els.artSum.textContent);
 
   // ---- the Hall of Relics tab ----
   tap(els.artTabs, 'data-tab', 'relics');
-  const h = els.artHalls.innerHTML;
-  ok('the Hall of Relics tab shows the three relics with icons and alloy cost lines, not the duck', G.getArtTab() === 'relics' && /Rose Lantern/.test(h) && /Blue Compass/.test(h) && /Mint Clock/.test(h) && !/Pink Duck/.test(h) &&
-    (h.match(/<svg viewBox="0 0 64 64"/g) || []).length === 3 && /0 of 2 Azure Steel/.test(h) && /aria-selected="true" data-tab="relics"/.test(els.artTabs.innerHTML));
+  const h = G.hallHTML();
+  ok('the Hall of Artifacts tab shows the three relics with icons and alloy cost lines, not the duck', G.getArtTab() === 'relics' && /Rose Lantern/.test(h) && /Blue Compass/.test(h) && /Mint Clock/.test(h) && !/Pink Duck/.test(h) &&
+    (G.gallery('relics').html.join('').match(/<svg viewBox="0 0 64 64"/g) || []).length === 3 && /0 of 2 Azure Steel/.test(h) && /aria-selected="true" aria-controls="hall-relics" data-tab="relics"/.test(els.artTabs.innerHTML));
   G.setArtTab('ducks');
 
   // ---- the duck stash warning on the forge's Rose Dust Start ----

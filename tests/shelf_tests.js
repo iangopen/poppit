@@ -19,12 +19,12 @@ module.exports = ({ G, ok, E, store, els }) => {
 
   // Commons stack into one row; the rest are rows of their own; sort
   G.updateArts(); const rows = shelf();
-  ok('the three shelf Commons stack into one row "Common x3"; Rare, Epic and Mythic each have a row (best first)', rows.map((r) => r.rarity + (r.stack ? ' x' + r.count : '')).join() === 'mythic,epic,rare,common x3' && /Common x3/.test(els.artHalls.innerHTML), rows.map((r) => r.rarity).join());
+  ok('the three shelf Commons stack into one row "Common x3"; Rare, Epic and Mythic each have a row (best first)', rows.map((r) => r.rarity + (r.stack ? ' x' + r.count : '')).join() === 'mythic,epic,rare,common x3' && /Common x3/.test(G.hallHTML()), rows.map((r) => r.rarity).join());
   tap(els.artHalls, 'data-sort', 'new');
-  ok('Newest first puts the latest craft on top', G.getShelfSort() === 'new' && shelf().map((r) => r.rarity).join() === 'mythic,epic,rare,common' && /data-sort="new" aria-pressed="true"/.test(els.artHalls.innerHTML));
+  ok('Newest first puts the latest craft on top', G.getShelfSort() === 'new' && shelf().map((r) => r.rarity).join() === 'mythic,epic,rare,common' && /data-sort="new" aria-pressed="true"/.test(G.hallHTML()));
   tap(els.artHalls, 'data-sort', 'best');
-  ok('every row has Place, Lock and Scrap; locked rows show Scrap disabled; the stack has Scrap all', (els.artHalls.innerHTML.match(/data-sact="place"/g) || []).length === 4 && (els.artHalls.innerHTML.match(/data-sact="lock"/g) || []).length === 4 &&
-    new RegExp('data-copy="' + made[5].id + '" disabled>Scrap<').test(els.artHalls.innerHTML) && /data-sact="scrapall" data-art="pink_duck" data-copy="stack">Scrap all 3</.test(els.artHalls.innerHTML));
+  ok('every row has Place, Lock and Scrap; locked rows show Scrap disabled; the stack has Scrap all', (G.hallHTML().match(/data-sact="place"/g) || []).length === 4 && (G.hallHTML().match(/data-sact="lock"/g) || []).length === 4 &&
+    new RegExp('data-copy="' + made[5].id + '" disabled>Scrap<').test(G.hallHTML()) && /data-sact="scrapall" data-art="pink_duck" data-copy="stack">Scrap all 3</.test(G.hallHTML()));
 
   // scrap: one Common at a time from the stack, into the backpack even with auto-sell on
   const r0 = st.inv.pearl, s0 = st.sparks; act('scrap', 'stack');
@@ -37,7 +37,7 @@ module.exports = ({ G, ok, E, store, els }) => {
   ok('a Rare scraps without a question', st.inv.pearl === r1 + 1000 && !ducks().some((c) => c.id === made[3].id) && G.getCf() === null);
   ok('a locked Mythic cannot be scrapped', G.shelfAction('scrap', 'pink_duck', String(made[5].id)) === false && ducks().some((c) => c.id === made[5].id));
   act('lock', made[5].id);
-  ok('Lock toggles at any time', made[5].locked === false && /Lock Mythic/.test(els.artHalls.innerHTML));
+  ok('Lock toggles at any time', made[5].locked === false && /Lock Mythic/.test(G.hallHTML()));
   const r2 = st.inv.pearl; act('scrap', made[5].id);
   ok('an unlocked Mythic asks first, in the page', G.getCf() !== null && els.confirm.hidden === false && els.cfTitle.textContent === 'Scrap this Mythic Pink Duck?' && /You get \+1,000 Rose Pearls back/.test(els.cfText.textContent) && st.inv.pearl === r2, els.cfText.textContent);
   key('Escape');
@@ -52,12 +52,12 @@ module.exports = ({ G, ok, E, store, els }) => {
   act('lock', more[3].id); // one Rare locked
   G.setActiveCopy('pink_duck', made[4].id); // the Epic on the pedestal; the first duck (paid 10,000) goes to the shelf
   G.updateArts(); const it = G.artView()[0].items[0];
-  ok('the bulk button counts the unlocked copies below Epic: 5 Commons (the first duck paid 10,000) and 1 Rare', it.bulk.n === 6 && it.bulk.refund === '+9,000 Rose Pearls' && /Scrap all unlocked below Epic \(6\)/.test(els.artHalls.innerHTML), JSON.stringify(it.bulk));
+  ok('the bulk button counts the unlocked copies below Epic: 5 Commons (the first duck paid 10,000) and 1 Rare', it.bulk.n === 6 && it.bulk.refund === '+9,000 Rose Pearls' && /Scrap all unlocked below Epic \(6\)/.test(G.hallHTML()), JSON.stringify(it.bulk));
   const r3 = st.inv.pearl; tap(els.artHalls, 'data-bulk', 'pink_duck');
   ok('it asks first, naming the count and the total refund', els.cfTitle.textContent === 'Scrap 6 copies below Epic?' && els.cfText.textContent.startsWith('6 unlocked Pink Duck copies go for +9,000 Rose Pearls.') && st.inv.pearl === r3, els.cfText.textContent);
   tap(els.confirm, 'data-cf', 'ok');
   ok('then scraps exactly those: the pedestal Epic and the locked Rare stay', st.inv.pearl === r3 + 9000 && ducks().map((c) => c.rarity + (c.locked ? '*' : '')).sort().join() === 'epic*,rare*' && els.toast.textContent === 'Scrapped 6 Pink Duck copies: +9,000 Rose Pearls', ducks().map((c) => c.rarity).join());
-  ok('with nothing left below, the bulk button is gone', G.artView()[0].items[0].bulk.n === 0 && !/data-bulk/.test(els.artHalls.innerHTML));
+  ok('with nothing left below, the bulk button is gone', G.artView()[0].items[0].bulk.n === 0 && !/data-bulk/.test(G.hallHTML()));
 
   // Scrap all on a Common stack asks first; locked Commons stay
   const cs = [0, 1, 2].map(() => { const c = G.craftArtifact('pink_duck', FORCE.common); G.closeReveal(); return c; });

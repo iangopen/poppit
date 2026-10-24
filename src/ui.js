@@ -102,8 +102,10 @@ function updateHud(dt) {
   $('rate').classList.toggle('live', state.autoSell);
   updatePack();
   const ec = $('echoes');
-  setLbl('echoes', payoutLine()); ec.hidden = !payoutLine();
+  const pl = payoutLine(); setLbl('echoes', pl); ec.hidden = !pl;
   syncDock();
+  const link = !$('artBtn').hidden, tip = link ? pl + '. Open the Hall of Ducks' + (typeDuckCount() ? ': type ducks pay more on their own pearl type' : '') : pl;
+  if (lblCache.echoesTip !== tip) { lblCache.echoesTip = tip; ec.disabled = !link; ec.setAttribute('aria-label', tip); ec.setAttribute('title', tip); }
   setLbl('toolLbl', S.toolName + ' · ' + S.power + (S.power === 1 ? ' hit power' : ' hit power'));
   const cb = $('combo');
   cb.classList.toggle('on', combo > 1);
@@ -315,7 +317,9 @@ const CLOCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-
   '<path d="M32 35 L32 25.5 M32 35 L39 39"/><circle cx="32" cy="35" r="1.8" fill="#3a2e1c" stroke="none"/>' +
   '<path d="M32 22.5 L32 24 M44.5 35 L43 35 M32 47.5 L32 46 M19.5 35 L21 35" stroke-width="2"/><path d="M18 29 C19.5 24.5 23 21.5 27 20.5" stroke="#fff" stroke-width="2" opacity="0.85"/></svg>';
 // a type duck is the Pink Duck's drawing in its pearl's colour (PALETTE in src/world.js), lightened so the ink still reads on Black
-const duckSvg = (kind) => { const c = PALETTE[kind]; return DUCK_SVG.replace('#ff9ec4', 'hsl(' + c[0] + ' ' + c[1] + '% ' + Math.max(36, c[2]) + '%)'); };
+const pearlColor = (kind) => { const c = kind === 'pearl' ? PAL[0] : PALETTE[kind]; return 'hsl(' + c[0] + ' ' + c[1] + '% ' + Math.max(36, c[2]) + '%)'; };
+const duckSvg = (kind) => DUCK_SVG.replace('#ff9ec4', pearlColor(kind));
+const RELIC_SIL = '#a89a7c'; // an unowned relic's silhouette
 const ART_ICON = { pink_duck: DUCK_SVG, rose_lantern: LANTERN_SVG, blue_compass: COMPASS_SVG, mint_clock: CLOCK_SVG };
 for (const d of ARTS.TYPE_DUCKS) ART_ICON[d.pearl + '_duck'] = duckSvg(d.pearl);
 // the small plinth an active copy stands on
@@ -402,8 +406,11 @@ function slotText(id) {
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => {
     const n = ARTS.count(state.artifacts, a.id), act = ARTS.activeCopy(state.artifacts, a.id), reason = craftReason(a.id);
+    const pk = a.hall === 'ducks' ? a.bonus.scope || a.cost[0].kind : null, kind = pk && ECON.KIND[pk] ? pk : null, found = !kind || !!(state.col[kind] && state.col[kind].found); // the pearl a duck is made from
     return {
       id: a.id, name: a.name, desc: a.description, owned: n > 0, count: n, can: !reason, reason, odds: oddsText(), slot: n > 0 ? slotText(a.id) : '',
+      kind, found, keep: !!kind && isKept(kind), keepName: kind ? pearlName(kind) + 's' : '', color: kind ? pearlColor(kind) : RELIC_SIL,
+      slots: ARTS.usesSlot(a.id), equipped: state.artEquip.indexOf(a.id), full: state.artEquip.length >= ARTS.EQUIP_SLOTS,
       cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
         : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
       active: act ? copyView(act) : null,
@@ -413,19 +420,39 @@ function artView() {
   }) }));
 }
 const whole2 = (n) => Math.floor(n).toLocaleString('en-US');
-function artCard(a) {
+// one pedestal: the artifact on its plinth (or a silhouette in its colour), the label under it, then everything about it.
+// Occupied: the active copy in its rarity frame, perks, the next copy's cost, Craft another and the shelf.
+// Empty: the recipe with bars, the Keep toggle for a duck's pearl type, the odds, the reason and Craft. Not found: dimmed, "Not found yet".
+function pedestalHTML(a) {
   const r = a.active;
-  return '<div class="acard' + (a.owned ? ' own r-' + r.rarity : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div>' +
-    (a.owned ? PEDESTAL_SVG + '<span class="abadge">On pedestal</span>' : '') + '<h5>' + a.name + '</h5>' +
-    (a.owned ? '<p class="arar">' + r.rarityName + ' copy</p>' : '') + (a.slot ? '<p class="aslot">' + a.slot + '</p>' : '') + '<p class="ad">' + (a.owned ? 'Base: ' : '') + a.desc + '</p>' +
+  const stage = '<div class="pstage' + (a.owned ? ' own r-' + r.rarity : '') + (a.found ? '' : ' dim') + '"><div class="aicon' + (a.owned ? '' : ' sil') + '"' + (a.owned ? '' : ' style="--sc:' + a.color + '"') + '>' + (ART_ICON[a.id] || '') + '</div>' +
+    PEDESTAL_SVG + '<h5 class="plabel">' + a.name + '</h5>' + (a.owned ? '<span class="abadge">On pedestal</span>' : a.found ? '<span class="pempty">Empty pedestal</span>' : '') + '</div>';
+  if (!a.found) return stage + '<p class="pnf">Not found yet</p>';
+  const keep = a.kind ? '<button type="button" class="chip keepT pkeep' + (a.keep ? ' on' : '') + '" data-akeep="' + a.kind + '" aria-pressed="' + a.keep + '">' + LOCK_SVG + '<span>' + (a.keep ? 'Keeping ' : 'Keep ') + a.keepName + '</span></button>' : '';
+  return stage +
+    (a.owned ? '<p class="arar">' + r.rarityName + ' copy</p>' + equipHTML(a) : '') + '<p class="ad">' + (a.owned ? 'Base: ' : '') + a.desc + '</p>' +
     (a.owned ? (r.perks.length ? '<ul class="aperks">' + r.perks.map((t) => '<li>' + t + '</li>').join('') + '</ul>' : '<p class="anone">No perks</p>') : '') +
     (a.owned ? '<p class="anext">Next copy costs</p>' : '') +
-    a.cost.map((c) => '<div class="acost"><span>' + (c.mat ? c.text : whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit) + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
-      (!a.owned && !c.kept ? '<small class="anote">Mark ' + c.label + ' Keep in your backpack to collect them</small>' : '') + '</div>').join('') +
-    '<small class="aodds">' + a.odds + '</small>' + (a.reason ? '<small class="areason">' + a.reason + '</small>' : '') +
+    a.cost.map((c) => '<div class="acost"><span>' + (c.mat ? c.text : whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit) + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span></div>').join('') +
+    keep + '<small class="aodds">' + a.odds + '</small>' + (a.reason ? '<small class="areason">' + a.reason + '</small>' : '') +
     '<button type="button" class="chip hot craft" data-craft="' + a.id + '"' + (a.can ? '' : ' disabled') + (a.reason ? ' title="' + a.reason + '"' : '') + '>' + (a.owned ? 'Craft another' : 'Craft') + '</button>' +
-    (a.shelf.length ? shelfHTML(a) : '') +
-    '</div>';
+    (a.shelf.length ? shelfHTML(a) : '');
+}
+// an owned relic's slot line, and Equip while it is not equipped
+function equipHTML(a) {
+  if (!a.slots) return '';
+  if (a.equipped >= 0) return '<p class="aslot">Equipped in slot ' + (a.equipped + 1) + ' of ' + ARTS.EQUIP_SLOTS + '</p>';
+  return '<p class="aslot off">Not equipped: it has no effect until you equip it.</p><button type="button" class="chip hot pequip" data-equip="' + a.id + '">' + (a.full ? 'Equip (swap one out)' : 'Equip') + '</button>';
+}
+// the five slots: a filled slot shows the relic and offers Unequip; an empty one reads "Empty"
+function equipRowHTML() {
+  const eq = state.artEquip, cells = [];
+  for (let i = 0; i < ARTS.EQUIP_SLOTS; i++) {
+    const id = eq[i], a = id && ARTS.byId(id);
+    cells.push(a ? '<button type="button" class="eslot" data-eslot="' + id + '" aria-label="Slot ' + (i + 1) + ': ' + a.name + '. Unequip">' + (ART_ICON[id] || '') + '<span>' + a.name + '</span></button>'
+      : '<div class="eslot" role="img" aria-label="Slot ' + (i + 1) + ': empty"><span>Empty</span></div>');
+  }
+  return '<p class="ehead">Equipped ' + eq.length + ' of ' + ARTS.EQUIP_SLOTS + '</p><div class="erow">' + cells.join('') + '</div>';
 }
 const lockBtn = (on, art, key, label) => '<button type="button" class="chip slock' + (on ? ' on' : '') + '" data-sact="lock" data-art="' + art + '" data-copy="' + key + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Unlock ' : 'Lock ') + label + '">' + LOCK_SVG + '<span>' + (on ? 'Locked' : 'Lock') + '</span></button>';
 function shelfHTML(a) {
@@ -442,16 +469,114 @@ function shelfHTML(a) {
         (c.stack && c.open > 1 ? '<button type="button" class="chip sscrap" data-sact="scrapall" data-art="' + a.id + '" data-copy="stack">Scrap all ' + c.open + '</button>' : '') + '</div></div>';
     }).join('') + '</div></div>';
 }
+const htmlCache = {};
+function setHTML(id, v) { if (htmlCache[id] !== v) { htmlCache[id] = v; $(id).innerHTML = v; } }
 function updateArts() {
   if ($('arts').hidden) return;
   const v = artView(), sig = JSON.stringify(v) + materialLine() + artTab + shelfSort;
   if (sig === artSig) return; artSig = sig;
   $('artMats').textContent = materialLine();
   $('artSum').textContent = pedestalLine();
-  $('artTabs').innerHTML = v.map((h) => '<button type="button" class="chip atab' + (h.id === artTab ? ' on' : '') + '" role="tab" aria-selected="' + (h.id === artTab) + '" data-tab="' + h.id + '">' + h.name + '</button>').join('');
-  $('artHalls').innerHTML = v.filter((h) => h.id === artTab).map((h) => '<section class="hall" role="tabpanel" aria-label="' + h.name + '"><p class="hint2">' + h.blurb + '</p><div class="hallGrid">' + h.items.map(artCard).join('') + '</div></section>').join('');
+  setHTML('artTabs', v.map((h) => '<button type="button" class="chip atab' + (h.id === artTab ? ' on' : '') + '" role="tab" aria-selected="' + (h.id === artTab) + '" aria-controls="hall-' + h.id + '" data-tab="' + h.id + '">' + h.name + '</button>').join(''));
+  for (const h of v) {
+    $('hall-' + h.id).hidden = h.id !== artTab;
+    if (h.id !== artTab) continue; // only the hall on show is drawn; the other keeps its gallery and pedestal
+    setHTML('hallBlurb-' + h.id, h.blurb);
+    if (ARTS.HALLS.find((x) => x.id === h.id).slots) setHTML('equipRow', equipRowHTML());
+    const g = gallery(h.id);
+    g.setItems(h.items.map((a) => a.id), h.items.map((a) => a.name));
+    h.items.forEach((a, k) => g.fill(k, pedestalHTML(a)));
+  }
 }
 function setArtTab(id) { if (!ARTS.HALLS.some((h) => h.id === id)) return false; artTab = id; artSig = ''; updateArts(); return true; }
+// the drawn hall as one string (tests): the equip row, then every pedestal
+const hallHTML = () => (ARTS.HALLS.find((x) => x.id === artTab).slots ? htmlCache.equipRow || '' : '') + gallery(artTab).html.join('');
+/* ----- Gallery: one pedestal at a time with a sliver of each neighbour, moved by a touch or mouse swipe, the arrow buttons, or the
+   Left and Right keys (galleryKey). Stops at both ends. The index is the model: the track sits at translateX in % of the view, so no
+   layout is read, and the harness can drive it with plain pointer events. Markup: #<id> with <id>Prev, Next, Dots, View, Track, Live. ----- */
+const GAL_W = 86, GAL_GAP = 10, GAL_SWIPE = 40; // slide width (% of the view), gap (px), drag (px) that moves one pedestal
+const GALS = {}; // one per hall, made on first use; each remembers its pedestal for the session
+const gallery = (hallId) => GALS[hallId] || (GALS[hallId] = makeGallery('gal-' + hallId));
+function makeGallery(id) {
+  const root = $(id), view = $(id + 'View'), track = $(id + 'Track'), prev = $(id + 'Prev'), next = $(id + 'Next'), dots = $(id + 'Dots'), live = $(id + 'Live');
+  const g = { id, index: 0, keys: [], names: [], slides: [], html: [], drag: null, swallow: false };
+  const place = (dx) => { track.style.transform = 'translateX(calc(' + (100 - GAL_W) / 2 + '% - ' + g.index + ' * (' + GAL_W + '% + ' + GAL_GAP + 'px) + ' + (dx || 0) + 'px))'; };
+  g.label = () => (g.keys.length ? g.names[g.index] + ', ' + (g.index + 1) + ' of ' + g.keys.length : '');
+  function show(announce) {
+    const n = g.keys.length; place(0);
+    g.slides.forEach((sl, i) => { const on = i === g.index; sl.classList.toggle('on', on); sl.inert = !on; sl.setAttribute('aria-hidden', String(!on)); });
+    prev.disabled = g.index <= 0; next.disabled = g.index >= n - 1;
+    dots.innerHTML = g.keys.map((_, i) => (i === g.index ? '<i class="on"></i>' : '<i></i>')).join('');
+    if (announce) live.textContent = g.label();
+  }
+  // moves to pedestal i, clamped to the ends; true if it moved. Focus inside the old pedestal moves to the gallery, never lost.
+  g.go = (i) => {
+    const j = Math.max(0, Math.min(g.keys.length - 1, i | 0)), old = g.slides[g.index], a = document.activeElement;
+    if (j === g.index) { show(false); return false; }
+    const had = !!(a && old && old.contains && old.contains(a));
+    g.index = j; show(true); if (had && root.focus) root.focus();
+    return true;
+  };
+  g.step = (d) => g.go(g.index + d);
+  // the pedestals, by key; rebuilt only when the list changes (the index is kept, clamped)
+  g.setItems = (keys, names) => {
+    g.names = names;
+    if (keys.join() === g.keys.join()) { g.slides.forEach((sl, i) => sl.setAttribute('aria-label', names[i] + ', ' + (i + 1) + ' of ' + keys.length)); return false; }
+    g.keys = keys.slice(); g.html = []; track.innerHTML = '';
+    g.slides = keys.map((k, i) => { const sl = document.createElement('div'); sl.className = 'galSlide acard'; sl.setAttribute('role', 'group'); sl.setAttribute('aria-roledescription', 'pedestal'); sl.setAttribute('aria-label', names[i] + ', ' + (i + 1) + ' of ' + keys.length); track.appendChild(sl); return sl; });
+    g.index = Math.max(0, Math.min(keys.length - 1, g.index)); show(false); return true;
+  };
+  // a pedestal's content, replaced only when it changed; a focused button inside comes back focused
+  g.fill = (i, html) => {
+    if (g.html[i] === html) return false;
+    const sl = g.slides[i], a = document.activeElement, key = a && sl.contains && sl.contains(a) ? focusKey(a) : null;
+    g.html[i] = html; sl.innerHTML = html;
+    if (key && sl.querySelector) { const t = sl.querySelector(key); if (t && t.focus) t.focus(); }
+    return true;
+  };
+  prev.addEventListener('click', () => { Snd.click(); g.step(-1); });
+  next.addEventListener('click', () => { Snd.click(); g.step(1); });
+  // swipes: a horizontal drag past 10 px takes over (vertical ones are left to the page), past GAL_SWIPE it moves one pedestal;
+  // past an end it only stretches a little. The click that ends a drag never presses a button.
+  view.addEventListener('pointerdown', (e) => { if (e.button > 0 || g.drag) return; g.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false }; });
+  view.addEventListener('pointermove', (e) => {
+    const d = g.drag; if (!d || e.pointerId !== d.id) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.on) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { g.drag = null; return; }
+      if (Math.abs(dx) < 10) return;
+      d.on = true; root.classList.add('dragging'); try { if (view.setPointerCapture) view.setPointerCapture(e.pointerId); } catch (err) { /* already released */ }
+    }
+    const atEnd = (dx > 0 && g.index === 0) || (dx < 0 && g.index === g.keys.length - 1);
+    d.dx = atEnd ? dx * 0.25 : dx; place(d.dx);
+  });
+  const end = (e, cancel) => {
+    const d = g.drag; if (!d || e.pointerId !== d.id) return;
+    g.drag = null; if (!d.on) return;
+    root.classList.remove('dragging'); g.swallow = true; setTimeout(() => { g.swallow = false; }, 0);
+    if (cancel || Math.abs(d.dx) < GAL_SWIPE || !g.step(d.dx < 0 ? 1 : -1)) show(false);
+  };
+  view.addEventListener('pointerup', (e) => end(e, false));
+  view.addEventListener('pointercancel', (e) => end(e, true));
+  view.addEventListener('click', (e) => {
+    if (g.swallow) { g.swallow = false; if (e.stopPropagation) e.stopPropagation(); if (e.preventDefault) e.preventDefault(); return; }
+    // a tap on a neighbour's sliver (outside the pedestal on show) moves to that side
+    const cur = g.slides[g.index]; if (!cur || !e.target || (cur.contains && cur.contains(e.target)) || !view.getBoundingClientRect) return;
+    const r = view.getBoundingClientRect(); g.step(e.clientX < r.left + r.width / 2 ? -1 : 1);
+  }, true);
+  return g;
+}
+// a selector for the same button after a redraw: its data attributes
+const focusKey = (el) => { const d = el.dataset || {}, ks = Object.keys(d); return ks.length ? ks.map((k) => '[data-' + k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase()) + '="' + d[k] + '"]').join('') : null; };
+// Left and Right move the hall on show while the Artifacts panel is open, no dialog is up and no text field has focus
+function galleryKey(e) {
+  if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || $('arts').hidden || cf || rv || ch) return false;
+  const a = document.activeElement, tag = a && a.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (a && a.isContentEditable)) return false;
+  if (e.preventDefault) e.preventDefault();
+  gallery(artTab).step(e.key === 'ArrowRight' ? 1 : -1); return true;
+}
+document.addEventListener('keydown', galleryKey);
 // crafts a copy (rng is for tests; the game rolls with Math.random), shows the reveal and returns the copy, or null
 function craftArtifact(id, rng) {
   const prev = ARTS.activeCopy(state.artifacts, id);
@@ -467,6 +592,20 @@ function equipChanged(ok) { if (ok) { recalc(); artSig = ''; forgeSig = ''; upda
 const equipArt = (id) => equipChanged(ARTS.equip(state.artEquip, state.artifacts, id));
 const unequipArt = (id) => equipChanged(ARTS.unequip(state.artEquip, id));
 const swapArt = (outId, inId) => equipChanged(ARTS.swap(state.artEquip, state.artifacts, outId, inId));
+// Equip on a relic's pedestal: the first free slot, or with every slot full a chooser of the equipped relics to swap out
+function equipFromHall(id) {
+  const a = ARTS.byId(id);
+  if (!a || !ARTS.usesSlot(id) || !ARTS.activeCopy(state.artifacts, id) || ARTS.isEquipped(state.artEquip, id)) return false;
+  if (state.artEquip.length < ARTS.EQUIP_SLOTS) { if (!equipArt(id)) return false; toast(a.name + ' equipped in slot ' + (state.artEquip.indexOf(id) + 1)); return true; }
+  return openChooser('All ' + ARTS.EQUIP_SLOTS + ' slots are full', 'Choose a relic to take out. ' + a.name + ' takes its slot, and the one you take out has no effect until you equip it again.',
+    state.artEquip.map((x, i) => ({ id: x, label: ARTS.byId(x).name, sub: 'Slot ' + (i + 1), icon: ART_ICON[x] || '' })),
+    (out) => { const k = state.artEquip.indexOf(out); if (!swapArt(out, id)) return false; toast(a.name + ' equipped in slot ' + (k + 1) + ', ' + ARTS.byId(out).name + ' taken out'); return true; });
+}
+// a tap on a filled slot offers Unequip
+function slotTap(id) {
+  const a = ARTS.byId(id), i = state.artEquip.indexOf(id); if (!a || i < 0) return false;
+  return openConfirm('Unequip ' + a.name + '?', 'It leaves slot ' + (i + 1) + ' and has no effect until you equip it again.', 'Unequip', () => { if (!unequipArt(id)) return false; toast(a.name + ' unequipped'); return true; });
+}
 // puts an owned copy on its artifact's pedestal (the swap is free)
 function setActiveCopy(id, copyId) {
   if (!ARTS.setActive(state.artifacts, id, copyId)) return false;
@@ -528,7 +667,38 @@ $('artHalls').addEventListener('click', (e) => {
   const so = at('[data-sort]'); if (so) { Snd.click(); shelfSort = so.dataset.sort; artSig = ''; updateArts(); return; }
   const bk = at('[data-bulk]'); if (bk) { Snd.click(); bulkScrap(bk.dataset.bulk); return; }
   const sa = at('[data-sact]'); if (sa) { if (sa.disabled) return; Snd.click(); shelfAction(sa.dataset.sact, sa.dataset.art, sa.dataset.copy); return; }
+  const k = at('[data-akeep]'); if (k) { Snd.click(); setKeep(k.dataset.akeep, !state.keep[k.dataset.akeep]); return; }
+  const q = at('[data-equip]'); if (q) { Snd.click(); equipFromHall(q.dataset.equip); return; }
+  const sl = at('[data-eslot]'); if (sl) { Snd.click(); slotTap(sl.dataset.eslot); return; }
   const b = at('[data-craft]'); if (b && !b.disabled) { Snd.resume(); craftArtifact(b.dataset.craft); }
+});
+/* ----- in-page chooser (never a browser dialog): a list of options and Cancel; focus starts on Cancel and stays inside;
+   Escape or a tap outside cancels; focus returns where it was, or to the gallery if that button was redrawn ----- */
+let ch = null;
+function openChooser(title, text, opts, onPick) {
+  ch = { onPick, back: document.activeElement || null, ids: opts.map((o) => o.id) };
+  $('chTitle').textContent = title; $('chText').textContent = text;
+  $('chList').innerHTML = opts.map((o) => '<button type="button" class="chip chOpt" data-ch="pick" data-id="' + o.id + '">' + o.icon + '<span><b>' + o.label + '</b><small>' + o.sub + '</small></span></button>').join('');
+  $('chooser').hidden = false; if ($('chCancel').focus) $('chCancel').focus(); return true;
+}
+function closeChooser(pick) {
+  if (!ch) return null;
+  const c = ch; ch = null; $('chooser').hidden = true;
+  const r = pick != null && c.ids.includes(pick) ? c.onPick(pick) : null;
+  const back = c.back && c.back.focus && c.back.isConnected !== false ? c.back : $('gal-' + artTab);
+  if (back && back.focus) back.focus(); return r;
+}
+$('chooser').addEventListener('click', (e) => {
+  const b = e.target && e.target.closest && e.target.closest('[data-ch]');
+  if (b) { Snd.click(); closeChooser(b.dataset.ch === 'pick' ? b.dataset.id : null); return; }
+  if (!(e.target && e.target.closest && e.target.closest('.cfBox'))) closeChooser(null); // a tap on the backdrop cancels
+});
+$('chooser').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { if (e.stopPropagation) e.stopPropagation(); if (e.preventDefault) e.preventDefault(); closeChooser(null); return; }
+  if (e.key !== 'Tab') return;
+  const list = ($('chList').querySelectorAll ? [...$('chList').querySelectorAll('button')] : []).concat([$('chCancel')]), n = list.length, i = list.indexOf(document.activeElement);
+  if (e.preventDefault) e.preventDefault();
+  const nx = list[((i < 0 ? (e.shiftKey ? 0 : -1) : i) + (e.shiftKey ? -1 : 1) + n) % n]; if (nx && nx.focus) nx.focus();
 });
 /* ----- in-page confirmation (never a browser dialog): focus starts on Cancel and stays inside; Escape or a tap outside cancels ----- */
 let cf = null;
@@ -628,17 +798,22 @@ $('reveal').addEventListener('keydown', (e) => {
   const next = list[((i < 0 ? (e.shiftKey ? 0 : -1) : i) + (e.shiftKey ? -1 : 1) + n) % n]; if (next && next.focus) next.focus();
 });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { Snd.click(); $(b.dataset.close).hidden = true; $(PANEL_BTN[b.dataset.close]).setAttribute('aria-expanded', 'false'); }));
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cf) { closeConfirm(false); return; } if (e.key === 'Escape' && rv) { closeReveal(); return; } if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ch) { closeChooser(null); return; } if (e.key === 'Escape' && cf) { closeConfirm(false); return; } if (e.key === 'Escape' && rv) { closeReveal(); return; } if (e.key === 'Escape') Object.keys(PANEL_BTN).forEach((p) => { $(p).hidden = true; $(PANEL_BTN[p]).setAttribute('aria-expanded', 'false'); }); });
 const resetTools = () => { state.owned = [true, false, false, false, false, false]; state.equip = -1; state.toolUp = {}; toolView = 0; };
 const zeroInv = () => { INV_IDS.forEach((id) => { state.inv[id] = 0; state.invV[id] = 0; }); };
 const clearUnkept = () => { INV_IDS.forEach((id) => { if (!isKept(id)) { state.inv[id] = 0; state.invV[id] = 0; } }); }; // Fresh Batch
 const multTxt = (m) => 'x' + +m.toFixed(2);
-// the payout multiplier line under the juice counter: Flavors and owned artifacts
+// how many type ducks pay right now (each on its own pearl type only)
+const typeDuckCount = () => ARTS.ARTIFACTS.filter((a) => a.bonus.scope && ARTS.applies(a, state.artifacts, state.artEquip)).length;
+// the payout multiplier line under the juice counter: Flavors and global artifacts, then "+ 3 type ducks" (they pay on one type each,
+// so pop values differ by type). It is a button that opens the Hall of Ducks.
 function payoutLine() {
-  const e = state.echoes, a = S.artMult;
-  if (a <= 1) return e > 0 ? 'Flavors ' + e + ' (payouts ' + multTxt(S.echoMult) + ')' : '';
-  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'artifacts ' + multTxt(a) + ')';
+  const e = state.echoes, a = S.artMult, n = typeDuckCount(), more = n ? ' + ' + n + ' type duck' + (n === 1 ? '' : 's') : '';
+  if (a <= 1) return e > 0 ? 'Flavors ' + e + ' (payouts ' + multTxt(S.echoMult) + ')' + more : n ? 'Payouts ' + multTxt(1) + more : '';
+  return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'artifacts ' + multTxt(a) + ')' + more;
 }
+function openDucksFromPayout() { if ($('artBtn').hidden) return false; if ($('arts').hidden) openPanel('arts'); setArtTab('ducks'); return true; }
+$('echoes').addEventListener('click', openDucksFromPayout);
 
 
 /* ----- pool menu: choose which discovered pearl types spawn, with the resulting chances shown live ----- */
