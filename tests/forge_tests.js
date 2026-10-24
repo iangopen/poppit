@@ -34,13 +34,13 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     G.forgeStart(0, 'rose_dust'); G.forgeStart(1, 'rose_dust'); G.save(); const raw = store['poppit.v1'], tSave = now;
     G.loadState(JSON.parse(raw)); now = tSave - 3600e3;
     const r0 = G.awayBonus(0);
-    ok('a clock set back an hour finishes no job', r0.jobs === 0 && st.forge.slots[0] && st.forge.slots[1] && !/forge job/.test(els.toast.textContent));
+    ok('a clock set back an hour finishes no job', r0.jobs === 0 && st.forge.slots[0] && st.forge.slots[1] && !/forge job/.test(G.lastToast()));
     G.loadState(JSON.parse(raw)); now = tSave + 31000; st.lv.auto = 0;
     const s1 = st.forge.stock.rose_dust || 0, r1 = G.awayBonus(31);
-    ok('back after 31 s: both jobs finish and the toast says so', r1.jobs === 2 && st.forge.stock.rose_dust === s1 + 2 && els.toast.textContent === 'Welcome back! 2 forge jobs finished while you were away', els.toast.textContent);
+    ok('back after 31 s: both jobs finish and the toast says so', r1.jobs === 2 && st.forge.stock.rose_dust === s1 + 2 && G.lastToast() === 'Welcome back! 2 forge jobs finished while you were away', G.lastToast());
     st.lv.auto = 3; G.recalc(); G.forgeStart(0, 'rose_dust'); now += 40000;
     const r2 = G.awayBonus(40);
-    ok('with helpers the toast names juice and jobs', r2.jobs === 1 && r2.gain > 0 && /^Welcome back! Your helpers popped .+ juice and 1 forge job finished while you were away$/.test(els.toast.textContent), els.toast.textContent);
+    ok('with helpers the toast names juice and jobs', r2.jobs === 1 && r2.gain > 0 && /^Welcome back! Your helpers popped .+ juice and 1 forge job finished while you were away$/.test(G.lastToast()), G.lastToast());
 
     // upgrades bought with juice
     st.sparks = 100000; const sp0 = st.sparks;

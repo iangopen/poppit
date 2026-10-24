@@ -82,14 +82,14 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     } finally { G.ARTS.ARTIFACTS.splice(G.ARTS.ARTIFACTS.indexOf(fx), 1); }
 
     // the away toast, with and without finished jobs
-    st.lv.auto = 0; G.recalc(); els.toast.textContent = 'before';
+    st.lv.auto = 0; G.recalc(); els.toast.textContent = 'before' // (set, then read back below);
     const r0 = G.awayBonus(60);
-    ok('nothing finished and no helpers: no away toast', r0.jobs === 0 && els.toast.textContent === 'before');
+    ok('nothing finished and no helpers: no away toast', r0.jobs === 0 && G.lastToast() === 'before');
     st.inv.pearl = 200; G.forgeStartUI('rose_dust'); now += 60000;
     const r1 = G.awayBonus(60);
-    ok('one job finished away: the toast says so in plain words', r1.jobs === 1 && els.toast.textContent === 'Welcome back! 1 forge job finished while you were away', els.toast.textContent);
+    ok('one job finished away: the toast says so in plain words', r1.jobs === 1 && G.lastToast() === 'Welcome back! 1 forge job finished while you were away', G.lastToast());
     st.lv.auto = 2; G.recalc(); const r2 = G.awayBonus(60);
-    ok('with helpers and no jobs, the toast names only the juice', r2.jobs === 0 && /^Welcome back! Your helpers popped .+ juice while you were away$/.test(els.toast.textContent), els.toast.textContent);
+    ok('with helpers and no jobs, the toast names only the juice', r2.jobs === 0 && /^Welcome back! Your helpers popped .+ juice while you were away$/.test(G.lastToast()), G.lastToast());
 
     // Fresh Batch and loads refresh the open panel
     els.forge.hidden = false; G.updateForge(); const stockBefore = els.fStock.textContent;

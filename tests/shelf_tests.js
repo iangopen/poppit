@@ -28,7 +28,7 @@ module.exports = ({ G, ok, E, store, els }) => {
 
   // scrap: one Common at a time from the stack, into the backpack even with auto-sell on
   const r0 = st.inv.pearl, s0 = st.sparks; act('scrap', 'stack');
-  ok('Scrap on the stack scraps one Common: +1,000 Rose Pearls (40% of 2,500), straight into the backpack', st.inv.pearl === r0 + 1000 && st.sparks === s0 && shelf().find((r) => r.stack).count === 2 && els.toast.textContent === 'Scrapped 1 Pink Duck copy: +1,000 Rose Pearls', els.toast.textContent);
+  ok('Scrap on the stack scraps one Common: +1,000 Rose Pearls (40% of 2,500), straight into the backpack', st.inv.pearl === r0 + 1000 && st.sparks === s0 && shelf().find((r) => r.stack).count === 2 && G.lastToast() === 'Scrapped 1 Pink Duck copy: +1,000 Rose Pearls', G.lastToast());
   G.sellAll(); G.setSelling(false);
   ok('the refund is kept stock: Sell all and auto-sell leave it', st.inv.pearl === r0 + 1000);
   ok('the pedestal copy can never be scrapped', G.shelfAction('scrap', 'pink_duck', String(c1.id)) === false && A.count(st.artifacts, 'pink_duck') === 6);
@@ -45,7 +45,7 @@ module.exports = ({ G, ok, E, store, els }) => {
   act('scrap', made[5].id); tap(els.confirm); // a tap on the backdrop
   ok('a tap outside the box cancels too', els.confirm.hidden === true && ducks().some((c) => c.id === made[5].id));
   act('scrap', made[5].id); tap(els.confirm, 'data-cf', 'ok');
-  ok('Confirm scraps it and toasts the refund', !ducks().some((c) => c.id === made[5].id) && st.inv.pearl === r2 + 1000 && els.toast.textContent === 'Scrapped 1 Pink Duck copy: +1,000 Rose Pearls');
+  ok('Confirm scraps it and toasts the refund', !ducks().some((c) => c.id === made[5].id) && st.inv.pearl === r2 + 1000 && G.lastToast() === 'Scrapped 1 Pink Duck copy: +1,000 Rose Pearls');
 
   // the bulk action: everything unlocked below the pedestal's rarity
   const more = ['common', 'common', 'rare', 'rare'].map((r) => { const c = G.craftArtifact('pink_duck', FORCE[r]); G.closeReveal(); return c; });
@@ -56,7 +56,7 @@ module.exports = ({ G, ok, E, store, els }) => {
   const r3 = st.inv.pearl; tap(els.artHalls, 'data-bulk', 'pink_duck');
   ok('it asks first, naming the count and the total refund', els.cfTitle.textContent === 'Scrap 6 copies below Epic?' && els.cfText.textContent.startsWith('6 unlocked Pink Duck copies go for +9,000 Rose Pearls.') && st.inv.pearl === r3, els.cfText.textContent);
   tap(els.confirm, 'data-cf', 'ok');
-  ok('then scraps exactly those: the pedestal Epic and the locked Rare stay', st.inv.pearl === r3 + 9000 && ducks().map((c) => c.rarity + (c.locked ? '*' : '')).sort().join() === 'epic*,rare*' && els.toast.textContent === 'Scrapped 6 Pink Duck copies: +9,000 Rose Pearls', ducks().map((c) => c.rarity).join());
+  ok('then scraps exactly those: the pedestal Epic and the locked Rare stay', st.inv.pearl === r3 + 9000 && ducks().map((c) => c.rarity + (c.locked ? '*' : '')).sort().join() === 'epic*,rare*' && G.lastToast() === 'Scrapped 6 Pink Duck copies: +9,000 Rose Pearls', ducks().map((c) => c.rarity).join());
   ok('with nothing left below, the bulk button is gone', G.artView()[0].items[0].bulk.n === 0 && !/data-bulk/.test(G.hallHTML()));
 
   // Scrap all on a Common stack asks first; locked Commons stay

@@ -45,7 +45,7 @@ body {
 #stage { position: relative; min-width: 0; min-height: 0; cursor: none; touch-action: none; user-select: none; -webkit-user-select: none; }
 #cv { cursor: none; position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .hud { position: absolute; pointer-events: none; }
-.hud-tl { left: 8px; top: 6px; }
+.hud-tl { left: 8px; right: 8px; top: 6px; } /* a column: juice, rate, payout line, next goal, toast (each in flow, so none overlap) */
 .hud-tr { right: 4px; top: 4px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; pointer-events: auto; }
 .lbl { color: var(--muted); font: 400 22px/1 var(--font-brand); }
 /* hand-drawn bits: wobbly marker outlines and scribble fills */
@@ -55,7 +55,7 @@ body {
 @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.1); } 100% { transform: scale(1); } }
 #rate { font: 400 20px var(--font-brand); color: var(--muted); font-variant-numeric: tabular-nums; opacity: 0.55; transition: opacity 200ms ease, color 200ms ease; }
 #rate.live { opacity: 1; color: var(--accent); }
-#echoes { display: block; pointer-events: auto; min-height: 44px; margin: -8px 0 -12px -4px; padding: 0 4px; background: none; border: 0; text-align: left; font: 700 12px var(--font-ui); color: var(--fg); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; } /* links to the Artifacts panel */
+#echoes { display: block; width: fit-content; max-width: 100%; pointer-events: auto; min-height: 44px; margin: -8px 0 -12px -4px; padding: 0 4px; background: none; border: 0; text-align: left; font: 700 12px var(--font-ui); color: var(--fg); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; } /* links to the Artifacts panel */
 #echoes:disabled { text-decoration: none; cursor: default; }
 #echoes:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
 .chip {
@@ -83,12 +83,25 @@ body {
 #surge.on { opacity: 1; }
 #hint { position: absolute; left: 0; right: 0; bottom: 46px; text-align: center; pointer-events: none; color: var(--muted); font: 400 20px/1.1 var(--font-brand); padding: 0 16px; transition: opacity 600ms ease; }
 #hint.gone { opacity: 0; }
+/* the toast sits in the HUD column under the goal line; messages within a second of each other share it, one per line */
 #toast {
-  position: absolute; left: 50%; top: 62px; transform: translate(-50%, -8px); max-width: min(440px, calc(100% - 32px)); text-align: center;
-  background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(255, 255, 255, 1); border-radius: var(--r); padding: 8px 18px 7px; font: 400 21px/1.1 var(--font-brand); pointer-events: none; opacity: 0;
-  box-shadow: 0 14px 34px -14px rgba(100, 80, 40, 0.45); transition: opacity 180ms ease, transform 180ms ease;
+  display: none; width: fit-content; max-width: min(440px, 100%); margin-top: 6px; white-space: pre-line;
+  background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(255, 255, 255, 1); border-radius: var(--r); padding: 8px 16px 7px; font: 400 21px/1.1 var(--font-brand); pointer-events: none;
+  box-shadow: 0 14px 34px -14px rgba(100, 80, 40, 0.45);
 }
-#toast.on { opacity: 1; transform: translate(-50%, 0); }
+#toast.on { display: block; animation: toastIn 180ms ease; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+/* the next goal: one short line, dismissable */
+.goal { display: flex; align-items: center; gap: 6px; width: fit-content; max-width: min(440px, 100%); margin-top: 6px; padding: 2px 2px 2px 12px; background: rgba(255, 253, 246, 0.94); border: 2px solid #3a2e1c; border-radius: 255px 14px 225px 14px / 14px 225px 14px 255px; font: 700 13px/1.25 var(--font-ui); color: var(--fg); pointer-events: auto; box-shadow: 0 8px 20px -12px rgba(100, 80, 40, 0.5); }
+.goal[hidden] { display: none; }
+.shopEmpty { margin: 6px 4px; font: 400 20px/1.2 var(--font-brand); color: var(--muted); }
+#echoes:not([hidden]) + .goal { margin-top: 14px; } /* clear of the payout line's 44 px hit box (it has a negative bottom margin) */
+.goalLbl { flex: none; font: 800 10px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+#goalText { min-width: 0; }
+#goalX { flex: none; width: 44px; height: 44px; margin: -6px -2px -6px 0; display: grid; place-items: center; background: none; border: 0; border-radius: 50%; font: 700 15px/1 var(--font-ui); color: var(--muted); cursor: pointer; }
+#goalX:focus-visible { outline: 2px solid var(--accent); outline-offset: -6px; }
+/* a shop group with a new or newly affordable row the player has not seen yet */
+#lists h2.ndot::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 8px; vertical-align: 0.3em; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #fffdf6, 0 0 0 3.5px #3a2e1c; }
 #shelf {
   min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 20px 50px -24px rgba(100, 80, 40, 0.45);
@@ -513,6 +526,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   .reveal *, .rvBox, .cfBox { animation: none !important; }
   .rvParts { display: none; }
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
+  #toast.on { animation: none; }
 }
 </style>
 </head>
@@ -525,6 +539,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <div id="sparks">0</div>
       <div id="rate">0 / s</div>
       <button type="button" id="echoes" hidden></button>
+      <div id="goal" class="goal" hidden><span class="goalLbl">Next goal</span><span id="goalText" aria-live="polite"></span><button type="button" id="goalX" aria-label="Hide this goal">&#10005;</button></div>
+      <div id="toast" role="status"></div>
     </div>
     <div class="hud hud-tr">
       <button class="chip cog pooli" id="poolBtn" type="button" aria-expanded="false" aria-controls="pool" aria-label="Pearl pool" title="Pearl pool"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 12.6 C8 13.2 16 13.2 20.8 12.6 C20.6 17 17 20 12 20 C7 20 3.4 17 3.2 12.6 Z"/><circle cx="8.3" cy="8.6" r="2.3"/><circle cx="15.6" cy="8.3" r="2.3"/><circle cx="12" cy="5.2" r="0.2"/></svg></button>
@@ -579,10 +595,10 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <div class="setRow"><span>Sound</span><button class="chip" id="muteBtn" type="button">Sound on</button></div>
       <div class="setRow"><span>Music<small id="musicNote"></small></span><button class="chip" id="musicBtn" type="button">Music on</button></div>
       <div class="setRow"><span>Music volume</span><input id="musicVol" type="range" min="0" max="100" step="1" value="50" aria-label="Music volume"></div>
-      <div class="setRow"><span>Progress</span><button class="chip" id="resetBtn" type="button">Reset save</button></div>
+      <div class="setRow" id="resetRow" hidden><span>Progress</span><button class="chip" id="resetBtn" type="button">Reset save</button></div>
       <h4 class="setHd">Save</h4>
-      <div class="setRow"><span>Save code<small>Paste it on any device to carry on</small></span><button class="chip" id="copySave" type="button">Copy save code</button></div>
-      <div class="setRow"><span>Save file</span><button class="chip" id="dlSave" type="button">Download save file</button></div>
+      <div class="setRow" id="copyRow" hidden><span>Save code<small>Paste it on any device to carry on</small></span><button class="chip" id="copySave" type="button">Copy save code</button></div>
+      <div class="setRow" id="dlRow" hidden><span>Save file</span><button class="chip" id="dlSave" type="button">Download save file</button></div>
       <textarea class="saveTxt" id="saveOut" readonly hidden aria-label="Your save code" rows="3"></textarea>
       <div class="setRow saveIn">
         <textarea class="saveTxt" id="saveText" rows="3" placeholder="Paste a save code here" aria-label="Save code to load" spellcheck="false" autocomplete="off"></textarea>
@@ -592,7 +608,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <p class="hint2" id="saveMsg" role="status" aria-live="polite"></p>
       <div class="setRow" id="restoreRow" hidden><span>Restore previous save<small id="restoreNote">The progress you had before your last load</small></span><button class="chip" id="restoreBtn" type="button">Restore</button></div>
     </section>
-    <button id="toolBtn" type="button" aria-expanded="false" aria-controls="tools" aria-label="Tools">
+    <button id="toolBtn" type="button" aria-expanded="false" aria-controls="tools" aria-label="Tools"><span class="fdot" id="toolsDot" hidden></span>
       <svg viewBox="0 0 64 64" width="60" height="60" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M15.5 54.5 C13.5 52 14.5 49.5 17 47 L37.5 21.5 C39.5 19.5 42.5 20.5 42.5 23.5 C42.5 25.5 41.5 27 40 28.5 L21.5 53.5 C20 55.5 17.5 56 15.5 54.5Z" fill="#e0a566"/>
         <path d="M59 23 L48.5 36 L25 17 L35.5 4.5 Z" fill="#b4bccb"/>
@@ -600,7 +616,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <path d="M24 42 L30 46" stroke-width="2"/>
       </svg>
     </button>
-    <button id="bookBtn" class="dock" type="button" aria-expanded="false" aria-controls="book" aria-label="Collection book">
+    <button id="bookBtn" class="dock" type="button" aria-expanded="false" aria-controls="book" aria-label="Collection book"><span class="fdot" id="bookDot" hidden></span>
       <svg viewBox="0 0 64 64" width="52" height="52" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 8 L48 8 C51 8 53 10 53 13 L53 51 C53 54 51 56 48 56 L14 56 Z" fill="#8a4b2a"/>
         <path d="M10 10 C10 8 12 7 14 8 L14 56 C12 57 10 56 10 54 Z" fill="#5e301a"/>
@@ -608,7 +624,7 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <path d="M22 42 L44 42 M22 47 L38 47" stroke="#f2d38a" stroke-width="2.4"/>
       </svg>
     </button>
-    <button id="artBtn" class="dock" type="button" aria-expanded="false" aria-controls="arts" aria-label="Artifacts" hidden>
+    <button id="artBtn" class="dock" type="button" aria-expanded="false" aria-controls="arts" aria-label="Artifacts" hidden><span class="fdot" id="artsDot" hidden></span>
       <svg viewBox="0 0 64 64" width="54" height="54" aria-hidden="true" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 52 C16 49.5 26 54 34 51.5 C42 49 50 53.5 58 51" stroke="#8fc7e8" stroke-width="2.4"/>
         <path d="M9 35 C8.5 30.5 10.5 28 13.5 29.5 C17 32 22 33.5 27 33 C29 32.5 30 31 29 28.5 C26 23.5 27.5 15 35.5 13.5 C43 12.5 47 18.5 45.5 24.5 C45 27 43.5 29 42.5 30.5 C49 31 54.5 34 54 40.5 C53.5 47.5 46 51.5 33 51.5 C20 51.5 9.5 46 9 35 Z" fill="#ff9ec4"/>
@@ -681,7 +697,6 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <button class="sell small" id="tAct" type="button">Equip</button>
     </section>
     <div id="surge">Frenzy</div>
-    <div id="toast" role="status"></div>
     <div id="hint">Poke a pearl to pop it for juice. Tough ones crack first, so keep going.</div>
     <div id="bottom">
       <div id="combo"><span class="lbl">Combo</span><span id="comboN">0</span><span id="comboBar"><i></i></span><span id="comboX">x1.00</span></div>
@@ -692,14 +707,15 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   <aside id="shelf">
     <header><h1>Poppit</h1><span id="shelfNote">Spend juice to grow</span></header>
     <div id="lists">
+      <p class="hint2 shopEmpty" id="shopEmpty">Upgrades show up here as you earn juice. Pop some pearls!</p>
       <h2 id="hVerbs" hidden>New techniques</h2>
       <div id="listVerbs"></div>
       <h2 id="hMarble" hidden>Pearls &amp; Marbles</h2>
       <div id="listMarble"></div>
-      <h2>Upgrades</h2>
+      <h2 id="hTune" hidden>Upgrades</h2>
       <div id="listTune"></div>
     </div>
-    <div id="collapseBox">
+    <div id="collapseBox" hidden>
       <p id="collapseText">A fresh batch resets the run for permanent Flavors.</p>
       <button class="big" id="collapseBtn" type="button" disabled>Fresh Batch</button>
     </div>
@@ -1708,6 +1724,8 @@ const tool = { sw: 99, heat: 0, spd: 1 }; // seconds since the current swing beg
 let flashT = 0, packBump = 0;
 
 /* ----- board ----- */
+// where pearls fly when they go to the backpack: its button (re-aimed when the button appears, see syncDock)
+function aimPack(r) { r = r || stage.getBoundingClientRect(); const pb = $('packBtn').getBoundingClientRect(); BPX = pb.left - r.left + pb.width / 2; BPY = pb.top - r.top + pb.height / 2; }
 function layout() {
   const r = stage.getBoundingClientRect();
   W = Math.max(200, r.width); H = Math.max(200, r.height);
@@ -1717,7 +1735,7 @@ function layout() {
   const top = clamp(H * 0.17, 76, 104), bottom = clamp(H * 0.14, 64, 86), side = clamp(W * 0.03, 12, 28);
   BX = side; BY = top; BW = W - 2 * side; BH = H - top - bottom;
   const sp = $('sparks').getBoundingClientRect();
-  const pb = $('packBtn').getBoundingClientRect(); BPX = pb.left - r.left + pb.width / 2; BPY = pb.top - r.top + pb.height / 2;
+  aimPack(r);
   TX = sp.left - r.left + Math.min(54, sp.width / 2); TY = sp.top - r.top + sp.height / 2;
   buildCells();
 }
@@ -2390,31 +2408,53 @@ const META = {
   shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv, S.shinyBonus) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
 };
 const rows = {};
-let toastTimer = 0;
+let toastTimer = 0, toastAt = -1e15, toastParts = [];
+const TOAST_BATCH_MS = 1000, TOAST_MAX = 3; // a message within a second of the last joins the toast on show (at most 3 lines, newest kept)
 function toast(msg) {
-  const el = $('toast'); el.textContent = msg; el.classList.add('on');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 3400);
+  const el = $('toast'), now = Date.now();
+  if (el.classList.contains('on') && now - toastAt < TOAST_BATCH_MS) { if (!toastParts.includes(msg)) toastParts = toastParts.concat([msg]).slice(-TOAST_MAX); }
+  else toastParts = [msg];
+  toastAt = now; el.textContent = toastParts.join('\n'); el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.classList.remove('on'); toastParts = []; }, 3400);
 }
 function buildShelf() {
   ECON.ORDER.forEach((id) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'up'; b.dataset.id = id; b.dataset.g = ECON.UPG[id].group;
     b.innerHTML = '<span class="top"><span class="nm"></span><span class="lv"></span></span><span class="ds"></span><span class="cs"></span>';
-    b.addEventListener('click', () => buy(id));
+    b.addEventListener('click', () => { seeRow(id); buy(id); });
     ({ verb: $('listVerbs'), marble: $('listMarble') }[ECON.UPG[id].group] || $('listTune')).appendChild(b);
-    rows[id] = { el: b, nm: b.querySelector('.nm'), lv: b.querySelector('.lv'), ds: b.querySelector('.ds'), cs: b.querySelector('.cs'), cache: {} };
+    rows[id] = { el: b, nm: b.querySelector('.nm'), lv: b.querySelector('.lv'), ds: b.querySelector('.ds'), cs: b.querySelector('.cs'), cache: {}, shown: false, can: false, inView: false };
     rows[id].nm.textContent = META[id].name;
+    if (rowObserver) rowObserver.observe(b);
   });
 }
+/* ----- "new" and "affordable" cues on the shop groups: a dot on a group's heading while a row in it is new (just revealed) or newly
+   affordable and the player has not seen it. A row counts as seen once at least half of it is on screen (IntersectionObserver)
+   or it is tapped. The price-progress strip under each row stays the one progress display. ----- */
+const SHOP_GROUPS = { verb: 'hVerbs', marble: 'hMarble', tune: 'hTune' };
+const rowSeen = {}; // per row: { shown, can } as the player last saw it
+const rowObserver = window.IntersectionObserver ? new IntersectionObserver((es) => { for (const e of es) { const id = e.target.dataset.id; if (rows[id]) { rows[id].inView = e.intersectionRatio >= 0.5; if (rows[id].inView) seeRow(id); } } syncShopDots(); }, { threshold: [0, 0.5, 1] }) : null;
+function seeRow(id) { const r = rows[id]; if (r) rowSeen[id] = { shown: rowSeen[id] && rowSeen[id].shown || r.shown, can: r.can }; }
+const rowNew = (id) => { const r = rows[id], v = rowSeen[id] || { shown: false, can: false }; return (r.shown && !v.shown) || (r.can && !v.can); };
+function syncShopDots() {
+  for (const g in SHOP_GROUPS) {
+    let dot = false;
+    for (const id of ECON.ORDER) { if (ECON.UPG[id].group !== g) continue; if (rows[id].inView) seeRow(id); if (rowNew(id)) dot = true; }
+    $(SHOP_GROUPS[g]).classList.toggle('ndot', dot && !$(SHOP_GROUPS[g]).hidden);
+  }
+}
+// boot, a load or a Reset save: what is on show now counts as seen, so nothing lights up just for loading
+function seeShop() { for (const id of ECON.ORDER) seeRow(id); syncShopDots(); }
 function setText(r, key, el, val) { if (r.cache[key] !== val) { r.cache[key] = val; el.textContent = val; } }
 function updateShelf() {
   ECON.ORDER.forEach((id) => {
     const u = ECON.UPG[id], r = rows[id], lvl = state.lv[id];
     const reqOk = !u.req || u.req(state.lv), maxed = lvl >= u.max, c = ECON.cost(id, lvl);
     const shown = reqOk && (lvl > 0 || state.runEarned >= c * 0.4 || state.sparks >= c * 0.4);
-    r.el.hidden = !shown;
+    r.el.hidden = !shown; r.shown = shown; r.can = false;
     if (!shown) return;
-    const can = !maxed && state.sparks >= c;
+    const can = !maxed && state.sparks >= c; r.can = can;
     r.el.classList.toggle('can', can); r.el.classList.toggle('max', maxed);
     r.el.style.setProperty('--p', maxed ? '0%' : (clamp(state.sparks / c, 0, 1) * 100).toFixed(0) + '%');
     setText(r, 'lv', r.lv, u.max <= 2 ? (lvl ? 'Lv ' + lvl + '/' + u.max : '') : 'Lv ' + lvl);
@@ -2422,8 +2462,11 @@ function updateShelf() {
     setText(r, 'cs', r.cs, maxed ? 'Max' : fmt(c));
   });
   if (!$('tools').hidden) updateToolPanel();
-  for (const [h, grp] of [['hVerbs', 'verb'], ['hMarble', 'marble']]) $(h).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === grp && !rows[id].el.hidden); // no empty headings
+  for (const g in SHOP_GROUPS) $(SHOP_GROUPS[g]).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === g && !rows[id].el.hidden); // no empty headings
+  $('shopEmpty').hidden = Object.values(SHOP_GROUPS).some((h) => !$(h).hidden); // an empty shop says why
+  syncShopDots();
   const run = state.runEarned, ready = ECON.collapseReady(run), btn = $('collapseBtn');
+  $('collapseBox').hidden = !(REVEAL.collapse() || ready);
   btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
   if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
   $('collapseText').textContent = ready
@@ -2629,6 +2672,7 @@ function openPanel(id) {
     const show = p === id && $(p).hidden;
     $(p).hidden = !show; $(PANEL_BTN[p]).setAttribute('aria-expanded', String(show));
   });
+  syncDots();
   updatePack(); updatePool(); artSig = ''; updateArts(); if (id === 'forge' && !$('forge').hidden) { setForgeDot(false); forgeSig = ''; updateForge(); } if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
 }
 $('packBtn').addEventListener('click', () => openPanel('pack'));
@@ -2643,17 +2687,100 @@ $('forgeBtn').addEventListener('click', () => openPanel('forge'));
 const ART_DOCK_ROSES = 100; // the Artifacts and Forge buttons show once this many Rose Pearls were popped in total
 const rosesPopped = () => state.col.pearl.popped + state.col.pearl.sPopped;
 const forgeUsed = () => state.forge.slots.some(Boolean) || Object.keys(state.forge.stock).length > 0 || state.forge.lv.speed > 0 || state.forge.lv.slot > 0;
-// dock buttons behind a gate, keyed by their PANEL_BTN panel id; the stage gets the panel id as a class while its button shows
+/* ----- Reveal rules: a control appears once the player has earned what it belongs to. Every rule reads the state, never a stored
+   flag, so an old save shows what it has earned and Reset save starts over. A save that has taken a Fresh Batch passes them all.
+   Settings and the paste box (to bring a save to a new device) are there from the start. ----- */
+const foundCount = () => ECON.PEARLS.filter((t) => state.col[t.id].found).length;
+const anyShiny = () => ECON.PEARLS.some((t) => state.col[t.id].sFound);
+const hasPearls = () => INV_IDS.some((k) => state.inv[k] > 0);
+const ownsArtifact = () => ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0);
+const veteran = () => state.collapses > 0 || state.echoes > 0;
+const toolsAt = () => 0.4 * Math.min(ECON.toolPrice(1), ECON.uniqueCost(0, 0)); // 40% of the cheapest thing in the Tools panel, like a shop row
+const COLLAPSE_SHOW = 0.1; // the Fresh Batch box shows once lifetime juice reaches this share of a Fresh Batch's run juice
+const REVEAL = {
+  collapse: () => veteran() || state.lifetime >= COLLAPSE_SHOW * ECON.COLLAPSE_MIN_RUN,
+  progress: () => veteran() || state.lifetime > 0 || hasPearls() || ownsArtifact(), // Reset save, Copy save code, Download save file
+};
+// dock and top-right buttons behind a gate, keyed by their PANEL_BTN panel id
 const DOCK_GATES = {
-  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0),
+  pack: () => veteran() || state.lifetime > 0 || hasPearls() || Object.keys(state.keep).length > 0 || !state.autoSell, // the first pop
+  tools: () => veteran() || state.lifetime >= toolsAt() || state.owned.some((o, i) => o && i > 0) || Object.keys(state.toolUp).length > 0,
+  book: () => veteran() || foundCount() >= 2 || anyShiny(), // a second pearl type, or a shiny
+  pool: () => veteran() || foundCount() >= 3 || anyShiny() || !state.shinyOn || ECON.PEARLS.some((t) => state.col[t.id].found && !state.pool.includes(t.id)), // a third type, a shiny, or a pool already changed
+  arts: () => rosesPopped() >= ART_DOCK_ROSES || ownsArtifact(),
   forge: () => rosesPopped() >= ART_DOCK_ROSES || forgeUsed(), // a loaded save with forge work keeps its button
 };
+const STAGE_CLASS = { arts: true, forge: true }; // the stage gets these panel ids as classes while their buttons show (the bottom bar moves right)
+// the dock, left to right, and how far each button moves the next one along; a hidden button leaves no gap (all shown = the CSS lefts)
+const DOCK_ORDER = [['pack', 70], ['tools', 70], ['book', 56], ['arts', 56], ['forge', 56]], DOCK_LEFT = 6;
 function syncDock() {
+  let moved = false;
   for (const id in DOCK_GATES) {
     const b = $(PANEL_BTN[id]), show = DOCK_GATES[id]();
-    if (b.hidden === show) { b.hidden = !show; $('stage').classList.toggle(id, show); }
+    if (b.hidden === show) { b.hidden = !show; moved = true; if (STAGE_CLASS[id]) $('stage').classList.toggle(id, show); }
+  }
+  if (moved) {
+    let x = DOCK_LEFT; for (const [id, step] of DOCK_ORDER) { const b = $(PANEL_BTN[id]); if (b.hidden) continue; b.style.left = x + 'px'; x += step; }
+    if (!$('packBtn').hidden) aimPack();
+  }
+  for (const [row, on] of [['resetRow', REVEAL.progress()], ['copyRow', REVEAL.progress()], ['dlRow', REVEAL.progress()]]) if ($(row).hidden === on) $(row).hidden = !on;
+  syncDots(); updateGoal();
+}
+/* ----- dots on dock buttons: something unseen or newly affordable inside, cleared when the panel opens. Each panel lists keys for
+   what it offers; a key the player has not had on show while the panel was open lights the dot. (The Forge has its own dot.) ----- */
+const DOTS = {
+  tools: () => { // things in the Tools panel the player can afford now: the next tool, and each owned tool's next upgrade levels
+    const k = [], nx = state.owned.lastIndexOf(true) + 1;
+    if (nx < ECON.TOOLS.length && state.sparks >= ECON.toolPrice(nx)) k.push('buy' + nx);
+    state.owned.forEach((o, i) => { if (!o) return; const u = state.toolUp[i] || { p: 0, s: 0, u: 0 };
+      for (const kind of ['p', 's', 'u']) { const c = toolUpgrade(i, kind, u[kind] | 0); if (c && (u[kind] | 0) < c.max && state.sparks >= c.cost) k.push(kind + i + ':' + (u[kind] | 0)); } });
+    return k;
+  },
+  book: () => ECON.PEARLS.flatMap((t) => [state.col[t.id].found ? t.id : null, state.col[t.id].sFound ? t.id + ':s' : null]).filter(Boolean), // discoveries
+  arts: () => ARTS.ARTIFACTS.filter((a) => ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock)).map((a) => a.id + ':' + ARTS.count(state.artifacts, a.id)), // crafts within reach
+};
+const dotSeen = {}; // per panel: every key the player has had on show while that panel was open
+function syncDots() {
+  for (const id in DOTS) {
+    const keys = DOTS[id](), seen = dotSeen[id] || (dotSeen[id] = new Set());
+    if (!$(id).hidden) for (const k of keys) seen.add(k);
+    const on = !$(PANEL_BTN[id]).hidden && keys.some((k) => !seen.has(k));
+    if ($(id + 'Dot').hidden === on) $(id + 'Dot').hidden = !on;
   }
 }
+// boot, a load or a Reset save: what the panels offer now counts as seen
+function seeDots() { for (const id in DOTS) dotSeen[id] = new Set(DOTS[id]()); syncDots(); }
+/* ----- the next goal: one short line under the juice counter, the first goal in GOALS whose test is not yet passed (goals with a
+   'when' count only once it holds). It never blocks play. Its close button hides that goal for good on this device; the next goal
+   still shows when it comes. Tests read the state, never a flag, so an old save starts at the goal it has reached. ----- */
+const GOALS_KEY = 'poppit.goalsOff'; // the goals this device has hidden (a list of ids); Reset save clears it
+const firstPrice = () => Math.min(...ECON.ORDER.filter((id) => !ECON.UPG[id].req).map((id) => ECON.cost(id, 0)));
+const anyBought = () => Object.values(state.lv).some((v) => v > 0) || state.owned.some((o, i) => o && i > 0) || veteran();
+const GOALS = [
+  { id: 'juice', text: () => 'Pop pearls to earn ' + fmt(firstPrice()) + ' juice for your first upgrade.', done: () => state.lifetime >= firstPrice() || anyBought() },
+  { id: 'buy', text: () => 'Buy your first upgrade in the shop.', done: anyBought },
+  { id: 'blue', text: () => 'Unlock Blue Pearls in the shop. Each pays x' + fmtX(ECON.KIND.blue.mult) + '.', done: () => state.col.blue.found || veteran() },
+  { id: 'tool', text: () => 'Open Tools (the hammer) and buy the ' + ECON.TOOLS[1].name + ': power ' + ECON.TOOLS[1].power + '.', done: () => state.owned.some((o, i) => o && i > 0) || veteran() },
+  { id: 'helpers', text: () => 'Unlock Coral Pearls, then hire Helpers to pop for you.', done: () => state.lv.auto > 0 || veteran() },
+  { id: 'fresh', text: () => 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run, then take a Fresh Batch.', done: veteran },
+  { id: 'duck', when: () => DOCK_GATES.arts(), text: () => 'Keep Rose Pearls in your backpack and craft the Pink Duck in Artifacts.', done: ownsArtifact },
+  { id: 'forge', when: () => DOCK_GATES.forge(), text: () => 'Start a job in the Forge: it turns kept pearls into dust.', done: forgeUsed },
+];
+let goalsOff = (() => { try { const v = JSON.parse(localStorage.getItem(GOALS_KEY)); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; } catch (e) { return []; } })();
+const currentGoal = () => GOALS.find((g) => (!g.when || g.when()) && !g.done()) || null;
+function updateGoal() {
+  const g = currentGoal(), show = !!g && !goalsOff.includes(g.id);
+  if ($('goal').hidden === show) $('goal').hidden = !show;
+  if (show) setLbl('goalText', g.text());
+  return show ? g.id : null;
+}
+function dismissGoal() {
+  const g = currentGoal(); if (!g || goalsOff.includes(g.id)) return false;
+  goalsOff = goalsOff.concat([g.id]); try { localStorage.setItem(GOALS_KEY, JSON.stringify(goalsOff)); } catch (e) { /* storage may be unavailable */ }
+  updateGoal(); return true;
+}
+function resetGoals() { goalsOff = []; try { localStorage.removeItem(GOALS_KEY); } catch (e) { /* ignore */ } }
+$('goalX').addEventListener('click', () => { Snd.click(); dismissGoal(); });
 const syncArtBtn = syncDock; // the older name, kept for the tests
 const pearlName = (kind) => (ECON.PEARLS.find((t) => t.id === kind) || { name: kind }).name;
 const DUCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -3706,7 +3833,7 @@ $('resetBtn').addEventListener('click', () => {
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
   Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
-  collapse = null; resetRun(); updateShelf(); toast('Save erased');
+  collapse = null; resetRun(); resetGoals(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
 });
 
 /* ----- save codes: copy or download one, paste or open one, then Load and Confirm. The replaced save goes to BACKUP_KEY. ----- */
@@ -3837,6 +3964,7 @@ function start(data) {
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); buildForgeUpg(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
   awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
   paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
+  seeShop(); seeDots(); syncDock();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
   document.addEventListener('visibilitychange', () => { if (document.hidden) { FORGE.setFrenzy(state.forge, false, Date.now()); save(); } }); // no frenzy speed while hidden

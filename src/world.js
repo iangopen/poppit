@@ -47,6 +47,8 @@ const tool = { sw: 99, heat: 0, spd: 1 }; // seconds since the current swing beg
 let flashT = 0, packBump = 0;
 
 /* ----- board ----- */
+// where pearls fly when they go to the backpack: its button (re-aimed when the button appears, see syncDock)
+function aimPack(r) { r = r || stage.getBoundingClientRect(); const pb = $('packBtn').getBoundingClientRect(); BPX = pb.left - r.left + pb.width / 2; BPY = pb.top - r.top + pb.height / 2; }
 function layout() {
   const r = stage.getBoundingClientRect();
   W = Math.max(200, r.width); H = Math.max(200, r.height);
@@ -56,7 +58,7 @@ function layout() {
   const top = clamp(H * 0.17, 76, 104), bottom = clamp(H * 0.14, 64, 86), side = clamp(W * 0.03, 12, 28);
   BX = side; BY = top; BW = W - 2 * side; BH = H - top - bottom;
   const sp = $('sparks').getBoundingClientRect();
-  const pb = $('packBtn').getBoundingClientRect(); BPX = pb.left - r.left + pb.width / 2; BPY = pb.top - r.top + pb.height / 2;
+  aimPack(r);
   TX = sp.left - r.left + Math.min(54, sp.width / 2); TY = sp.top - r.top + sp.height / 2;
   buildCells();
 }

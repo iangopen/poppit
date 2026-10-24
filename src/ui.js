@@ -28,31 +28,53 @@ const META = {
   shiny:  { name: 'Shiny Hunter', desc: () => 'Shiny chance ' + (ECON.shinyChance(state.lv, S.shinyBonus) * 100).toFixed(2) + '% per pearl, shinies pay ' + ECON.SHINY_MULT + 'x' },
 };
 const rows = {};
-let toastTimer = 0;
+let toastTimer = 0, toastAt = -1e15, toastParts = [];
+const TOAST_BATCH_MS = 1000, TOAST_MAX = 3; // a message within a second of the last joins the toast on show (at most 3 lines, newest kept)
 function toast(msg) {
-  const el = $('toast'); el.textContent = msg; el.classList.add('on');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 3400);
+  const el = $('toast'), now = Date.now();
+  if (el.classList.contains('on') && now - toastAt < TOAST_BATCH_MS) { if (!toastParts.includes(msg)) toastParts = toastParts.concat([msg]).slice(-TOAST_MAX); }
+  else toastParts = [msg];
+  toastAt = now; el.textContent = toastParts.join('\n'); el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.classList.remove('on'); toastParts = []; }, 3400);
 }
 function buildShelf() {
   ECON.ORDER.forEach((id) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'up'; b.dataset.id = id; b.dataset.g = ECON.UPG[id].group;
     b.innerHTML = '<span class="top"><span class="nm"></span><span class="lv"></span></span><span class="ds"></span><span class="cs"></span>';
-    b.addEventListener('click', () => buy(id));
+    b.addEventListener('click', () => { seeRow(id); buy(id); });
     ({ verb: $('listVerbs'), marble: $('listMarble') }[ECON.UPG[id].group] || $('listTune')).appendChild(b);
-    rows[id] = { el: b, nm: b.querySelector('.nm'), lv: b.querySelector('.lv'), ds: b.querySelector('.ds'), cs: b.querySelector('.cs'), cache: {} };
+    rows[id] = { el: b, nm: b.querySelector('.nm'), lv: b.querySelector('.lv'), ds: b.querySelector('.ds'), cs: b.querySelector('.cs'), cache: {}, shown: false, can: false, inView: false };
     rows[id].nm.textContent = META[id].name;
+    if (rowObserver) rowObserver.observe(b);
   });
 }
+/* ----- "new" and "affordable" cues on the shop groups: a dot on a group's heading while a row in it is new (just revealed) or newly
+   affordable and the player has not seen it. A row counts as seen once at least half of it is on screen (IntersectionObserver)
+   or it is tapped. The price-progress strip under each row stays the one progress display. ----- */
+const SHOP_GROUPS = { verb: 'hVerbs', marble: 'hMarble', tune: 'hTune' };
+const rowSeen = {}; // per row: { shown, can } as the player last saw it
+const rowObserver = window.IntersectionObserver ? new IntersectionObserver((es) => { for (const e of es) { const id = e.target.dataset.id; if (rows[id]) { rows[id].inView = e.intersectionRatio >= 0.5; if (rows[id].inView) seeRow(id); } } syncShopDots(); }, { threshold: [0, 0.5, 1] }) : null;
+function seeRow(id) { const r = rows[id]; if (r) rowSeen[id] = { shown: rowSeen[id] && rowSeen[id].shown || r.shown, can: r.can }; }
+const rowNew = (id) => { const r = rows[id], v = rowSeen[id] || { shown: false, can: false }; return (r.shown && !v.shown) || (r.can && !v.can); };
+function syncShopDots() {
+  for (const g in SHOP_GROUPS) {
+    let dot = false;
+    for (const id of ECON.ORDER) { if (ECON.UPG[id].group !== g) continue; if (rows[id].inView) seeRow(id); if (rowNew(id)) dot = true; }
+    $(SHOP_GROUPS[g]).classList.toggle('ndot', dot && !$(SHOP_GROUPS[g]).hidden);
+  }
+}
+// boot, a load or a Reset save: what is on show now counts as seen, so nothing lights up just for loading
+function seeShop() { for (const id of ECON.ORDER) seeRow(id); syncShopDots(); }
 function setText(r, key, el, val) { if (r.cache[key] !== val) { r.cache[key] = val; el.textContent = val; } }
 function updateShelf() {
   ECON.ORDER.forEach((id) => {
     const u = ECON.UPG[id], r = rows[id], lvl = state.lv[id];
     const reqOk = !u.req || u.req(state.lv), maxed = lvl >= u.max, c = ECON.cost(id, lvl);
     const shown = reqOk && (lvl > 0 || state.runEarned >= c * 0.4 || state.sparks >= c * 0.4);
-    r.el.hidden = !shown;
+    r.el.hidden = !shown; r.shown = shown; r.can = false;
     if (!shown) return;
-    const can = !maxed && state.sparks >= c;
+    const can = !maxed && state.sparks >= c; r.can = can;
     r.el.classList.toggle('can', can); r.el.classList.toggle('max', maxed);
     r.el.style.setProperty('--p', maxed ? '0%' : (clamp(state.sparks / c, 0, 1) * 100).toFixed(0) + '%');
     setText(r, 'lv', r.lv, u.max <= 2 ? (lvl ? 'Lv ' + lvl + '/' + u.max : '') : 'Lv ' + lvl);
@@ -60,8 +82,11 @@ function updateShelf() {
     setText(r, 'cs', r.cs, maxed ? 'Max' : fmt(c));
   });
   if (!$('tools').hidden) updateToolPanel();
-  for (const [h, grp] of [['hVerbs', 'verb'], ['hMarble', 'marble']]) $(h).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === grp && !rows[id].el.hidden); // no empty headings
+  for (const g in SHOP_GROUPS) $(SHOP_GROUPS[g]).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === g && !rows[id].el.hidden); // no empty headings
+  $('shopEmpty').hidden = Object.values(SHOP_GROUPS).some((h) => !$(h).hidden); // an empty shop says why
+  syncShopDots();
   const run = state.runEarned, ready = ECON.collapseReady(run), btn = $('collapseBtn');
+  $('collapseBox').hidden = !(REVEAL.collapse() || ready);
   btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
   if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
   $('collapseText').textContent = ready
@@ -267,6 +292,7 @@ function openPanel(id) {
     const show = p === id && $(p).hidden;
     $(p).hidden = !show; $(PANEL_BTN[p]).setAttribute('aria-expanded', String(show));
   });
+  syncDots();
   updatePack(); updatePool(); artSig = ''; updateArts(); if (id === 'forge' && !$('forge').hidden) { setForgeDot(false); forgeSig = ''; updateForge(); } if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
 }
 $('packBtn').addEventListener('click', () => openPanel('pack'));
@@ -281,17 +307,100 @@ $('forgeBtn').addEventListener('click', () => openPanel('forge'));
 const ART_DOCK_ROSES = 100; // the Artifacts and Forge buttons show once this many Rose Pearls were popped in total
 const rosesPopped = () => state.col.pearl.popped + state.col.pearl.sPopped;
 const forgeUsed = () => state.forge.slots.some(Boolean) || Object.keys(state.forge.stock).length > 0 || state.forge.lv.speed > 0 || state.forge.lv.slot > 0;
-// dock buttons behind a gate, keyed by their PANEL_BTN panel id; the stage gets the panel id as a class while its button shows
+/* ----- Reveal rules: a control appears once the player has earned what it belongs to. Every rule reads the state, never a stored
+   flag, so an old save shows what it has earned and Reset save starts over. A save that has taken a Fresh Batch passes them all.
+   Settings and the paste box (to bring a save to a new device) are there from the start. ----- */
+const foundCount = () => ECON.PEARLS.filter((t) => state.col[t.id].found).length;
+const anyShiny = () => ECON.PEARLS.some((t) => state.col[t.id].sFound);
+const hasPearls = () => INV_IDS.some((k) => state.inv[k] > 0);
+const ownsArtifact = () => ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0);
+const veteran = () => state.collapses > 0 || state.echoes > 0;
+const toolsAt = () => 0.4 * Math.min(ECON.toolPrice(1), ECON.uniqueCost(0, 0)); // 40% of the cheapest thing in the Tools panel, like a shop row
+const COLLAPSE_SHOW = 0.1; // the Fresh Batch box shows once lifetime juice reaches this share of a Fresh Batch's run juice
+const REVEAL = {
+  collapse: () => veteran() || state.lifetime >= COLLAPSE_SHOW * ECON.COLLAPSE_MIN_RUN,
+  progress: () => veteran() || state.lifetime > 0 || hasPearls() || ownsArtifact(), // Reset save, Copy save code, Download save file
+};
+// dock and top-right buttons behind a gate, keyed by their PANEL_BTN panel id
 const DOCK_GATES = {
-  arts: () => rosesPopped() >= ART_DOCK_ROSES || ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0),
+  pack: () => veteran() || state.lifetime > 0 || hasPearls() || Object.keys(state.keep).length > 0 || !state.autoSell, // the first pop
+  tools: () => veteran() || state.lifetime >= toolsAt() || state.owned.some((o, i) => o && i > 0) || Object.keys(state.toolUp).length > 0,
+  book: () => veteran() || foundCount() >= 2 || anyShiny(), // a second pearl type, or a shiny
+  pool: () => veteran() || foundCount() >= 3 || anyShiny() || !state.shinyOn || ECON.PEARLS.some((t) => state.col[t.id].found && !state.pool.includes(t.id)), // a third type, a shiny, or a pool already changed
+  arts: () => rosesPopped() >= ART_DOCK_ROSES || ownsArtifact(),
   forge: () => rosesPopped() >= ART_DOCK_ROSES || forgeUsed(), // a loaded save with forge work keeps its button
 };
+const STAGE_CLASS = { arts: true, forge: true }; // the stage gets these panel ids as classes while their buttons show (the bottom bar moves right)
+// the dock, left to right, and how far each button moves the next one along; a hidden button leaves no gap (all shown = the CSS lefts)
+const DOCK_ORDER = [['pack', 70], ['tools', 70], ['book', 56], ['arts', 56], ['forge', 56]], DOCK_LEFT = 6;
 function syncDock() {
+  let moved = false;
   for (const id in DOCK_GATES) {
     const b = $(PANEL_BTN[id]), show = DOCK_GATES[id]();
-    if (b.hidden === show) { b.hidden = !show; $('stage').classList.toggle(id, show); }
+    if (b.hidden === show) { b.hidden = !show; moved = true; if (STAGE_CLASS[id]) $('stage').classList.toggle(id, show); }
+  }
+  if (moved) {
+    let x = DOCK_LEFT; for (const [id, step] of DOCK_ORDER) { const b = $(PANEL_BTN[id]); if (b.hidden) continue; b.style.left = x + 'px'; x += step; }
+    if (!$('packBtn').hidden) aimPack();
+  }
+  for (const [row, on] of [['resetRow', REVEAL.progress()], ['copyRow', REVEAL.progress()], ['dlRow', REVEAL.progress()]]) if ($(row).hidden === on) $(row).hidden = !on;
+  syncDots(); updateGoal();
+}
+/* ----- dots on dock buttons: something unseen or newly affordable inside, cleared when the panel opens. Each panel lists keys for
+   what it offers; a key the player has not had on show while the panel was open lights the dot. (The Forge has its own dot.) ----- */
+const DOTS = {
+  tools: () => { // things in the Tools panel the player can afford now: the next tool, and each owned tool's next upgrade levels
+    const k = [], nx = state.owned.lastIndexOf(true) + 1;
+    if (nx < ECON.TOOLS.length && state.sparks >= ECON.toolPrice(nx)) k.push('buy' + nx);
+    state.owned.forEach((o, i) => { if (!o) return; const u = state.toolUp[i] || { p: 0, s: 0, u: 0 };
+      for (const kind of ['p', 's', 'u']) { const c = toolUpgrade(i, kind, u[kind] | 0); if (c && (u[kind] | 0) < c.max && state.sparks >= c.cost) k.push(kind + i + ':' + (u[kind] | 0)); } });
+    return k;
+  },
+  book: () => ECON.PEARLS.flatMap((t) => [state.col[t.id].found ? t.id : null, state.col[t.id].sFound ? t.id + ':s' : null]).filter(Boolean), // discoveries
+  arts: () => ARTS.ARTIFACTS.filter((a) => ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock)).map((a) => a.id + ':' + ARTS.count(state.artifacts, a.id)), // crafts within reach
+};
+const dotSeen = {}; // per panel: every key the player has had on show while that panel was open
+function syncDots() {
+  for (const id in DOTS) {
+    const keys = DOTS[id](), seen = dotSeen[id] || (dotSeen[id] = new Set());
+    if (!$(id).hidden) for (const k of keys) seen.add(k);
+    const on = !$(PANEL_BTN[id]).hidden && keys.some((k) => !seen.has(k));
+    if ($(id + 'Dot').hidden === on) $(id + 'Dot').hidden = !on;
   }
 }
+// boot, a load or a Reset save: what the panels offer now counts as seen
+function seeDots() { for (const id in DOTS) dotSeen[id] = new Set(DOTS[id]()); syncDots(); }
+/* ----- the next goal: one short line under the juice counter, the first goal in GOALS whose test is not yet passed (goals with a
+   'when' count only once it holds). It never blocks play. Its close button hides that goal for good on this device; the next goal
+   still shows when it comes. Tests read the state, never a flag, so an old save starts at the goal it has reached. ----- */
+const GOALS_KEY = 'poppit.goalsOff'; // the goals this device has hidden (a list of ids); Reset save clears it
+const firstPrice = () => Math.min(...ECON.ORDER.filter((id) => !ECON.UPG[id].req).map((id) => ECON.cost(id, 0)));
+const anyBought = () => Object.values(state.lv).some((v) => v > 0) || state.owned.some((o, i) => o && i > 0) || veteran();
+const GOALS = [
+  { id: 'juice', text: () => 'Pop pearls to earn ' + fmt(firstPrice()) + ' juice for your first upgrade.', done: () => state.lifetime >= firstPrice() || anyBought() },
+  { id: 'buy', text: () => 'Buy your first upgrade in the shop.', done: anyBought },
+  { id: 'blue', text: () => 'Unlock Blue Pearls in the shop. Each pays x' + fmtX(ECON.KIND.blue.mult) + '.', done: () => state.col.blue.found || veteran() },
+  { id: 'tool', text: () => 'Open Tools (the hammer) and buy the ' + ECON.TOOLS[1].name + ': power ' + ECON.TOOLS[1].power + '.', done: () => state.owned.some((o, i) => o && i > 0) || veteran() },
+  { id: 'helpers', text: () => 'Unlock Coral Pearls, then hire Helpers to pop for you.', done: () => state.lv.auto > 0 || veteran() },
+  { id: 'fresh', text: () => 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run, then take a Fresh Batch.', done: veteran },
+  { id: 'duck', when: () => DOCK_GATES.arts(), text: () => 'Keep Rose Pearls in your backpack and craft the Pink Duck in Artifacts.', done: ownsArtifact },
+  { id: 'forge', when: () => DOCK_GATES.forge(), text: () => 'Start a job in the Forge: it turns kept pearls into dust.', done: forgeUsed },
+];
+let goalsOff = (() => { try { const v = JSON.parse(localStorage.getItem(GOALS_KEY)); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; } catch (e) { return []; } })();
+const currentGoal = () => GOALS.find((g) => (!g.when || g.when()) && !g.done()) || null;
+function updateGoal() {
+  const g = currentGoal(), show = !!g && !goalsOff.includes(g.id);
+  if ($('goal').hidden === show) $('goal').hidden = !show;
+  if (show) setLbl('goalText', g.text());
+  return show ? g.id : null;
+}
+function dismissGoal() {
+  const g = currentGoal(); if (!g || goalsOff.includes(g.id)) return false;
+  goalsOff = goalsOff.concat([g.id]); try { localStorage.setItem(GOALS_KEY, JSON.stringify(goalsOff)); } catch (e) { /* storage may be unavailable */ }
+  updateGoal(); return true;
+}
+function resetGoals() { goalsOff = []; try { localStorage.removeItem(GOALS_KEY); } catch (e) { /* ignore */ } }
+$('goalX').addEventListener('click', () => { Snd.click(); dismissGoal(); });
 const syncArtBtn = syncDock; // the older name, kept for the tests
 const pearlName = (kind) => (ECON.PEARLS.find((t) => t.id === kind) || { name: kind }).name;
 const DUCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -1344,7 +1453,7 @@ $('resetBtn').addEventListener('click', () => {
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
   Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
-  collapse = null; resetRun(); updateShelf(); toast('Save erased');
+  collapse = null; resetRun(); resetGoals(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
 });
 
 /* ----- save codes: copy or download one, paste or open one, then Load and Confirm. The replaced save goes to BACKUP_KEY. ----- */
@@ -1475,6 +1584,7 @@ function start(data) {
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); buildForgeUpg(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
   awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
   paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
+  seeShop(); seeDots(); syncDock();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
   document.addEventListener('visibilitychange', () => { if (document.hidden) { FORGE.setFrenzy(state.forge, false, Date.now()); save(); } }); // no frenzy speed while hidden
