@@ -6,6 +6,8 @@
 //   node tools/sim32.js --duck          the player owns a plain Pink Duck (Common, x1.4) from the start (no ducks by default)
 //   node tools/sim32.js --duck=best     the best-case duck instead: a Mythic copy with a top payout perk (+15%), x1.61
 //   node tools/sim32.js --early         the early beats of run 1 (first purchase, tool, tool upgrade, helper, Fresh Batch) against the rule of thumb
+//   node tools/sim32.js --flavors       the Flavor study: rules A-E, six cycles, three strategies over 3 hours, early timings (docs/flavor-study.md)
+//   node tools/sim32.js --flavors-ducks=C   one Flavor rule with the plain Pink Duck and with all ten ducks
 //   node tools/sim32.js --ducks         the Hall of Ducks report: per-type pop rates, suggested duck costs, cycle times with ducks
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
 const E = require('../src/econ.js'), A = require('../src/artifacts.js');
@@ -34,6 +36,11 @@ const VARIANTS = {
   flavor5: { flavorBonus: 0.05 },
   pinkDuck: { duck: 'plain' }, // same as --duck
   pinkDuckBest: { duck: 'best' }, // same as --duck=best
+  // the Flavor study (docs/flavor-study.md): lifetime rules B-E; A (the live rule) is baseline
+  flavorB: { flavor: { div: 1.25e6, exp: 0.5, need: 0 } },
+  flavorC: { flavor: { div: 1.25e6, exp: 0.5, need: 0.5 } },
+  flavorD: { flavor: { div: 1.25e6, exp: 0.5, need: 1 } },
+  flavorE: { flavor: { div: 5e6 / Math.pow(2, 1 / 0.4), exp: 0.4, need: 0 } },
   allDucks: { artifacts: A.ARTIFACTS.filter((a) => a.hall === 'ducks').map((a) => a.id) }, // every duck as one plain Common copy
 };
 // the duck the duck flags give: plain is one Common copy (x1.4); best is a Mythic copy whose payout perk is at its top roll (x1.61).
@@ -49,9 +56,14 @@ function econ(v) {
   const toolUpCost = (i, kind, lvl) => Math.ceil(Math.max(400, cost('tool', i) * 0.5) * Math.pow(2.2, lvl) * (kind === 'speed' ? 0.8 : 1));
   const toolPrice = (idx) => (idx <= 0 ? 0 : cost('tool', idx - 1));
   const uniqueCost = (i, lvl) => { const u = E.TOOLS[i].unique; return Math.ceil(u.base * scale * Math.pow(u.grow, lvl)); };
-  const collapseGain = v.gain || E.collapseGain;
   const minRun = (echoes) => (typeof v.minRun === 'function' ? v.minRun(echoes) : v.minRun || E.COLLAPSE_MIN_RUN);
-  const collapseReady = (run, echoes) => run >= minRun(echoes) && collapseGain(run) >= 2;
+  // a lifetime rule (v.flavor = { div, exp, need }): the Flavors owed are floor((lifetime juice / div)^exp); a Fresh Batch pays what is
+  // owed minus the Flavors already held, and is ready at the run floor once that gain is at least max(2, ceil(need x Flavors held)).
+  // life = lifetime juice including this run. The 1e-9 keeps an exact 2.0 from flooring to 1 after pow's rounding.
+  const LF = v.flavor, owed = LF ? (life) => Math.floor(Math.pow(Math.max(0, life) / LF.div, LF.exp) + 1e-9) : null;
+  const collapseGain = LF ? (run, echoes, life) => Math.max(0, owed(life) - echoes) : v.gain || E.collapseGain;
+  const collapseReady = LF ? (run, echoes, life) => run >= minRun(echoes) && collapseGain(run, echoes, life) >= Math.max(2, Math.ceil(LF.need * echoes - 1e-9))
+    : (run, echoes) => run >= minRun(echoes) && collapseGain(run) >= 2;
   const FLAVOR_BONUS = v.flavorBonus != null ? v.flavorBonus : E.FLAVOR_BONUS;
   const stats = (st) => Object.assign(E.stats(st), { echoMult: 1 + FLAVOR_BONUS * st.echoes });
   return Object.assign({}, E, { UPG, cost, toolUpCost, toolPrice, uniqueCost, collapseGain, collapseReady, minRun, FLAVOR_BONUS, stats });
@@ -118,7 +130,9 @@ const helperHours = (X, st, board, cells, seed) => [0, 1, 2, 3].reduce((a, k) =>
 
 // One run from a fresh board until Fresh Batch is ready. st.echoes carries over between calls.
 // A variant's waitMin makes the player keep going until that minute even when Fresh Batch is ready earlier.
-function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
+// takeIf(gain, echoes): the player takes a ready Fresh Batch only once this holds (the strategy comparison); st.lifetime carries the
+// lifetime juice for the lifetime Flavor rules.
+function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf) {
   freshRun(st);
   let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0, idleHelper = null, idleReady = null;
   // Rose collection for the Pink Duck: normal Rose pops and their juice over the last 60 s (the sim cannot keep pearls)
@@ -150,7 +164,8 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     if (un && U.u < un.max) cands.push({ n: 'uniq' + e, c: X.uniqueCost(e, U.u), s: X.uniqueCost(e, U.u), f: () => U.u++ });
     return cands;
   };
-  while (!(ready != null && t >= (waitMin || 0) * 60) && t < MAX_CYCLE_MIN * 60) {
+  const life0 = st.lifetime || 0;
+  while (!(ready != null && t >= (waitMin || 0) * 60 && (!takeIf || takeIf(X.collapseGain(runEarned, st.echoes, life0 + runEarned), st.echoes))) && t < MAX_CYCLE_MIN * 60) {
     const dt = 0.1; t += dt; comboT += dt; frenzy = Math.max(0, frenzy - dt);
     st.lv.tool = bestOwned(); st.equip = st.lv.tool;
     const S = X.stats(st);
@@ -213,11 +228,11 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
-    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); roseReady = roseSnap(); typeReady = typeSnap(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
+    if (ready == null && X.collapseReady(runEarned, st.echoes, life0 + runEarned)) { ready = t; awayReady = away1h(); roseReady = roseSnap(); typeReady = typeSnap(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
   }
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
-  const gainF = ready == null ? 0 : X.collapseGain(runEarned);
-  st.echoes += gainF;
+  const gainF = ready == null ? 0 : X.collapseGain(runEarned, st.echoes, life0 + runEarned);
+  st.echoes += gainF; st.lifetime = life0 + runEarned;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
   return { early, furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
@@ -329,6 +344,77 @@ function earlyReport() {
     console.log(p[0] + ', mean of seeds 1-8: ' + line(mean));
   }
 }
+/* ----- The Flavor study (--flavors): docs/flavor-study.md. Report only. ----- */
+const FLAVOR_RULES = [['A', 'baseline', 'live rule: floor(sqrt(run / 1.25M)), ready at 5M run juice with a gain of at least 2'],
+  ['B', 'flavorB', 'lifetime: owed floor(sqrt(lifetime / 1.25M)), pays the difference, at least 2'],
+  ['C', 'flavorC', 'B, and ready only once the gain is at least 50% of the Flavors held'],
+  ['D', 'flavorD', 'B, and ready only once the gain is at least 100% of the Flavors held'],
+  ['E', 'flavorE', 'B with exponent 0.4: owed floor((lifetime / ' + Math.round(5e6 / Math.pow(2, 2.5)) + ')^0.4), still 2 at the first 5M']];
+const STRATEGIES = [['at once', null, 0], ['+100%', (g, e) => g >= e, 0], ['minute 25', null, 25]];
+// one profile for a fixed span of play: Fresh Batches by a strategy until the clock passes hours; returns the Flavors held at each mark.
+// A run that reaches MAX_CYCLE_MIN without a Fresh Batch ends the play (it would earn no more Flavors before the horizon).
+function playFor(v, profile, takeIf, waitMin, hours) {
+  const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
+  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [], lifetime: 0 };
+  for (const id of v.artifacts || []) { A.addCopy(st.artifacts, id, 'common', []); A.equip(st.artEquip, st.artifacts, id); }
+  if (v.duck) A.addCopy(st.artifacts, 'pink_duck', DUCKS[v.duck].rarity, DUCKS[v.duck].perks);
+  const marks = [], ends = []; let clock = 0, stalled = false;
+  while (clock < hours * 3600) { const r = cycle(X, st, rng, taps, skill, false, waitMin, 0, takeIf); if (r.ready == null) { stalled = true; break; } clock += r.minutes * 60; ends.push([clock, st.echoes]); }
+  for (let h = 1; h <= hours; h++) { let e = 0; for (const [c, f] of ends) if (c <= h * 3600) e = f; marks.push(e); }
+  return { marks, resets: ends.filter(([c]) => c <= hours * 3600).length, stalled, X };
+}
+function flavorStudy() {
+  const X0 = econ({}), mult = (e) => (1 + X0.FLAVOR_BONUS * e).toFixed(1), f1c = (x) => (x == null ? '>' + MAX_CYCLE_MIN : f1(x));
+  console.log('# Flavor study: rules');
+  for (const [k, , d] of FLAVOR_RULES) console.log('- ' + k + ': ' + d);
+  console.log('All rules: the 5M run floor, 10% payout per Flavor, no artifacts unless named.\n');
+  // 1. six cycles, at once and waiting to minute 25
+  console.log('## Six cycles: minutes, Flavors held and payout multiplier after each cycle\n');
+  console.log('| rule | profile | policy | minutes C1..C6 | Flavors after each | payout x after each |'); console.log('|---|---|---|---|---|---|');
+  const early = {};
+  for (const [k, name] of FLAVOR_RULES) for (const p of PROFILES) for (const w of [0, 25]) {
+    const rs = play(Object.assign({}, VARIANTS[name], w ? { waitMin: w } : {}), p);
+    if (!w) early[k + p[0]] = rs;
+    console.log('| ' + k + ' | ' + p[0] + ' | ' + (w ? 'to minute 25' : 'at once') + ' | ' + rs.map((r) => f1c(r.minutes)).join(' / ') + ' | ' + rs.map((r) => r.echoes).join(' / ') + ' | ' + rs.map((r) => mult(r.echoes)).join(' / ') + ' |');
+  }
+  // 2. the strategy comparison
+  console.log('\n## Strategies over 3 hours of play: Flavors held (payout x) at 1, 2 and 3 hours\n');
+  console.log('Strategies: at once = Fresh Batch the moment it is ready; +100% = only once the gain is at least the Flavors held; minute 25 = keep playing to minute 25 of each run.');
+  console.log('Spread = the best strategy\'s 3-hour payout over the worst one\'s (1.00 = they end level).\n');
+  console.log('| rule | profile | at once 1h / 2h / 3h | +100% 1h / 2h / 3h | minute 25 1h / 2h / 3h | resets (at once / +100% / 25) | spread at 3h | best |'); console.log('|---|---|---|---|---|---|---|---|');
+  for (const [k, name] of FLAVOR_RULES) for (const p of PROFILES) {
+    const res = STRATEGIES.map(([, take, w]) => playFor(Object.assign({}, VARIANTS[name]), p, take, w, 3));
+    const fin = res.map((r) => 1 + X0.FLAVOR_BONUS * r.marks[2]), hi = Math.max(...fin), lo = Math.min(...fin), best = STRATEGIES[fin.indexOf(hi)][0];
+    console.log('| ' + k + ' | ' + p[0] + ' | ' + res.map((r) => r.marks.map((e) => e + ' (x' + mult(e) + ')').join(' / ') + (r.stalled ? ' (stalled)' : '')).join(' | ') + ' | ' + res.map((r) => r.resets).join(' / ') + ' | ' + (hi / lo).toFixed(2) + ' | ' + best + ' |');
+  }
+  // 3. early timings
+  console.log('\n## Early timings, Fresh Batch at once: first Fresh Batch ready, then cycles 2-6 (minutes)\n');
+  console.log('Marks: * under 4 minutes, ^ longer than the cycle before.\n');
+  console.log('| rule | profile | C1 ready | C2 | C3 | C4 | C5 | C6 |'); console.log('|---|---|---|---|---|---|---|---|');
+  for (const [k] of FLAVOR_RULES) for (const p of PROFILES) {
+    const rs = early[k + p[0]], cells = rs.map((r, i) => { const m = i ? r.minutes : (r.ready == null ? null : r.ready / 60), prev = i ? (i === 1 ? rs[0].minutes : rs[i - 1].minutes) : null;
+      return f1c(m) + (m != null && m < 4 ? '*' : '') + (i && m != null && prev != null && m > prev ? '^' : ''); });
+    while (cells.length < 6) cells.push('-');
+    console.log('| ' + k + ' | ' + p[0] + ' | ' + cells.join(' | ') + ' |');
+  }
+}
+// --flavors-ducks=X: one rule with the plain Pink Duck and with all ten ducks (six cycles at once and to minute 25, and the strategies)
+function flavorDucks(k) {
+  const rule = FLAVOR_RULES.find((r) => r[0] === k); if (!rule) { console.error('unknown rule ' + k); process.exit(1); }
+  const X0 = econ({}), f1c = (x) => (x == null ? '>' + MAX_CYCLE_MIN : f1(x));
+  console.log('# Flavor rule ' + k + ' with ducks (payout x counts Flavors and the global duck)\n');
+  console.log('| ducks | profile | policy | minutes C1..C6 | Flavors after each | payout x after each |'); console.log('|---|---|---|---|---|---|');
+  const sets = [['Pink Duck (Common)', { duck: 'plain' }], ['all ten (Common)', { artifacts: VARIANTS.allDucks.artifacts }]];
+  for (const [dn, dv] of sets) for (const p of PROFILES) for (const w of [0, 25]) {
+    const rs = play(Object.assign({}, VARIANTS[rule[1]], dv, w ? { waitMin: w } : {}), p);
+    console.log('| ' + dn + ' | ' + p[0] + ' | ' + (w ? 'to minute 25' : 'at once') + ' | ' + rs.map((r) => f1c(r.minutes)).join(' / ') + ' | ' + rs.map((r) => r.echoes).join(' / ') + ' | ' + rs.map((r) => r.mult.toFixed(1)).join(' / ') + ' |');
+  }
+  console.log('\n| ducks | profile | at once 1h / 2h / 3h | +100% 1h / 2h / 3h | minute 25 1h / 2h / 3h | spread at 3h |'); console.log('|---|---|---|---|---|---|');
+  for (const [dn, dv] of sets) for (const p of PROFILES) {
+    const res = STRATEGIES.map(([, take, w]) => playFor(Object.assign({}, VARIANTS[rule[1]], dv), p, take, w, 3)), fin = res.map((r) => 1 + X0.FLAVOR_BONUS * r.marks[2]);
+    console.log('| ' + dn + ' | ' + p[0] + ' | ' + res.map((r) => r.marks.join(' / ') + (r.stalled ? ' (stalled)' : '')).join(' | ') + ' | ' + (Math.max(...fin) / Math.min(...fin)).toFixed(2) + ' |');
+  }
+}
 function compare() {
   console.log('| variant | profile | taken min C1..C6 | Flavors total | payout x | upgrades maxed in C1 | nothing-to-want ignoring Sharp, min C1..C6 | furthest pearl C1..C6 |');
   console.log('|---|---|---|---|---|---|---|---|');
@@ -346,5 +432,7 @@ if (require.main === module) {
   if (arg('compare')) compare();
   else if (arg('ducks')) duckReport();
   else if (arg('early')) earlyReport();
+  else if (arg('flavors-ducks')) flavorDucks(arg('flavors-ducks'));
+  else if (arg('flavors')) flavorStudy();
   else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}, arg('duck') ? { duck: arg('duck') === 'best' ? 'best' : 'plain' } : {}), !!arg('log')); }
 }
