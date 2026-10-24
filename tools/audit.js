@@ -70,8 +70,32 @@ async function layoutChecks() {
   }
   return out;
 }
+// node tools/audit.js settings: Settings (with Reduce effects) and the Stats screen on a mid-game save; screenshots and widths
+async function settingsChecks() {
+  const out = [], save = { version: 9, sparks: 4200, runEarned: 900000, lifetime: 2.4e6, echoes: 4, collapses: 2, lv: { sharp: 12, lucky: 5 }, col: Object.fromEntries(['pearl', 'blue', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black'].map((k, i) => [k, { found: i < 6, popped: i < 6 ? Math.round(48000 / (i + 1) ** 2) : 0, sFound: i < 3, sPopped: i < 3 ? 40 - 10 * i : 0 }])), pool: ['pearl', 'blue', 'mint', 'golden', 'violet', 'coral'], stats: { taps: 18342, secs: 7395, runSecs: 410, bestPop: 98765, bestCombo: 61, bestGain: 3, fastest: 742 }, t: Date.now() };
+  await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/package.json' }); await sleep(500);
+  await ev('localStorage.clear(); localStorage.setItem("poppit.v1", ' + JSON.stringify(JSON.stringify(save)) + '); true');
+  await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(1800);
+  const widths = (panel) => ev(`(() => { const d = document.documentElement, p = document.getElementById(${JSON.stringify(panel)}), r = p.getBoundingClientRect();
+    const wide = [...p.querySelectorAll('*')].filter((e) => { const b = e.getBoundingClientRect(); return b.width && (b.right > r.right + 0.5 || b.left < r.left - 0.5); }).map((e) => e.id || e.className);
+    return { page: d.scrollWidth + '/' + d.clientWidth, panel: p.scrollWidth + '/' + p.clientWidth, past: wide }; })()`);
+  await ev('document.getElementById("setBtn").click(); true'); await sleep(400);
+  await ev('document.getElementById("fxBtn").scrollIntoView({ block: "center" }); true'); await sleep(200);
+  let w = await widths('settings'), file = 'settings-390.png';
+  fs.writeFileSync(path.join(OUT, file), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  const fx = await ev('document.getElementById("fxBtn").textContent + " (reduceFx " + state.reduceFx + ")"');
+  out.push(Object.assign({ screen: 'settings', file, fx }, w)); console.log('settings: Reduce effects ' + fx + ', page ' + w.page + ', panel ' + w.panel + ', past the panel: ' + (w.past.join(' ') || 'none') + ' -> ' + file);
+  await ev('document.getElementById("statsBtn").click(); true'); await sleep(400);
+  w = await widths('stats'); file = 'stats-390.png';
+  fs.writeFileSync(path.join(OUT, file), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  const text = await ev('document.getElementById("statsBody").innerText.replace(/\\n+/g, " | ")');
+  out.push(Object.assign({ screen: 'stats', file, text }, w)); console.log('stats: page ' + w.page + ', panel ' + w.panel + ', past the panel: ' + (w.past.join(' ') || 'none') + ' -> ' + file + '\n  ' + text);
+  await ev('document.getElementById("stats").scrollTop = 9999; true'); await sleep(200);
+  fs.writeFileSync(path.join(OUT, 'stats-390-end.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  return out;
+}
 (async () => {
-  const result ={ label, width: +W, height: +H, moments: [] };
+  const result = { label, width: +W, height: +H, moments: [] };
   try {
     let tgt; for (let i = 0; i < 60 && !tgt; i++) { await sleep(200); try { tgt = await new Promise((res, rej) => http.get('http://127.0.0.1:' + DBG + '/json/list', (r) => { let b = ''; r.on('data', (c) => (b += c)); r.on('end', () => res(JSON.parse(b).find((t) => t.type === 'page'))); }).on('error', rej)); } catch (e) { /* not up yet */ } }
     ws = new WebSocket(tgt.webSocketDebuggerUrl); await new Promise((r) => ws.addEventListener('open', r));
@@ -81,6 +105,7 @@ async function layoutChecks() {
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(2000);
     if (label === 'layout') { result.layout = await layoutChecks(); return; }
+    if (label === 'settings') { result.settings = await settingsChecks(); return; }
     const t0 = Date.now();
     const moment = async (name) => {
       await sleep(400);
