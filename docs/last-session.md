@@ -1,75 +1,77 @@
-Session: the halls as galleries, the equip row, and the payout line (interface only)
+Session: the first minutes (what a new player sees). UI only: no economy, save or rule changes.
 
 What changed
-- One reusable Gallery (makeGallery in src/ui.js), used by both halls: one pedestal at a
-  time, a sliver of each neighbour, snaps, stops at both ends (no wrap). Moves by touch or
-  mouse swipe, the 44 px arrow buttons, a tap on a neighbour's sliver, and Left / Right
-  while the panel is open with no dialog up and no text field focused. A dot row shows
-  the position; a live region says e.g. "Blue Duck, 2 of 10". Vertical drags still
-  scroll the panel. Reduced motion makes moves instant. Off-screen pedestals are inert.
-- Hall of Ducks: one labeled pedestal per duck in roster order.
-  - Occupied: the active copy in its rarity frame, then the old details unchanged (perks,
-    next copy cost, Craft another, odds, shelf with Place / Lock / Scrap).
-  - Empty: a silhouette in the pearl's colour, "Empty pedestal", "820 of 1,600 Blue
-    Pearls kept" with a bar, the Keep toggle for that pearl, odds, reason and Craft.
-  - Not found: dimmed, labeled, "Not found yet", no recipe.
-- Hall of Artifacts (renamed from Hall of Relics): a row of 5 equip slots on top (icon
-  and name, or "Empty"), then the relic gallery. Unequipped relics say "Not equipped: it
-  has no effect until you equip it." with Equip into the first free slot. With all five
-  full, Equip opens an in-page chooser of the five; picking one swaps. Tapping a filled
-  slot offers Unequip in the existing in-page confirm. Both trap focus and take Escape.
-- Each hall remembers its pedestal for the page session (not saved).
-- Payout line: "Payouts x1.68 (Flavors 2 x1.2, artifacts x1.4) + 3 type ducks". It is
-  now a button that opens the Hall of Ducks.
-- The reveal, the shelf, scrap and lock are untouched.
+- Reveal rules (src/ui.js), all read from the state, never a stored flag:
+  - Start: the board, Settings, the next-goal line, and an empty-shop line.
+  - Backpack at the first juice; Tools at 35 lifetime juice (40% of its cheapest item);
+    the book at a second pearl type; Pool (top right) at a third type or any shiny.
+  - Fresh Batch box at 500K lifetime juice (10% of a Fresh Batch); Settings' Reset,
+    Copy and Download rows once there is progress.
+  - Shop headings only with a row in them. Artifacts and Forge keep their old gate.
+  - Any save with a Fresh Batch or Flavors passes every rule. Dock buttons pack left to
+    right with no gaps.
+- Next goal: one line under the juice counter from a goals table, checked in order:
+  earn the first upgrade's price, buy it, unlock Blue, buy the Awl, hire Helpers, take a
+  Fresh Batch, then the Pink Duck and the Forge once they unlock. A 44 px close button
+  hides that goal on this device; Reset save brings the goals back.
+- Dots: Tools (newly affordable), Collection book (new discovery), Artifacts (craft in
+  reach), cleared on opening. Shop headings get a dot for new or newly affordable rows
+  not yet seen on screen; the price-progress strip stays the only progress display.
+- Messages: the goal and toast now stack in the top-left HUD column, so they cannot
+  overlap each other, the hint or the bottom bar. Toasts within 1 s share one toast,
+  one line each, at most 3, repeats dropped.
+- New tools: tools/audit.js (screenshots and control lists; "layout" mode measures the
+  HUD column at 360, 390 and 430 px), and sim --early.
+
+Audit (docs/onboarding-audit.md, screenshots in docs/audit/), visible controls
+- 0 s: before 6, after 2 (Settings, Hide this goal)
+- after the first pop: before 6, after 3 (+ Backpack)
+- after the first purchase: before 9, after 7
+- about 3 min: before 18, after 18 (Artifacts and Forge unlock at 100 Roses either way)
+
+Early beats from the sim (--early; run 1; reference seed, then mean of seeds 1-8)
+- casual: first purchase 7 s / 7 s, first tool 53 s / 57 s, first tool upgrade 47 s /
+  47 s, first helper 11.4 / 11.0 min, first Fresh Batch ready 12.8 / 12.8 min
+- engaged: first purchase 4 s / 4 s, first tool 42 s / 41 s, first tool upgrade 29 s /
+  28 s, first helper 4.8 / 4.7 min, first Fresh Batch ready 6.0 / 5.4 min
+- Rule of thumb: first upgrade within about 60 s (met), first automation about 3 min
+  (helpers come later: 11 min casual, 5 min engaged), first prestige 10 to 15 min
+  (casual 12.8 inside it; engaged 5.4 to 6.0 is early). Report only; nothing changed.
 
 Verification
-- npm run build: built index.html. npm test: exit 0. Node test files 0 failures
-  (32, 19, 9, 21, 8, 2); the harness prints 342 PASS lines and ALL PASSED.
-- New harness file tests/gallery_tests.js covers:
-  - arrows, keys and swipes; short and vertical drags; both ends; the announcement;
-  - an empty pedestal's recipe, bar and disabled reason; the pedestal Keep toggle
-    changing the backpack Keep state;
-  - Equip into the first free slot, the chooser with five full (Escape, then swap),
-    Unequip;
-  - the payout line with and without type ducks, and the link.
-- Older panel tests now read the drawn hall through G.hallHTML(); their assertions are
-  unchanged apart from the hall name, the tab markup and one icon count.
-- npm run sim twice: identical, and identical to the output from before the duck session.
-- Headless Chrome 390x844, mobile with touch, real touch and mouse drags over CDP:
-  - occupied (Pink Duck): framed Mythic copy, perks below; page 390/390, panel body
-    316/316, gallery 310/310, pedestal 265/265
-  - empty (Blue Duck, after a touch swipe): blue silhouette, recipe and bar; a real tap
-    on Keep turned Keep on and the reason changed
-  - not found (Coral Duck, after two mouse drags and two touch swipes): dimmed, "Not
-    found yet"; same widths
-  - ends: six swipes right stayed on Pink, twelve left stayed on Black; the Left key and
-    Prev each moved one; a vertical touch drag scrolled the panel 239 -> 0
-  - Hall of Artifacts, five slots full (three real relics + three test-only ones made in
-    the page for this check): row 310/310, all five fit; Equip on the sixth opened the
-    chooser (focus on Cancel), picking Mint Clock swapped it; a slot tap offered Unequip
-  - The gallery view's scrollWidth is the whole clipped track (e.g. 2778/310) by design;
-    nothing visible overflows. No buttons under 44 px. No console errors.
-  - Forge stash warning still shows at 390 px. Desktop 1280x800: gallery capped at
-    560 px.
-
-Fixed along the way
-- Tabs were 36 px tall and the panel close button 31x26: both now at least 44 px.
+- npm run build: built index.html. npm test: exit 0; node test files 0 failures
+  (32, 19, 9, 21, 8, 2); the harness prints ALL PASSED.
+- New tests/onboarding_tests.js covers:
+  - each reveal threshold from a fresh state, with no gaps in the dock;
+  - two fixture saves past every threshold showing exactly the controls they showed
+    under commit 50de9ac (lists from running that commit's sources);
+  - Reset save back to the start view;
+  - the goal order and each completion test, and dismissing a goal;
+  - dots appearing and clearing;
+  - toasts within a second batching.
+- npm run sim twice: identical, and identical to the output saved before the duck work.
+- Layout, 360 / 390 / 430 px, fresh start and a mid-game save with a three-line toast:
+  page scrollWidth equals clientWidth at every width, no overlaps between payout line,
+  goal, toast, hint and bottom bar, no button outside the page. The first run found the
+  payout line's 44 px hit box overlapping the goal by 6 px; fixed, then re-measured.
+- No console errors in any headless run. All browser checks now use --mute-audio.
 
 Choices I made
-- The gallery moves a transformed track by pointer events instead of native scroll-snap,
-  so the index is testable and drags are real. It sits in src/ui.js, not a new file, so
-  the fixed concat order is unchanged.
-- Renamed the relic hall to "Hall of Artifacts" (one constant) to match the brief; the
-  items are still called relics.
-- Duck pedestals also show the Keep toggle when the duck is owned (Craft another has the
-  same Keep reason).
-- Not-found pedestals show the duck's name (it was required) but no recipe and no Craft.
-- Equip goes to the next free slot (the list is compact, so free slots are at the end).
-- The payout line is always a link while the Artifacts dock button shows.
+- Settings shows from the start (sound, and the paste box to bring a save to a new device).
+- Artifacts and Forge keep the 100-Rose gate: a later gate would hide them from saves past
+  it, and a stored flag was ruled out.
+- Pool comes at the third type: with two types there is nothing to switch off yet.
+- Dismissed goals are kept in localStorage (poppit.goalsOff), not in the save, so the save
+  format did not change. Reset save clears them.
+- A dismissed goal hides the line until that goal is done; it does not skip to the next.
+- Toasts in the HUD column are left-aligned now (they were centered).
+- An early save (Rose only, 3,000 juice) gets the new-player view; its Pool and book
+  return as soon as it finds more types.
+- tools/audit.js and its screenshots are committed so the audit can be repeated.
 
 Still open
-- Real-phone check: swipe feel, the slivers, the chooser, focus and screen readers.
-- Only three relics exist, so the slots stay mostly empty and the chooser never shows
-  in real play yet.
-- Duck cost tuning (docs/duck-report.md) and how hard ten ducks stack.
+- Next small session: a stats screen and a reduce-effects toggle.
+- Artifacts and the Forge still appear about a minute in (100 Roses).
+- Helpers arrive later than the 3-minute rule of thumb; engaged prestige is early.
+- The real-phone check.
+- The Flavors decision (balance: 10% per Flavor, gain curve, floor).

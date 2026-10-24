@@ -120,8 +120,8 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - **Disabled reason** (`craftReason(id)`): the first short cost line. "Need 1,500 more Rose Pearls in your backpack"; with auto-sell on and the type not kept, "Need 1,500 more Rose Pearls: turn on Keep for them in your backpack"; for a material, "Need 1 more Rosegold: make it in the forge". The button's `title` carries it too.
   - Rarity colours are CSS classes `.r-common`, `.r-rare`, `.r-epic`, `.r-mythic` (`--rc` frame and glow, `--rt` darker text for contrast, `--go` glow strength, `--gl` glow size). A new rarity needs a class.
   - The dock button (`#artBtn`, an inked duck) shows once Rose Pearls popped in total (normal + shiny) reach 100, or once any copy is owned.
-  - **Gated dock buttons** use one table, `DOCK_GATES` in `src/ui.js`, keyed by `PANEL_BTN` panel ids (`arts`, `forge`), and `syncDock()` checks them every HUD tick. While a gated button shows, the stage carries its id as a class (`#stage.arts`, `#stage.forge`), which moves the bottom bar right on wide screens.
-  - The dock order is pack, tools, book, Artifacts (202 px), Forge (258 px).
+  - **Gated dock buttons:** see "First minutes" below (`DOCK_GATES`, `syncDock()`). While Artifacts or Forge shows, the stage carries its id as a class (`#stage.arts`, `#stage.forge`, `STAGE_CLASS`), which moves the bottom bar right on wide screens.
+  - The dock order is pack, tools, book, Artifacts, Forge; visible buttons pack left to right (`DOCK_ORDER`), so with all five shown they sit at 6, 76, 146, 202 and 258 px.
 - **Roll reveal** (`#reveal`, a full-screen dialog after every craft; `openReveal`, `revealTick`, `skipReveal`, `closeReveal`, `placeFromReveal`, data from `revealView()`):
   - It shows the icon, the artifact name, the rarity name in its colour, a glow and particles that grow with rarity (`REVEAL_PARTS` 8 / 16 / 28 / 44, on fixed angles, never `Math.random`), then the perks one by one (`REVEAL_FIRST` 0.7 s, then every `REVEAL_GAP` 0.55 s), driven by the main loop so tests can step it.
   - When done it shows the compare line against the copy that was on the pedestal before the craft: "Payouts x1.54 vs your current x1.4; Shiny chance +25% vs your current +0%", or "The same stats as the copy on your pedestal".
@@ -206,6 +206,23 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 - **`src/world.js`** holds state, board, spawning (`trySpawn` enforces the per-type cap) and effects.
 - **`src/render.js`** draws the canvas.
 - **`src/ui.js`** holds the shop, panels, input, save/load, Fresh Batch and the main loop.
+- **First minutes** (`src/ui.js`; audit in `docs/onboarding-audit.md`):
+  - **Reveal rules.** A control appears once the player has earned what it belongs to. Every rule reads the state, never a stored flag, so an old save shows what it has earned and Reset save starts over. `veteran()` (a Fresh Batch taken, or any Flavors) passes every rule. Rules never compare against a price that grows, so nothing a player used disappears; shop rows keep their old 40% rule (they hide after a Fresh Batch until 40% affordable again, as before).
+    - From the start: the board, the bottom bar, Settings (Sound, Music, volume, the save paste box and Open file, so a save can come to a new device), the next-goal line, and the empty-shop line ("Upgrades show up here as you earn juice. Pop some pearls!", `#shopEmpty`).
+    - `DOCK_GATES` (keyed by `PANEL_BTN` ids, checked every HUD tick by `syncDock()`):
+      - `pack`: the first juice (`lifetime > 0`), pearls in the backpack, a Keep, or auto-sell off;
+      - `tools`: lifetime juice at 40% of the cheapest thing in the Tools panel (`toolsAt()`, 35 today), a second tool, or tool upgrades;
+      - `book`: a second pearl type found, or any shiny;
+      - `pool` (top right): a third type found, any shiny, shinies off, or a pool that already leaves a found type out;
+      - `arts`, `forge`: unchanged (100 Rose Pearls popped, or owning or using them).
+    - `REVEAL.collapse`: the Fresh Batch box (`#collapseBox`) at 10% of `COLLAPSE_MIN_RUN` in lifetime juice (`COLLAPSE_SHOW`, 500K), or when ready. `REVEAL.progress`: Settings' Reset, Copy save code and Download rows once there is any progress.
+    - Shop headings (`SHOP_GROUPS`: New techniques, Pearls & Marbles, Upgrades) show only with a row in them.
+    - Two fixture saves past every threshold (mid-game, after a Fresh Batch) show exactly the interactive controls they showed before (`tests/onboarding_tests.js`, lists taken from commit 50de9ac). An early save (3,000 juice, Rose only) gets the new-player view.
+  - **Next goal** (`#goal`, `GOALS`, `currentGoal()`, `updateGoal()`): one line under the juice counter, the first goal whose `done()` is false (goals with `when()` count only once it holds). In order: `juice` (earn the first upgrade's price), `buy`, `blue`, `tool` (the Awl), `helpers`, `fresh`, `duck` (when Artifacts shows), `forge` (when the Forge shows). Texts read their numbers from the economy. It never blocks play.
+    - Its close button (44 px) hides that goal on this device (`localStorage` key `poppit.goalsOff`, a list of ids; Reset save clears it). The next goal still shows when it comes.
+  - **Dots** (`.fdot`, like the Forge's): Tools (something newly affordable: the next tool or a tool upgrade level), the Collection book (a new discovery), Artifacts (a craft newly in reach). `DOTS` lists keys per panel; a key not yet on show while that panel was open lights the dot; opening the panel clears it. Shop headings get a dot (`h2.ndot`) while a row in the group is new or newly affordable and not yet seen; a row counts as seen once half of it is on screen (IntersectionObserver) or it is tapped. Boot and Reset save count everything on offer as seen (`seeShop`, `seeDots`). The price-progress strip under each row is still the one progress display.
+  - **Messages stack in one column:** the top-left HUD (`.hud-tl`, now left and right 8 px) holds the juice, the rate, the payout line, the goal and the toast, all in flow, so they cannot overlap. The start hint and the bottom bar sit lower. Measured at 360, 390 and 430 px (fresh start, and a mid-game save with a three-line toast): no overlaps, no sideways scroll (`node tools/audit.js layout`).
+  - **Toasts batch:** a toast within `TOAST_BATCH_MS` (1 s) of the previous one joins it on a new line instead of replacing it (repeats are dropped, at most `TOAST_MAX` 3 lines, the newest kept). Tests read the newest line through `lastToast()`.
 - **Fresh Batch:**
   - Code: the `collapseBtn` handler, `finishCollapse()` and `resetRun()` in `src/ui.js`.
   - **Wipes:** juice, run juice, all upgrade levels, tools and tool upgrades, the backpack stacks that are not kept (`clearUnkept()`), and the board.
@@ -260,12 +277,14 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
 
 ## Commands (Windows PowerShell and macOS alike, no bash needed)
 
+- `node tools/audit.js <label> [width] [height]`: the onboarding audit in headless Chrome (fresh profile, `--mute-audio`, default 390x844 mobile with touch): a screenshot and the visible controls at 0 s, the first pop, the first purchase and about 3 minutes of bot play; writes `docs/audit/<label>-*.png` and `<label>.json`. `node tools/audit.js layout` checks the HUD column, hint and bottom bar at 360, 390 and 430 px. Needs Chrome, no npm packages. Every automated browser check launches Chrome with `--mute-audio`.
+
 - `npm run build`: runs `node tools/build.js`, which concatenates into `build/all.js` (gitignored), syntax-checks it with `vm.Script`, and writes `index.html`. **This is the gate.**
 - `npm test`:
   - `tests/econ32.test.js`: `node:test` unit tests of `ECON` and `fmt`.
   - `tests/artifacts.test.js`: the artifacts module: copies, repeatFactor and costGrowth, rolls (rarity distribution over 200,000 seeded rolls), perks, the retuned ranges and caps, the pedestal, the relics, every `stats()` hook, the v5 → v6 and v6 → v7 steps, paid costs, locks, scrap and refunds (pearls and alloys), and `fromSave`.
   - `tests/artifact_tests.js` (pulled in by the harness): artifacts, Keep and save v4 in the real game. `tests/relic_tests.js`: copies, rolls, swaps, alloys, relics, the away bonus and helper pops with perks, save round trips, Fresh Batch and Reset in the real game; it prints one full run as `run:` lines. `tests/reveal_tests.js`: the panel (Craft another at the repeat cost, the reason, the odds hint, the shelf and Place, the pedestal line, the Hall of Relics tab), the reveal for every rarity (forced with a scripted rng, opening, perks one by one, tap to skip and close, Escape, Place, the first copy auto-placed) and the stash warning. `tests/shelf_tests.js`: paid costs at craft, new Epic and Mythic locked, the Common stack and sort, scrap one at a time, refunds into the backpack with auto-sell on, the pedestal and locked copies refused, the confirmations (Escape, backdrop, Confirm), the bulk action's count and refund, Scrap all, alloy refunds, and locks through save, save code, import, backup and Restore.
-  - `tests/ducks.test.js`: the duck roster and costs, each type duck changing only its type (pops, helpers, the away bonus), scoped payout perks, the Pink Duck still global, equip / unequip / swap and the five-slot limit (with test-only fixture relics), unequipped relics, `equippedFromSave` and the v7 → v8 step. `tests/duck_tests.js` (pulled in by the harness): the same in the real game, the stash warning for Blue, Mint and Rose, save, save code, import, backup, Restore, Fresh Batch and Reset; it prints `duck run:` lines. `tests/gallery_tests.js` (pulled in by the harness): the galleries (arrows, keys, swipes, short and vertical drags, both ends, the announcement, inert pedestals, per-hall memory), the pedestal states (empty with recipe, bar, reason and Keep; not found; occupied with shelf), Equip, Unequip, the chooser (Escape, swap, keys ignored) and the payout line. The panel tests read the drawn hall through `hallHTML()`.
+  - `tests/ducks.test.js`: the duck roster and costs, each type duck changing only its type (pops, helpers, the away bonus), scoped payout perks, the Pink Duck still global, equip / unequip / swap and the five-slot limit (with test-only fixture relics), unequipped relics, `equippedFromSave` and the v7 → v8 step. `tests/duck_tests.js` (pulled in by the harness): the same in the real game, the stash warning for Blue, Mint and Rose, save, save code, import, backup, Restore, Fresh Batch and Reset; it prints `duck run:` lines. `tests/gallery_tests.js` (pulled in by the harness): the galleries (arrows, keys, swipes, short and vertical drags, both ends, the announcement, inert pedestals, per-hall memory), the pedestal states (empty with recipe, bar, reason and Keep; not found; occupied with shelf), Equip, Unequip, the chooser (Escape, swap, keys ignored) and the payout line. The panel tests read the drawn hall through `hallHTML()`. `tests/onboarding_tests.js` (pulled in by the harness): each reveal threshold from a fresh state, the two fixture saves against their pre-session control lists, Reset save, the goal order and tests, dismissing, the dots, and toast batching.
   - `tests/forge.test.js`: the forge engine, dusts and alloys. `tests/forge_tests.js` (pulled in by the harness): the forge in the real game, with `Date.now` pinned.
   - `tests/page.test.js`: checks that the built `index.html` is a standalone page (doctype, charset, viewport, `[hidden]` rule, head/body structure) and was built from the current `head.html` / `tail.html`. **Run `npm run build` before `npm test`.**
   - `tests/harness32.js`: runs the real concatenated game against stubbed DOM APIs and drives it like a player. It prints PASS/FAIL lines and ends with `ALL PASSED`. It pulls in `tests/pearl_tests.js`.
@@ -274,6 +293,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `--wait=25`: the player keeps going to minute 25 before pressing Fresh Batch.
   - `--variant=NAME`: plays a tuning option: `oldDials` (the dials before 2026-10-22), `scaledFloor` (floor × (1 + `FLAVOR_BONUS` × Flavors)), `moreFlavors`, `moreTuneLevels`, `flavor20`, `flavor5`, `pinkDuck`, `pinkDuckBest`, `allDucks` (all ten ducks as Common copies). Variant levers: `minRun`, `gain`, `base`, `max`, `flavorBonus`, `newBase` (first-level spawn weights, set on `ECON.NEW_BASE` for the run and restored), `duck`, `artifacts`.
   - `--compare`: prints a summary of every variant.
+  - `--early`: the early beats of run 1 (first purchase, first tool, first tool upgrade, first helper, first Fresh Batch ready) for both profiles, the reference seed and the mean of seeds 1-8, against the rule of thumb. Report only.
   - `--ducks`: the Hall of Ducks report: normal pops per minute per type at three checkpoints, the suggested duck costs against the data, collection minutes, and cycle times with no ducks, the Pink Duck alone and all ten. It never changes the default run.
   - `--log`: prints a per-mark pacing log.
   - `--duck` (or `--variant=pinkDuck`): the player owns a plain Pink Duck (one Common copy, x1.4) from the start. `--duck=best` (or `pinkDuckBest`): the best-case duck, a Mythic copy with a top payout perk (+15%), x1.61; only payout is modelled. By default no ducks are owned. `DUCKS` in the sim holds both.
@@ -281,6 +301,14 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - Variants override levers inside the sim only. The sim's copies of the cost formulas are checked against `src/econ.js` at startup.
 
 ## Still open
+
+- **Next small session:** a stats screen, and a reduce-effects toggle.
+- **First minutes:**
+  - Artifacts and the Forge still unlock at 100 Rose Pearls popped (about a minute in), so at 3 minutes the view counts 18 controls, as before. Moving that gate later would hide them from saves already past 100 Roses, which the reveal rules forbid without a stored flag.
+  - Early beats against the rule of thumb (`--early`, seeds 1-8): the first purchase is at 4-7 s (target within 60 s); the first helper at 11.0 min casual and 4.7 min engaged (target about 3 min); the first Fresh Batch ready at 12.8 min casual (inside 10-15) and 5.4 min engaged (early). Not tuned.
+  - The start hint shows on every page load until the first pop, even on a veteran save (unchanged).
+  - Not checked on a real phone.
+- **The Flavors decision** is still Ian's (see Balance below: 10% per Flavor, the gain curve, the floor).
 
 - **Other tools' unique upgrades:** only the Steel Pin has one. The other five show "No special upgrade yet".
 - **Balance:**

@@ -134,3 +134,11 @@
     picking Mint Clock swapped it out; a slot tap offered Unequip; Escape closed it, not the panel;
   - the forge stash warning showed for Rose, Blue and Mint; no console errors. Desktop 1280×800: gallery
     capped at 560 px, no overflow.
+
+## 2026-10-24: the first minutes (reveal rules, next goal, dots, toast batching)
+
+- UI only; no economy, save or rule changes. Audit before and after in docs/onboarding-audit.md (headless Chrome, 390x844,
+  muted): visible controls 6 / 6 / 9 / 18 before, 2 / 3 / 7 / 18 after, at 0 s / first pop / first purchase / 3 min.
+- Layout at 360, 390 and 430 px: the HUD column (juice, payout line, goal, toast) never overlaps the hint or the bottom bar,
+  no sideways scroll; one overlap found and fixed (the payout line's 44 px hit box under the goal line).
+- Two fixture saves past every threshold show exactly the controls they showed under commit 50de9ac.

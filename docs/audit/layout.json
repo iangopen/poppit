@@ -1,0 +1,257 @@
+{
+ "label": "layout",
+ "width": 390,
+ "height": 844,
+ "moments": [],
+ "layout": [
+  {
+   "width": 360,
+   "state": "start",
+   "file": "layout-360-start.png",
+   "boxes": [
+    {
+     "id": "goal",
+     "l": 24,
+     "t": 115,
+     "r": 336,
+     "b": 156
+    },
+    {
+     "id": "toast",
+     "l": 24,
+     "t": 162,
+     "r": 336,
+     "b": 271
+    },
+    {
+     "id": "hint",
+     "l": 16,
+     "t": 314,
+     "r": 344,
+     "b": 352
+    },
+    {
+     "id": "bottom",
+     "l": 24,
+     "t": 360,
+     "r": 336,
+     "b": 398
+    }
+   ],
+   "overlaps": [],
+   "page": "360/360",
+   "outside": []
+  },
+  {
+   "width": 360,
+   "state": "midgame",
+   "file": "layout-360-midgame.png",
+   "boxes": [
+    {
+     "id": "echoes",
+     "l": 20,
+     "t": 101,
+     "r": 332,
+     "b": 145
+    },
+    {
+     "id": "goal",
+     "l": 24,
+     "t": 147,
+     "r": 336,
+     "b": 188
+    },
+    {
+     "id": "toast",
+     "l": 24,
+     "t": 194,
+     "r": 336,
+     "b": 303
+    },
+    {
+     "id": "hint",
+     "l": 16,
+     "t": 314,
+     "r": 344,
+     "b": 352
+    },
+    {
+     "id": "bottom",
+     "l": 24,
+     "t": 360,
+     "r": 336,
+     "b": 398
+    }
+   ],
+   "overlaps": [],
+   "page": "360/360",
+   "outside": []
+  },
+  {
+   "width": 390,
+   "state": "start",
+   "file": "layout-390-start.png",
+   "boxes": [
+    {
+     "id": "goal",
+     "l": 24,
+     "t": 115,
+     "r": 366,
+     "b": 156
+    },
+    {
+     "id": "toast",
+     "l": 24,
+     "t": 162,
+     "r": 366,
+     "b": 271
+    },
+    {
+     "id": "hint",
+     "l": 16,
+     "t": 314,
+     "r": 374,
+     "b": 352
+    },
+    {
+     "id": "bottom",
+     "l": 24,
+     "t": 360,
+     "r": 366,
+     "b": 398
+    }
+   ],
+   "overlaps": [],
+   "page": "390/390",
+   "outside": []
+  },
+  {
+   "width": 390,
+   "state": "midgame",
+   "file": "layout-390-midgame.png",
+   "boxes": [
+    {
+     "id": "echoes",
+     "l": 20,
+     "t": 101,
+     "r": 352,
+     "b": 145
+    },
+    {
+     "id": "goal",
+     "l": 24,
+     "t": 147,
+     "r": 366,
+     "b": 188
+    },
+    {
+     "id": "toast",
+     "l": 24,
+     "t": 194,
+     "r": 366,
+     "b": 303
+    },
+    {
+     "id": "hint",
+     "l": 16,
+     "t": 314,
+     "r": 374,
+     "b": 352
+    },
+    {
+     "id": "bottom",
+     "l": 24,
+     "t": 360,
+     "r": 366,
+     "b": 398
+    }
+   ],
+   "overlaps": [],
+   "page": "390/390",
+   "outside": []
+  },
+  {
+   "width": 430,
+   "state": "start",
+   "file": "layout-430-start.png",
+   "boxes": [
+    {
+     "id": "goal",
+     "l": 24,
+     "t": 115,
+     "r": 406,
+     "b": 156
+    },
+    {
+     "id": "toast",
+     "l": 24,
+     "t": 162,
+     "r": 371,
+     "b": 248
+    },
+    {
+     "id": "hint",
+     "l": 16,
+     "t": 314,
+     "r": 414,
+     "b": 352
+    },
+    {
+     "id": "bottom",
+     "l": 24,
+     "t": 360,
+     "r": 406,
+     "b": 398
+    }
+   ],
+   "overlaps": [],
+   "page": "430/430",
+   "outside": []
+  },
+  {
+   "width": 430,
+   "state": "midgame",
+   "file": "layout-430-midgame.png",
+   "boxes": [
+    {
+     "id": "echoes",
+     "l": 20,
+     "t": 101,
+     "r": 352,
+     "b": 145
+    },
+    {
+     "id": "goal",
+     "l": 24,
+     "t": 147,
+     "r": 406,
+     "b": 188
+    },
+    {
+     "id": "toast",
+     "l": 24,
+     "t": 194,
+     "r": 371,
+     "b": 280
+    },
+    {
+     "id": "hint",
+     "l": 16,
+     "t": 314,
+     "r": 414,
+     "b": 352
+    },
+    {
+     "id": "bottom",
+     "l": 24,
+     "t": 360,
+     "r": 406,
+     "b": 398
+    }
+   ],
+   "overlaps": [],
+   "page": "430/430",
+   "outside": []
+  }
+ ]
+}
