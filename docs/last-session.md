@@ -1,70 +1,99 @@
-Session: Artifacts and Forge gate moved, a Stats screen, and a Reduce effects setting.
-No economy numbers changed.
+Session: Flavor study. A study only: no change to src/, saves or tests.
 
 What changed
-- Gate: Artifacts and the Forge now appear with the Fresh Batch box, at 500K lifetime
-  juice (they were at 100 Rose Pearls popped, about a minute in). Read from the state,
-  no stored flag. A save keeps both buttons, whatever its juice, if it has an owned
-  copy, forge jobs, stock or upgrades, a pearl type marked Keep, a Fresh Batch, or
-  Flavors. The Pink Duck and Forge goals follow the buttons, since they use the same
-  gate.
-- Stats screen (Settings > Stats > Open stats):
-  - From existing counters: juice earned, pearls popped, shiny pops, Fresh Batches,
-    Flavors, and pops per found pearl type with shinies.
-  - From the new saved stats object: taps, time played, fastest Fresh Batch run,
-    biggest Fresh Batch, best single pop, highest combo.
-  - Numbers use fmt / fmtV, times use durTxt rounded down.
-- Save v9: the migration starts every counter at 0. A run already in progress is not
-  timed (runSecs -1), so it can never count as the fastest. Loads clamp every value. Stats
-  travel through export, import, backup and Restore; Fresh Batch keeps them; Reset save
-  starts them over.
-- Reduce effects (Settings): saved with the settings. With no saved choice it follows
-  the browser's prefers-reduced-motion. When on: no particle bursts, shake, floating
-  numbers or words, marble screen flash, or reveal particles and animations. Sounds,
-  the juice counter and every number stay. The existing reduced-motion behaviour is
-  unchanged.
-- tools/audit.js: a "settings" mode (Settings and Stats screenshots and widths). Every
-  browser check still launches Chrome with --mute-audio.
+- tools/sim32.js, all behind flags (the default output is byte-identical):
+  - variants flavorB to flavorE (lever flavor: { div, exp, need });
+  - cycle() carries lifetime juice and an optional take-policy;
+  - --flavors prints the whole study; --flavors-ducks=C plays rule C with ducks.
+- docs/flavor-study.md: the tables, the recommendation, the exact code changes, the save
+  impact and what the player would notice.
+- CLAUDE.md: the study's location and the open decision.
 
-Audit (docs/onboarding-audit.md), visible controls at 390x844: before / after / now
-- 0 s: 6 / 2 / 2
-- after the first pop: 6 / 3 / 3
-- after the first purchase: 9 / 7 / 6
-- about 3 min: 18 / 18 / 16 (11 on screen; Artifacts and Forge no longer there)
+Rules (all keep the 5M run floor and 10% per Flavor)
+- A: today: floor(sqrt(run / 1.25M)), ready at 5M with a gain of at least 2.
+- B: owed = floor(sqrt(lifetime / 1.25M)), a reset pays owed minus held, at least 2.
+- C: B, ready only once the gain is at least 50% of the Flavors held.
+- D: B, ready only once the gain is at least 100% of the Flavors held.
+- E: B with exponent 0.4 (divisor 883,883, still exactly 2 at the first 5M).
+
+Strategy comparison: Flavors held at 1h / 2h / 3h, then the 3-hour spread
+(best payout over worst; 1.00 = level)
+- A casual: at once 19 / 99 / 273; +100% 82 / 658 / 1316; minute 25 167 / 863 / 3293.
+  Spread 11.67
+- A engaged: at once 137 / 697 / 1853; +100% 1025 / 2050 / 4101; minute 25 338 / 1828 /
+  7101. Spread 3.82
+- B casual: at once 10 / 35 / 67; +100% 32 / 256 / 512; minute 25 133 / 423 / 970.
+  Spread 12.73
+- B engaged: at once 52 / 154 / 296; +100% 448 / 896 / 1792; minute 25 275 / 937 / 2193.
+  Spread 7.20
+- C casual: at once 18 / 216 / 486; +100% 32 / 256 / 512; minute 25 133 / 423 / 953.
+  Spread 1.94
+- C engaged: at once 434 / 977 / 2199; +100% 448 / 896 / 1792; minute 25 275 / 937 /
+  2109. Spread 1.23
+- D casual: at once 32 / 256 / 512; +100% 32 / 256 / 512; minute 25 133 / 266 / 532.
+  Spread 1.04
+- D engaged: at once 448 / 896 / 1792 (stalled); +100% the same (stalled); minute 25
+  275 / 1146 / 1146. Spread 1.56
+- E casual: at once 10 / 30 / 52; +100% 16 / 64 / 64; minute 25 46 / 89 / 144.
+  Spread 2.48
+- E engaged: at once 37 / 87 / 139; +100% 96 / 96 / 192; minute 25 77 / 153 / 253.
+  Spread 1.77
+- "Stalled": a run passed 120 minutes without a Fresh Batch.
+
+Early timings, Fresh Batch at once: C1 ready, then C2 to C6 (minutes)
+(* under 4 min, ^ longer than the cycle before)
+- A casual: 12.8, 12.9^, 10.2, 8.6, 6.6, 5.4
+- A engaged: 6.0, 3.6*, 3.4*, 3.0*, 2.2*, 2.3*^
+- B casual: 12.8, 12.9^, 11.7, 9.0, 7.9, 7.3
+- B engaged: 6.0, 3.7*, 3.8*^, 3.3*, 3.0*, 2.5*
+- C casual: 12.8, 12.9^, 11.7, 9.2, 7.7, 6.4
+- C engaged: 6.0, 3.7*, 4.0*^ (3.98), 4.5^, 3.9*, 3.0*
+- D casual: 12.8, 12.9^, 12.2, 10.4, 9.1, 10.9^
+- D engaged: 6.0, 3.8*, 5.5^, 4.6, 4.5, 6.3^
+- E casual: 12.8, 13.2^, 12.0, 10.0, 8.0, 8.2^
+- E engaged: 6.0, 3.8*, 4.4^, 3.7*, 3.3*, 3.3*
+
+Rule C with ducks (Flavors at 1h / 2h / 3h, spread at 3h)
+- Pink Duck casual: 63 / 485 / 1092, 113 / 454 / 908, 172 / 584 / 1314. Spread 1.44
+- Pink Duck engaged: 649 / 1464 / 3294, 620 / 1241 / 2482, 387 / 1304 / 2937. Spread 1.33
+- All ten casual: 213 / 1080 / 1620, 192 / 770 / 1540, 249 / 827 / 1864. Spread 1.21
+- All ten engaged: 853 / 2887 / 4331, 621 / 2486 / 2486, 499 / 1827 / 4114. Spread 1.74
+- Ducks shorten runs (all ten: engaged runs 2 to 3 min) but the spread stays small.
+
+Recommendation: rule C
+- The reset habit no longer decides the outcome: 1.2 to 1.9 apart, against 3.8 to 11.7
+  today. It avoids D's walls (stalls, longer runs) and E's flatness (x6 to x26 after 3 h).
+- The first Fresh Batch is unchanged (2 Flavors at 5M), and so is the 10% per Flavor.
+- It does not fix engaged cycles under 4 minutes; that needs a run-length lever.
+- Saves: add flavorJuice with a v9 to v10 migration, flavorJuice = max(lifetime,
+  1.25M x Flavors^2), so every existing Flavor stays valid. Without it, players would
+  need 9 to 10 times their lifetime juice before the next Fresh Batch; with it,
+  2.25 to 2.33 times.
+- Exact code changes are listed in docs/flavor-study.md.
+
+Found while studying (reported, not fixed)
+- Selling backpack pearls adds their value to the current run's juice, and kept stacks
+  survive a Fresh Batch. Pearls kept over several runs and sold in one raise that run's
+  Flavors under today's rule. The away bonus counts as run juice the same way.
 
 Verification
-- npm run build: built index.html. npm test: exit 0; node test files 0 failures
-  (32, 19, 9, 21, 8, 2); the harness prints ALL PASSED.
-- New tests/stats_tests.js covers:
-  - the gate: a save under 500K with no artifact or forge state loses both buttons;
-    each kind of state keeps them (owned copy, forge job, stock, upgrade, Keep); a
-    Fresh Batch or Flavors keeps them; 500K shows both;
-  - counters from real board taps, pops and frames; the Stats screen;
-  - the v8 -> v9 migration and clamping;
-  - Fresh Batch: best gain, fastest run, untimed runs;
-  - save, save code, import, backup, Restore, and Reset zeroing;
-  - Reduce effects: a golden pop with no particles, floating text, shake or flash
-    while its sounds play and its juice lands; the same pop with the setting off does
-    burst; the reveal shows no particles.
-- The last session's two fixture saves still show exactly their old controls.
-- Settings and Stats at 390x844 (mid-game save): page 390/390, panels 316/316,
-  nothing past the panel edge.
-- npm run sim twice: identical, and unchanged.
+- npm run build: built index.html (unchanged). npm test: exit 0; node test files 0
+  failures (32, 19, 9, 21, 8, 2); the harness prints ALL PASSED.
+- npm run sim twice: identical, and identical to the saved earlier output.
+- --flavors twice: identical. --flavors-ducks=C twice: identical.
+- git diff --stat for the session: only tools/sim32.js, docs/ and CLAUDE.md.
 
 Choices I made
-- "Fastest Fresh Batch run" had no existing counter, so it lives in the new stats
-  object. Only fully timed runs count, so a save that migrates mid-run shows
-  "None yet" until its next full run.
-- "Kept pearls for a duck" means any pearl type marked Keep.
-- The Stats row in Settings shows once there is any progress, like Reset.
-- Taps count every press on the board, including on empty spots, but not during a Fresh
-  Batch. Best single pop counts helper pops too.
-- Time played counts only while the page runs. Away time is not counted.
-- Reduce effects also turns off the white screen flash on marble and heavy pops (it is
-  flashing). Hit stop and the reveal's one-by-one perks still follow reduced motion only.
-- Reset save keeps the Reduce effects choice, like Sound and Music.
-- The v7 -> v8 unit test now asks for SAVE_VERSION >= 8 instead of exactly 8.
+- Lifetime in the sim is the sum of run juice (the sim takes no away bonus and sells
+  nothing).
+- "At least 50% / 100% of held" is rounded up, and never below 2.
+- The +100% strategy under A waits for the run's own gain to reach the Flavors held.
+- A strategy run stops if a single run passes 120 minutes without a Fresh Batch, and is
+  marked "stalled".
+- Rule C was picked for the duck runs: it has the smallest spread without stalling.
+- One seed per profile, like the other reports.
 
 Still open
+- The Flavors decision (Ian): adopt rule C, or keep today's rule.
+- Engaged cycles under 4 minutes (any rule), and how hard ducks stack.
 - The real-phone check.
-- The Flavors decision (balance: 10% per Flavor, gain curve, floor).

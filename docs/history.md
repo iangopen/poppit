@@ -150,3 +150,9 @@
 - Save v9: a stats object (taps, time played, run timer, best pop, highest combo, biggest Fresh Batch, fastest run).
 - Reduce effects in Settings (defaults to the browser's reduced motion): no bursts, shake, floating text or flash; sounds stay.
 - Settings and Stats checked in headless Chrome at 390x844: page 390/390, panels 316/316, nothing past the edge.
+
+## 2026-10-24: Flavor study (report only)
+
+- tools/sim32.js --flavors / --flavors-ducks: rule A (live) against lifetime rules B-E over six cycles, three reset strategies over
+  3 hours, and early timings. docs/flavor-study.md recommends rule C (lifetime sqrt, ready at +50% of Flavors held): the reset
+  habits end 1.2-1.9x apart instead of 3.8-11.7x. No game code changed.

@@ -303,6 +303,7 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - `--variant=NAME`: plays a tuning option: `oldDials` (the dials before 2026-10-22), `scaledFloor` (floor × (1 + `FLAVOR_BONUS` × Flavors)), `moreFlavors`, `moreTuneLevels`, `flavor20`, `flavor5`, `pinkDuck`, `pinkDuckBest`, `allDucks` (all ten ducks as Common copies). Variant levers: `minRun`, `gain`, `base`, `max`, `flavorBonus`, `newBase` (first-level spawn weights, set on `ECON.NEW_BASE` for the run and restored), `duck`, `artifacts`.
   - `--compare`: prints a summary of every variant.
   - `--early`: the early beats of run 1 (first purchase, first tool, first tool upgrade, first helper, first Fresh Batch ready) for both profiles, the reference seed and the mean of seeds 1-8, against the rule of thumb. Report only.
+  - `--flavors`: the Flavor study (docs/flavor-study.md): rule A (live) against lifetime rules B-E (`VARIANTS.flavorB`..`flavorE`, lever `flavor: { div, exp, need }`; `cycle()` carries `st.lifetime` and an optional `takeIf(gain, echoes)`), six cycles at once and to minute 25, three reset strategies over 3 hours (`playFor`), and early timings marked under 4 min or longer than the cycle before. `--flavors-ducks=X` plays one rule with the plain Pink Duck and all ten ducks. Report only; about 25 s and 10 s.
   - `--ducks`: the Hall of Ducks report: normal pops per minute per type at three checkpoints, the suggested duck costs against the data, collection minutes, and cycle times with no ducks, the Pink Duck alone and all ten. It never changes the default run.
   - `--log`: prints a per-mark pacing log.
   - `--duck` (or `--variant=pinkDuck`): the player owns a plain Pink Duck (one Common copy, x1.4) from the start. `--duck=best` (or `pinkDuckBest`): the best-case duck, a Mythic copy with a top payout perk (+15%), x1.61; only payout is modelled. By default no ducks are owned. `DUCKS` in the sim holds both.
@@ -316,7 +317,8 @@ Single-file browser idle/clicker game: pop pearls for juice, buy upgrades, Fresh
   - Early beats against the rule of thumb (`--early`, seeds 1-8): the first purchase is at 4-7 s (target within 60 s); the first helper at 11.0 min casual and 4.7 min engaged (target about 3 min); the first Fresh Batch ready at 12.8 min casual (inside 10-15) and 5.4 min engaged (early). Not tuned.
   - The start hint shows on every page load until the first pop, even on a veteran save (unchanged).
   - Not checked on a real phone.
-- **The Flavors decision** is still Ian's (see Balance below: 10% per Flavor, the gain curve, the floor).
+- **The Flavors decision** is Ian's. The study (docs/flavor-study.md, 2026-10-24) recommends **rule C**: Flavors owed = floor(sqrt(lifetime juice / 1.25M)), a Fresh Batch pays owed minus held, and is ready at the 5M run floor once that gain is at least max(2, half the Flavors held). Over 3 hours the three reset habits end 1.94x (casual) and 1.23x (engaged) apart, against 11.7x and 3.8x today. It needs a saved `flavorJuice` with a v9 to v10 migration (`max(lifetime, 1.25M x echoes^2)`) so existing Flavors stay valid; the doc lists the exact changes. It does not fix engaged cycles under 4 minutes. Nothing is changed in the game until Ian decides.
+  - Found in the study, not fixed: selling kept pearls (and the away bonus) counts as the current run's juice, so pearls kept over several runs raise one run's Flavors under today's rule.
 
 - **Other tools' unique upgrades:** only the Steel Pin has one. The other five show "No special upgrade yet".
 - **Balance:**
