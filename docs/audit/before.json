@@ -1,0 +1,249 @@
+{
+ "label": "before",
+ "width": 390,
+ "height": 844,
+ "moments": [
+  {
+   "name": "0s",
+   "at": 1,
+   "juice": 0,
+   "file": "before-0s.png",
+   "total": 6,
+   "onScreen": 6,
+   "goal": "",
+   "controls": [
+    {
+     "id": "poolBtn",
+     "name": "Pearl pool",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    },
+    {
+     "id": "toolBtn",
+     "name": "Tools",
+     "onScreen": true
+    },
+    {
+     "id": "bookBtn",
+     "name": "Collection book",
+     "onScreen": true
+    },
+    {
+     "id": "collapseBtn",
+     "name": "Fresh Batch",
+     "onScreen": true
+    }
+   ]
+  },
+  {
+   "name": "first-pop",
+   "at": 2,
+   "juice": 2,
+   "file": "before-first-pop.png",
+   "total": 6,
+   "onScreen": 6,
+   "goal": "",
+   "controls": [
+    {
+     "id": "poolBtn",
+     "name": "Pearl pool",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    },
+    {
+     "id": "toolBtn",
+     "name": "Tools",
+     "onScreen": true
+    },
+    {
+     "id": "bookBtn",
+     "name": "Collection book",
+     "onScreen": true
+    },
+    {
+     "id": "collapseBtn",
+     "name": "Fresh Batch",
+     "onScreen": true
+    }
+   ]
+  },
+  {
+   "name": "first-purchase",
+   "at": 7,
+   "juice": 29,
+   "file": "before-first-purchase.png",
+   "total": 9,
+   "onScreen": 9,
+   "goal": "",
+   "controls": [
+    {
+     "id": "poolBtn",
+     "name": "Pearl pool",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    },
+    {
+     "id": "toolBtn",
+     "name": "Tools",
+     "onScreen": true
+    },
+    {
+     "id": "bookBtn",
+     "name": "Collection book",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Richer Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Faster Fill",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Combo Window",
+     "onScreen": true
+    },
+    {
+     "id": "collapseBtn",
+     "name": "Fresh Batch",
+     "onScreen": true
+    }
+   ]
+  },
+  {
+   "name": "3min",
+   "at": 181,
+   "juice": 17876,
+   "file": "before-3min.png",
+   "total": 18,
+   "onScreen": 18,
+   "goal": "",
+   "controls": [
+    {
+     "id": "poolBtn",
+     "name": "Pearl pool",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    },
+    {
+     "id": "toolBtn",
+     "name": "Tools",
+     "onScreen": true
+    },
+    {
+     "id": "bookBtn",
+     "name": "Collection book",
+     "onScreen": true
+    },
+    {
+     "id": "artBtn",
+     "name": "Artifacts",
+     "onScreen": true
+    },
+    {
+     "id": "forgeBtn",
+     "name": "Forge",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Blue Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Mint Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Golden Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Violet Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Richer Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Shiny Hunter",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Faster Fill",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Combo Window",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Frenzy Fuel",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Bigger Board",
+     "onScreen": true
+    },
+    {
+     "id": "collapseBtn",
+     "name": "Fresh Batch",
+     "onScreen": true
+    }
+   ]
+  }
+ ],
+ "firstBuy": "sharp",
+ "levels": "{\"golden\":1,\"sharp\":10,\"lucky\":6,\"spawn\":7,\"combo\":8,\"fuel\":3,\"board\":1,\"mint\":2,\"shiny\":1}",
+ "errors": []
+}
