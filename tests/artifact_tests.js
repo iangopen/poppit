@@ -49,17 +49,17 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   ok('Fresh Batch keeps the kept Rose stacks and the duck, and wipes the rest', !G.getCollapse() && st.echoes > echo0 && st.inv.pearl === 7000 && st.inv['pearl:s'] === 2 && st.inv.blue === 0 && ducks() === 1 && st.keep.pearl === true && G.getS().artMult === A.PINK_DUCK_PAYOUT, 'pearl ' + st.inv.pearl + ', blue ' + st.inv.blue);
 
   // the dock button
-  const pop0 = st.col.pearl.popped, sp0 = st.col.pearl.sPopped;
-  st.artifacts = {}; st.col.pearl.popped = 99; st.col.pearl.sPopped = 0; G.syncArtBtn();
+  const life0 = st.lifetime, keep0 = st.keep, ech0 = st.echoes, col0 = st.collapses; st.echoes = 0; st.collapses = 0; // a save before its first Fresh Batch
+  st.artifacts = {}; st.keep = {}; st.lifetime = 499999; G.syncArtBtn();
   const hid = els.artBtn.hidden;
-  st.col.pearl.popped = 100; G.syncArtBtn();
-  ok('the Artifacts button shows from 100 Rose Pearls popped', hid === true && els.artBtn.hidden === false && els.stage.classList.contains('arts'));
-  st.col.pearl.popped = 0; st.artifacts = oneDuck(); G.syncArtBtn();
+  st.lifetime = 500000; G.syncArtBtn();
+  ok('the Artifacts button shows at 500K lifetime juice, with the Fresh Batch box', hid === true && els.artBtn.hidden === false && els.stage.classList.contains('arts'));
+  st.lifetime = 0; st.artifacts = oneDuck(); G.syncArtBtn();
   ok('and always once an artifact is owned', els.artBtn.hidden === false);
-  st.col.pearl.popped = pop0; st.col.pearl.sPopped = sp0;
+  st.lifetime = life0; st.keep = keep0; st.echoes = ech0; st.collapses = col0;
 
   // save v4 (artifacts and Keep); v6 turned owned artifacts into copies
-  ok('SAVE_VERSION is 8 (equip slots came after paid costs and locks)', G.SAVE_VERSION === 8);
+  ok('SAVE_VERSION is 9 (the stats object came after equip slots)', G.SAVE_VERSION === 9);
   const m = G.migrateSave({ version: 3, sparks: 5, inv: { pearl: 50 } }).save;
   ok('a v3 save migrates with no artifacts and nothing kept', m.version === G.SAVE_VERSION && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
   ok('and loads that way', G.loadState({ version: 3, inv: { pearl: 50 } }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && st.inv.pearl === 50);

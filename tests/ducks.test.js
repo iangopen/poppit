@@ -129,7 +129,7 @@ test('equippedFromSave: unique, known, owned relics only, at most five, in saved
   });
 });
 test('migration v7 -> v8: every owned relic is equipped, in hall order, up to five; ducks are not', () => {
-  assert.strictEqual(SAVE_VERSION, 8);
+  assert.ok(SAVE_VERSION >= 8, 'the step exists; later steps may follow');
   const v7 = { version: 7, sparks: 2, artifacts: {
     mint_clock: { active: 2, copies: [{ id: 2, rarity: 'rare', perks: [] }] }, pink_duck: { active: 1, copies: [{ id: 1, rarity: 'common', perks: [] }] },
     rose_lantern: { active: 3, copies: [{ id: 3, rarity: 'epic', perks: [] }] }, blue_compass: { copies: [] }, ghost: { copies: [{ id: 4 }] } } };

@@ -8,14 +8,14 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     G.loadState({ version: 5, lv: E.zeroLevels() }); G.resetRun(); els.forge.hidden = true; G.updateForge();
 
     // dock gate, the same as Artifacts, through PANEL_BTN
-    st.col.pearl.popped = 99; st.col.pearl.sPopped = 0; G.syncDock();
+    st.lifetime = 499999; G.syncDock();
     const hidden99 = els.forgeBtn.hidden;
-    st.col.pearl.popped = 100; G.syncDock();
-    ok('the Forge button shows from 100 Rose Pearls popped, like Artifacts', hidden99 === true && els.forgeBtn.hidden === false && els.artBtn.hidden === false && els.stage.classList.contains('forge') && G.PANEL_BTN.forge === 'forgeBtn');
-    st.col.pearl.popped = 0; G.syncDock(); const gone = els.forgeBtn.hidden;
+    st.lifetime = 500000; G.syncDock();
+    ok('the Forge button shows at 500K lifetime juice, like Artifacts', hidden99 === true && els.forgeBtn.hidden === false && els.artBtn.hidden === false && els.stage.classList.contains('forge') && G.PANEL_BTN.forge === 'forgeBtn');
+    st.lifetime = 0; G.syncDock(); const gone = els.forgeBtn.hidden;
     st.forge.stock.rose_dust = 1; G.syncDock();
-    ok('a save with forge work keeps the button even under 100 Roses', gone === true && els.forgeBtn.hidden === false);
-    delete st.forge.stock.rose_dust; st.col.pearl.popped = 150; G.syncDock();
+    ok('a save with forge work keeps the button under 500K juice', gone === true && els.forgeBtn.hidden === false);
+    delete st.forge.stock.rose_dust; st.lifetime = 600000; G.syncDock();
 
     // Start's disabled reasons
     st.autoSell = true; st.inv.pearl = 37;

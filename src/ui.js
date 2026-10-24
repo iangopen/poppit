@@ -285,7 +285,7 @@ function sellAll() {
 }
 $('sellBtn').addEventListener('click', () => { Snd.resume(); sellAll(); });
 $('autoSell').addEventListener('change', (e) => { state.autoSell = e.target.checked; Snd.resume(); Snd.click(); toast(state.autoSell ? 'Auto-sell on. New pops sell the moment they pop, your backpack stays as it is' : 'Auto-sell off. New pops go to your backpack'); updateHud(0.016); save(); });
-const PANEL_BTN = { pack: 'packBtn', settings: 'setBtn', tools: 'toolBtn', pool: 'poolBtn', book: 'bookBtn', arts: 'artBtn', forge: 'forgeBtn' };
+const PANEL_BTN = { pack: 'packBtn', settings: 'setBtn', tools: 'toolBtn', pool: 'poolBtn', book: 'bookBtn', arts: 'artBtn', forge: 'forgeBtn', stats: 'setBtn' }; // Stats opens from Settings
 function openPanel(id) {
   Snd.click();
   Object.keys(PANEL_BTN).forEach((p) => {
@@ -293,7 +293,7 @@ function openPanel(id) {
     $(p).hidden = !show; $(PANEL_BTN[p]).setAttribute('aria-expanded', String(show));
   });
   syncDots();
-  updatePack(); updatePool(); artSig = ''; updateArts(); if (id === 'forge' && !$('forge').hidden) { setForgeDot(false); forgeSig = ''; updateForge(); } if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
+  updatePack(); updatePool(); artSig = ''; updateArts(); updateStats(); if (id === 'forge' && !$('forge').hidden) { setForgeDot(false); forgeSig = ''; updateForge(); } if (id === 'book' && !$('book').hidden) openBook(); if (id === 'tools' && !$('tools').hidden) { toolView = state.equip >= 0 ? state.equip : state.lv.tool; updateToolPanel(); }
 }
 $('packBtn').addEventListener('click', () => openPanel('pack'));
 $('setBtn').addEventListener('click', () => openPanel('settings'));
@@ -304,8 +304,6 @@ $('artBtn').addEventListener('click', () => openPanel('arts'));
 $('forgeBtn').addEventListener('click', () => openPanel('forge'));
 
 /* ----- artifacts: permanent items crafted from kept pearls, one section per hall ----- */
-const ART_DOCK_ROSES = 100; // the Artifacts and Forge buttons show once this many Rose Pearls were popped in total
-const rosesPopped = () => state.col.pearl.popped + state.col.pearl.sPopped;
 const forgeUsed = () => state.forge.slots.some(Boolean) || Object.keys(state.forge.stock).length > 0 || state.forge.lv.speed > 0 || state.forge.lv.slot > 0;
 /* ----- Reveal rules: a control appears once the player has earned what it belongs to. Every rule reads the state, never a stored
    flag, so an old save shows what it has earned and Reset save starts over. A save that has taken a Fresh Batch passes them all.
@@ -315,6 +313,9 @@ const anyShiny = () => ECON.PEARLS.some((t) => state.col[t.id].sFound);
 const hasPearls = () => INV_IDS.some((k) => state.inv[k] > 0);
 const ownsArtifact = () => ARTS.ARTIFACTS.some((a) => ARTS.count(state.artifacts, a.id) > 0);
 const veteran = () => state.collapses > 0 || state.echoes > 0;
+// any artifact or forge state: owned copies, forge jobs, stock or upgrades, or pearls marked Keep (what a duck or the forge needs).
+// A save with any of it keeps both the Artifacts and Forge buttons, whatever its juice.
+const artsUsed = () => ownsArtifact() || forgeUsed() || Object.keys(state.keep).length > 0;
 const toolsAt = () => 0.4 * Math.min(ECON.toolPrice(1), ECON.uniqueCost(0, 0)); // 40% of the cheapest thing in the Tools panel, like a shop row
 const COLLAPSE_SHOW = 0.1; // the Fresh Batch box shows once lifetime juice reaches this share of a Fresh Batch's run juice
 const REVEAL = {
@@ -327,8 +328,8 @@ const DOCK_GATES = {
   tools: () => veteran() || state.lifetime >= toolsAt() || state.owned.some((o, i) => o && i > 0) || Object.keys(state.toolUp).length > 0,
   book: () => veteran() || foundCount() >= 2 || anyShiny(), // a second pearl type, or a shiny
   pool: () => veteran() || foundCount() >= 3 || anyShiny() || !state.shinyOn || ECON.PEARLS.some((t) => state.col[t.id].found && !state.pool.includes(t.id)), // a third type, a shiny, or a pool already changed
-  arts: () => rosesPopped() >= ART_DOCK_ROSES || ownsArtifact(),
-  forge: () => rosesPopped() >= ART_DOCK_ROSES || forgeUsed(), // a loaded save with forge work keeps its button
+  arts: () => REVEAL.collapse() || artsUsed(), // with the Fresh Batch box (500K lifetime juice), or once used
+  forge: () => REVEAL.collapse() || artsUsed(),
 };
 const STAGE_CLASS = { arts: true, forge: true }; // the stage gets these panel ids as classes while their buttons show (the bottom bar moves right)
 // the dock, left to right, and how far each button moves the next one along; a hidden button leaves no gap (all shown = the CSS lefts)
@@ -343,7 +344,7 @@ function syncDock() {
     let x = DOCK_LEFT; for (const [id, step] of DOCK_ORDER) { const b = $(PANEL_BTN[id]); if (b.hidden) continue; b.style.left = x + 'px'; x += step; }
     if (!$('packBtn').hidden) aimPack();
   }
-  for (const [row, on] of [['resetRow', REVEAL.progress()], ['copyRow', REVEAL.progress()], ['dlRow', REVEAL.progress()]]) if ($(row).hidden === on) $(row).hidden = !on;
+  for (const [row, on] of [['resetRow', REVEAL.progress()], ['copyRow', REVEAL.progress()], ['dlRow', REVEAL.progress()], ['statsRow', REVEAL.progress()]]) if ($(row).hidden === on) $(row).hidden = !on;
   syncDots(); updateGoal();
 }
 /* ----- dots on dock buttons: something unseen or newly affordable inside, cleared when the panel opens. Each panel lists keys for
@@ -861,7 +862,7 @@ function paintReveal() {
 function openReveal(id, c, prev) {
   const first = ARTS.count(state.artifacts, id) === 1, a = ARTS.byId(id), n = c.perks.length;
   rv = { id, c, prev, first, t: 0, shown: calm ? n : 0, done: calm || n === 0 };
-  const el = $('reveal'), k = rarityRank(c.rarity), parts = calm ? 0 : REVEAL_PARTS[Math.min(k, REVEAL_PARTS.length - 1)];
+  const el = $('reveal'), k = rarityRank(c.rarity), parts = fxOff() ? 0 : REVEAL_PARTS[Math.min(k, REVEAL_PARTS.length - 1)];
   $('rvIcon').innerHTML = ART_ICON[id] || '';
   $('rvName').textContent = a.name;
   $('rvRar').textContent = ARTS.rarityById(c.rarity).name;
@@ -1164,7 +1165,10 @@ function resetRun() {
   recalc(); buildCells(); if (!pearls.length) prefill(); dispSparks = state.sparks;
 }
 function finishCollapse() {
-  const gain = collapse.gain; collapse = null;
+  const gain = collapse.gain, sx = state.stats; collapse = null;
+  if (gain > sx.bestGain) sx.bestGain = gain;
+  if (sx.runSecs > 0 && (!sx.fastest || sx.runSecs < sx.fastest)) sx.fastest = sx.runSecs;
+  sx.runSecs = 0; // the next run is timed from the start
   state.echoes += gain; state.collapses += 1; state.sparks = 0; state.runEarned = 0; state.lv = ECON.zeroLevels(); clearUnkept(); resetTools(); // kept stacks and artifacts survive
   resetRun();
   toast('Yum! Flavors +' + gain + '. Everything pays ' + multTxt(S.echoMult * S.artMult) + ' now'); updateShelf(); forgeSig = ''; updateForge(); save();
@@ -1197,6 +1201,7 @@ cv.addEventListener('pointerdown', (e) => {
   try { cv.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
   const q = ptr(e); pointer.x = q[0]; pointer.y = q[1]; pointer.down = true; pointer.has = true; pointer.touch = e.pointerType === 'touch'; pointer.last = time;
   if (collapse) return;
+  state.stats.taps++;
   swing();
   const p = pearlAt(q[0], q[1]);
   if (p) hitPearl(p, S.power, 'tap');
@@ -1217,7 +1222,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -1239,12 +1244,19 @@ const fin = (x) => { const n = +x; return Number.isFinite(n) && n > 0 ? n : 0; }
 const whole = (x, max) => Math.min(max, Math.floor(fin(x)));
 const objOf = (o) => (isObj(o) ? o : {});
 const BIG = Number.MAX_SAFE_INTEGER;
+// the stats object from a save: whole counts and finite seconds, never below 0; runSecs may be -1 (not timed)
+function statsFromSave(o) {
+  o = objOf(o); const b = blankStats();
+  return { taps: whole(o.taps, BIG), secs: Math.min(fin(o.secs), 1e10), runSecs: o.runSecs === -1 ? -1 : Math.min(fin(o.runSecs), 1e10), bestPop: fin(o.bestPop), bestCombo: whole(o.bestCombo, BIG), bestGain: whole(o.bestGain, BIG), fastest: Math.min(fin(o.fastest), 1e10) || b.fastest };
+}
 // Returns 'ok', or 'invalid' / 'newer' and leaves the state exactly as it was. Unknown keys are ignored.
 function loadState(raw) {
   const m = migrateSave(raw); if (!m.save) return m.error;
   const d = m.save, lv = objOf(d.lv), toolUp = objOf(d.toolUp), inv = objOf(d.inv), invV = objOf(d.invV), seen = objOf(d.seen), dc = objOf(d.col);
   state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime);
   state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
+  state.reduceFx = typeof d.reduceFx === 'boolean' ? d.reduceFx : calm; // no saved choice: the browser's reduced-motion setting
+  state.stats = statsFromSave(d.stats);
   state.muted = d.muted === true; state.musicOn = d.musicOn !== false; state.musicVol = Number.isFinite(d.musicVol) ? clamp(d.musicVol, 0, 1) : 0.5;
   state.autoSell = typeof d.autoSell === 'boolean' ? d.autoSell : true; // on unless the save says off
   for (const k in ECON.UPG) state.lv[k] = whole(lv[k], ECON.UPG[k].max);
@@ -1440,6 +1452,24 @@ function paintMusic() {
   $('musicNote').textContent = Music.hasTracks() ? Music.count() + (Music.count() === 1 ? ' song' : ' songs') + ', shuffled' : 'No songs added yet';
   $('musicBtn').disabled = $('musicVol').disabled = !Music.hasTracks();
 }
+// Reduce effects: saved with the settings; it also stops the reveal's particles and glow animation (the fxoff class)
+function paintFx() {
+  const on = !!state.reduceFx; $('fxBtn').textContent = on ? 'On' : 'Off'; $('fxBtn').setAttribute('aria-pressed', String(on));
+  document.documentElement.classList.toggle('fxoff', on);
+}
+$('fxBtn').addEventListener('click', () => { state.reduceFx = !state.reduceFx; Snd.click(); paintFx(); save(); });
+$('statsBtn').addEventListener('click', () => { openPanel('stats'); });
+/* ----- Stats: lifetime numbers from the collection counters and the stats object, written with fmt and durTxt ----- */
+const stRow = (k, v) => '<div class="stRow"><span>' + k + '</span><b>' + v + '</b></div>';
+function statsHTML() {
+  const x = state.stats, cols = ECON.PEARLS.filter((t) => state.col[t.id].found || state.col[t.id].sFound);
+  const pops = ECON.PEARLS.reduce((n, t) => n + state.col[t.id].popped + state.col[t.id].sPopped, 0), shiny = ECON.PEARLS.reduce((n, t) => n + state.col[t.id].sPopped, 0);
+  return '<h4 class="setHd">Totals</h4>' + stRow('Juice earned', fmt(state.lifetime)) + stRow('Pearls popped', fmt(pops)) + stRow('Shiny pops', fmt(shiny)) + stRow('Taps', fmt(x.taps)) + stRow('Time played', durTxt(Math.floor(x.secs))) +
+    '<h4 class="setHd">Fresh Batches</h4>' + stRow('Fresh Batches taken', fmt(state.collapses)) + stRow('Flavors', fmt(state.echoes)) + stRow('Fastest run', x.fastest ? durTxt(Math.floor(x.fastest)) : 'None yet') + stRow('Biggest Fresh Batch', x.bestGain ? '+' + fmt(x.bestGain) + ' Flavors' : 'None yet') +
+    '<h4 class="setHd">Best moments</h4>' + stRow('Best single pop', x.bestPop ? fmtV(x.bestPop) + ' juice' : 'None yet') + stRow('Highest combo', x.bestCombo ? fmt(x.bestCombo) : 'None yet') +
+    '<h4 class="setHd">Pops by pearl</h4>' + cols.map((t) => stRow(t.name, fmt(state.col[t.id].popped) + (state.col[t.id].sPopped ? ' <small>+ ' + fmt(state.col[t.id].sPopped) + ' shiny</small>' : ''))).join('');
+}
+function updateStats() { if ($('stats').hidden) return; setHTML('statsBody', statsHTML()); }
 $('musicBtn').addEventListener('click', () => { state.musicOn = !state.musicOn; Snd.click(); Music.start(); Music.setOn(state.musicOn); paintMusic(); save(); });
 $('musicVol').addEventListener('input', (e) => { state.musicVol = e.target.value / 100; Music.setVolume(state.musicVol); });
 $('musicVol').addEventListener('change', () => save());
@@ -1452,7 +1482,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); resetGoals(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
 });
 
@@ -1530,7 +1560,7 @@ function restoreBackup() {
 function afterLoad() {
   collapse = null; armed = false; clearTimeout(armTimer); toolView = state.equip >= 0 ? state.equip : state.lv.tool;
   resetRun(); syncDiscoveries(); $('autoSell').checked = state.autoSell;
-  paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); paintMusic();
+  paintMute(); paintFx(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); paintMusic();
   updateShelf(); updatePack(); updatePool(); paintRestore(); artSig = ''; updateArts(); forgeSig = ''; setForgeDot(false); updateForge(); // no stale numbers from the old save
 }
 $('loadSave').addEventListener('click', () => { Snd.click(); checkImport($('saveText').value); });
@@ -1564,13 +1594,14 @@ function frame(ts) {
   let dt = (ts - last) / 1000; last = ts;
   if (dt > 3) { awayBonus(dt); dt = 0.05; }
   dt = Math.min(dt, 0.1);
+  state.stats.secs += dt; if (state.stats.runSecs >= 0) state.stats.runSecs += dt; // time played: only while the page runs (an away gap counts 0.05 s)
   const w0 = performance.now();
   if (hitStop > 0) hitStop -= dt;
   else { acc += dt; while (acc >= DT) { step(DT); acc -= DT; } }
   hudT += dt; saveT += dt;
   revealTick(dt);
   forgeTick(); // before the HUD, so the speed line and slots show this frame's frenzy and finished jobs
-  if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); updateForge(); hudT = 0; }
+  if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); updateForge(); updateStats(); hudT = 0; }
   if (saveT > 5) { save(); saveT = 0; }
   render();
   if (!$('tools').hidden) drawPedestal(ts);
@@ -1583,7 +1614,7 @@ function start(data) {
   const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
   recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); buildForgeUpg(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
   awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
-  paintMute(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
+  paintMute(); paintFx(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
   seeShop(); seeDots(); syncDock();
   if (window.ResizeObserver) new ResizeObserver(layout).observe(stage); else window.addEventListener('resize', layout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);

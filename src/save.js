@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 8;
+const SAVE_VERSION = 9;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -98,6 +98,9 @@ const MIGRATIONS = {
     const artEquip = RELICS.filter((k) => isObj(src[k]) && Array.isArray(src[k].copies) && src[k].copies.length > 0).slice(0, SLOTS);
     return Object.assign({}, d, { version: 8, artEquip });
   },
+  // v8 had no stats object: every new counter starts at zero. The run in progress is not timed (runSecs -1), so a run that began
+  // before this version can never count as the fastest Fresh Batch. Reduce effects is absent, so it takes the browser's default.
+  8: (d) => Object.assign({}, d, { version: 9, stats: { taps: 0, secs: 0, runSecs: -1, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 } }),
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {

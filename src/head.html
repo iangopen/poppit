@@ -386,7 +386,13 @@ button.eslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .setRow input[type=range] { flex: 1; max-width: 170px; accent-color: #c9588a; cursor: pointer; }
 .setRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px 8px 14px; font: 800 13.5px var(--font-ui); }
 .setRow[hidden], .saveTxt[hidden] { display: none; }
-#settings { max-height: calc(100% - 56px); overflow-y: auto; }
+#settings, #stats { max-height: calc(100% - 56px); overflow-y: auto; }
+#statsBody { display: flex; flex-direction: column; gap: 6px; }
+.stRow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font: 700 13.5px var(--font-ui); color: var(--fg); }
+.stRow span { min-width: 0; overflow-wrap: anywhere; }
+.stRow b { flex: none; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
+.stRow small { font-weight: 600; color: var(--muted); }
+#statsBody .setHd { margin: 6px 0 0 4px; }
 .setHd { margin: 4px 0 -4px 4px; font: 400 24px/1 var(--font-brand); color: var(--fg); }
 .setRow.saveIn { flex-direction: column; align-items: stretch; padding: 10px; }
 #saveConfirm { border-color: #3a2e1c; font-weight: 700; }
@@ -528,6 +534,9 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
   #sparks.bump, .up.flash, .chip.pop, .panel, .panel.jolt, .sell.squish,   #toast, #hint, #combo, #surge { transition: none; }
   #toast.on { animation: none; }
 }
+/* Reduce effects (Settings): the same as reduced motion for the reveal's particles and animations */
+.fxoff .reveal *, .fxoff .rvBox, .fxoff .cfBox { animation: none !important; }
+.fxoff .rvParts { display: none; }
 </style>
 </head>
 <body>
@@ -590,11 +599,17 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <div id="poolList"></div>
       <div class="setRow"><span>Shiny pearls<small id="shinyPct"></small></span><button class="chip" id="shinyBtn" type="button">On</button></div>
     </section>
+    <section class="panel" id="stats" hidden aria-label="Stats">
+      <header><h3>Stats</h3><button class="x" type="button" data-close="stats" aria-label="Close stats">&#10005;</button></header>
+      <div id="statsBody"></div>
+    </section>
     <section class="panel" id="settings" hidden aria-label="Settings">
       <header><h3>Settings</h3><button class="x" type="button" data-close="settings" aria-label="Close settings">&#10005;</button></header>
       <div class="setRow"><span>Sound</span><button class="chip" id="muteBtn" type="button">Sound on</button></div>
       <div class="setRow"><span>Music<small id="musicNote"></small></span><button class="chip" id="musicBtn" type="button">Music on</button></div>
       <div class="setRow"><span>Music volume</span><input id="musicVol" type="range" min="0" max="100" step="1" value="50" aria-label="Music volume"></div>
+      <div class="setRow"><span>Reduce effects<small>No shake, bursts, flashes or floating numbers. Sounds and numbers stay.</small></span><button class="chip" id="fxBtn" type="button" aria-pressed="false">Off</button></div>
+      <div class="setRow" id="statsRow" hidden><span>Stats<small>Your pops, juice and best moments</small></span><button class="chip" id="statsBtn" type="button">Open stats</button></div>
       <div class="setRow" id="resetRow" hidden><span>Progress</span><button class="chip" id="resetBtn" type="button">Reset save</button></div>
       <h4 class="setHd">Save</h4>
       <div class="setRow" id="copyRow" hidden><span>Save code<small>Paste it on any device to carry on</small></span><button class="chip" id="copySave" type="button">Copy save code</button></div>

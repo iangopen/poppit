@@ -9,7 +9,11 @@ const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce
 const INV_IDS = ECON.PEARLS.flatMap((t) => [t.id, t.id + ':s']); // normal and shiny stacks
 const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); return o; };
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank() };
+// lifetime stats beyond the collection counters: taps on the board, seconds played (the page open and running), the current run's
+// seconds (-1 = not timed: a save from before stats started mid-run), the best single pop, the highest combo, the biggest Fresh Batch
+// (Flavors) and the fastest Fresh Batch run (seconds, 0 = none yet). Kept through Fresh Batch; Reset save starts them again.
+const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 });
+const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
@@ -92,10 +96,14 @@ function prefill() {
 }
 
 /* ----- effects ----- */
+// Reduce effects (Settings), or the browser's reduced motion: no particle bursts, no screen shake, no floating numbers, no screen flash.
+// Sounds, the juice counter and every number in the HUD and panels stay. hitStop and the reveal's pacing still follow calm alone.
+const fxOff = () => calm || state.reduceFx;
 const MAX_PARTS = 800, MAX_MOTES = 140;
 let fxQ = 1, dprCap = 2; // adaptive quality: particle density and canvas resolution back off when frames run long
 const budget = (n) => Math.max(0, Math.min(Math.round(n * fxQ), MAX_PARTS - fx.parts.length));
 function burst(x, y, n, speed, col, big) {
+  if (fxOff()) return;
   n = budget(n);
   for (let i = 0; i < n; i++) {
     const a = rnd(0, TAU), v = rnd(0.35, 1) * speed * (big ? 1.25 : 1);
@@ -103,6 +111,7 @@ function burst(x, y, n, speed, col, big) {
   }
 }
 function confetti(x, y, n) {
+  if (fxOff()) return;
   n = budget(n);
   for (let i = 0; i < n; i++) {
     const a = rnd(0, TAU), v = rnd(0.3, 1) * 520 * U / 350;
@@ -110,6 +119,7 @@ function confetti(x, y, n) {
   }
 }
 function shards(x, y, n, col, speed, rainbow) {
+  if (fxOff()) return;
   n = budget(n);
   for (let i = 0; i < n; i++) {
     const a = rnd(0, TAU), v = rnd(0.35, 1) * speed;
@@ -125,15 +135,15 @@ function splat(x, y, col, scale) {
   while (stains.length > 200) stains.shift();
 }
 // shiny pop: a ring of white stars on top of the normal burst
-function sparkle(x, y) { if (calm) return; for (let i = 0; i < 6; i++) { const a = rnd(0, TAU); fx.texts.push({ x: x + Math.cos(a) * PR * 0.9, y: y + Math.sin(a) * PR * 0.9, t: -i * 0.04, dur: 0.7, str: '\u2726', col: '#ffe27a', size: rnd(12, 20) }); } }
+function sparkle(x, y) { if (fxOff()) return; for (let i = 0; i < 6; i++) { const a = rnd(0, TAU); fx.texts.push({ x: x + Math.cos(a) * PR * 0.9, y: y + Math.sin(a) * PR * 0.9, t: -i * 0.04, dur: 0.7, str: '\u2726', col: '#ffe27a', size: rnd(12, 20) }); } }
 function bloom(x, y, r, col, dur) { fx.blooms.push({ x, y, r, t: 0, dur, h: col[0], s: col[1], l: col[2] }); }
-function floatText(x, y, str, col, size) { fx.texts.push({ x, y, t: 0, dur: 0.9, str, col, size: size || 16 }); }
+function floatText(x, y, str, col, size) { if (fxOff()) return; fx.texts.push({ x, y, t: 0, dur: 0.9, str, col, size: size || 16 }); }
 function motes(x, y, n, col, toPack) {
   const tx = toPack ? BPX : TX, ty = toPack ? BPY : TY;
   n = Math.min(n, MAX_MOTES - fx.motes.length);
   for (let i = 0; i < n; i++) fx.motes.push({ tx, ty, pack: !!toPack, x0: x, y0: y, t: -i * 0.03, dur: rnd(0.5, 0.75) + (toPack ? 0.1 : 0), bx: rnd(-1, 1) * (toPack ? 30 : 80), by: rnd(-1, 0.4) * (toPack ? 30 : 80), x, y, h: col[0], l: col[2] });
 }
-const addShake = (a) => { if (!calm) shake = Math.max(shake, a); };
+const addShake = (a) => { if (!fxOff()) shake = Math.max(shake, a); };
 
 /* ----- pearls ----- */
 function spawnAt(cell, kind, shiny) {
@@ -178,13 +188,14 @@ function popPearl(p, src, opts) {
   const col = [p.h, p.s, p.l];
   const x = p.cell.x, y = p.cell.y;
   let step = opts.step || 0;
-  if (manual) { combo = (combo > 0 && comboT < S.comboWindow) ? combo + 1 : 1; comboT = 0; step = combo - 1; }
+  if (manual) { combo = (combo > 0 && comboT < S.comboWindow) ? combo + 1 : 1; comboT = 0; step = combo - 1; if (combo > state.stats.bestCombo) state.stats.bestCombo = combo; }
   if (src !== 'batch') Snd.hit(p.kind, 1, !manual);
   p.st = 'dead'; p.cell.p = null;
   const rad = radiusOf(p);
 
   if (src !== 'batch') {
     const val = ECON.popValue(S, manual ? combo : (src === 'auto' ? 0 : combo), frenzyT > 0, p.kind) * (p.shiny ? ECON.SHINY_MULT : 1);
+    if (val > state.stats.bestPop) state.stats.bestPop = val;
     award(val, x, y, col, (isBig(p.kind) && !isHeavy(p.kind)) || p.shiny, p.kind + (p.shiny ? ':s' : ''));
     if (p.shiny) { state.col[p.kind].sPopped++; discover(p.kind, true); Snd.shimmer(); sparkle(x, y); } else { state.col[p.kind].popped++; discover(p.kind, false); }
     meter += (manual ? 1 : ECON.HELPER_METER) * S.meterMult;
@@ -203,11 +214,11 @@ function popPearl(p, src, opts) {
     if (!calm) hitStop = Math.max(hitStop, 0.06);
     Snd.golden(); floatText(x, y - PR * 1.9, 'Jackpot', '#b5740a', 13);
   } else if (p.kind === 'marble') {
-    confetti(x, y, 22); shards(x, y, 22, col, 520 * U / 350, true); addShake(3.2); flashT = 0.32;
+    confetti(x, y, 22); shards(x, y, 22, col, 520 * U / 350, true); addShake(3.2); flashT = fxOff() ? 0 : 0.32;
     if (!calm) hitStop = Math.max(hitStop, 0.09);
     Snd.marble(); floatText(x, y - PR * 1.9, 'Marble', '#6a3fd1', 14);
   } else if (isHeavy(p.kind)) { // opal, ruby, black: marble-class bursts
-    confetti(x, y, 22); shards(x, y, 22, col, 520 * U / 350, true); addShake(3.2 + (fw >= 30 ? 1 : 0)); flashT = 0.32;
+    confetti(x, y, 22); shards(x, y, 22, col, 520 * U / 350, true); addShake(3.2 + (fw >= 30 ? 1 : 0)); flashT = fxOff() ? 0 : 0.32;
     if (!calm) hitStop = Math.max(hitStop, 0.09);
     Snd.marble(); floatText(x, y - PR * 1.9, ECON.PEARLS.find((t) => t.id === p.kind).name, 'hsl(' + col[0] + ',70%,35%)', 14);
   } else if (fw >= 8) { // violet, coral: golden-class bursts
