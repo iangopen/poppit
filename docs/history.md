@@ -110,3 +110,10 @@
   - Forge Speed cost 20,000 and the speed line read x1.25;
   - reload and Fresh Batch kept Keep, stock, level and the 50 kept Roses;
   - no horizontal overflow, and no console errors.
+
+## 2026-10-23: Hall of Ducks (ten ducks) and relic equip slots
+
+- Nine type ducks added as data (Blue ... Black), each x1.4 on its own pearl type only; the Pink Duck is unchanged.
+- Costs derived from the new `node tools/sim32.js --ducks` report (docs/duck-report.md); untuned.
+- Relics now work only while equipped: EQUIP_SLOTS 5, `state.artEquip`, save v8 equips old relics.
+- The forge stash warning covers every pearl type. The default sim output was byte-identical before and after.
