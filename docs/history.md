@@ -117,3 +117,20 @@
 - Costs derived from the new `node tools/sim32.js --ducks` report (docs/duck-report.md); untuned.
 - Relics now work only while equipped: EQUIP_SLOTS 5, `state.artEquip`, save v8 equips old relics.
 - The forge stash warning covers every pearl type. The default sim output was byte-identical before and after.
+
+## 2026-10-24: the halls as galleries, the equip row, the payout line
+
+- Interface only, no number changes. One Gallery component (`makeGallery`) for both halls; pedestal states
+  (occupied, empty with recipe and Keep, not found); the equip row, Equip, Unequip and the swap chooser;
+  "Hall of Relics" renamed "Hall of Artifacts"; the payout line counts type ducks and opens the Hall of Ducks.
+- Checked in headless Chrome at 390×844 (mobile, touch) over CDP, with real touch and mouse drags:
+  - a touch swipe moved Pink -> Blue; two mouse drags Blue -> Mint -> Golden; two touches -> Coral;
+    six swipes right stopped at Pink (Prev disabled), twelve left stopped at Black (Next disabled);
+  - the Left key and the Prev arrow each moved one; a vertical touch drag scrolled the panel (239 -> 0)
+    and left the pedestal alone; a real tap on the pedestal Keep turned on Keep for Blue Pearls;
+  - page 390/390, panel body 316/316, gallery 310/310, pedestal on show 265/265, equip row 310/310 in
+    every state; no button under 44 px (after raising the tabs from 36 and the close button from 31×26);
+  - with three test-only relics, five equipped: Equip opened the chooser (focus on Cancel, box 25..365),
+    picking Mint Clock swapped it out; a slot tap offered Unequip; Escape closed it, not the panel;
+  - the forge stash warning showed for Rose, Blue and Mint; no console errors. Desktop 1280×800: gallery
+    capped at 560 px, no overflow.
