@@ -107,11 +107,12 @@ const ECON = (() => {
     const eq = (st.equip == null || st.equip < 0) ? L.tool : st.equip; // the tool in hand, not necessarily the best one owned
     const up = (st.toolUp && st.toolUp[eq]) || { p: 0, s: 0, u: 0 };
     const ul = uniqueLevel(eq, up);
-    const B = ART.activeBonuses(st.artifacts); // only the active copy of each artifact counts: its base bonus plus its perks
+    const B = ART.activeBonuses(st.artifacts, st.artEquip); // only the active copy of each artifact counts (relics only while equipped): its base bonus plus its perks
     return Object.assign({
       echoMult,
       art: B,
-      artMult: B.payout, // payout: the duck's base x1.4 times every active payout perk
+      artMult: B.payout, // global payout: the Pink Duck's base x1.4 times every active global payout perk
+      typeMult: B.typePay, // per pearl type: { blue: 1.4, ... } from the type ducks and their payout perks (a missing type is x1)
       shinyBonus: B.shiny, // the rest add up: +0.1 = +10%
       frenzySecs: FRENZY_SECS * (1 + B.frenzy),
       meterMult: 1 + B.meter,
@@ -130,8 +131,9 @@ const ECON = (() => {
   }
 
   const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
+  const typeMult = (S, kind) => (S.typeMult && S.typeMult[kind]) || 1; // a type duck's payout on its own pearl type
   function popValue(S, combo, frenzy, kind) {
-    return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult;
+    return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
   const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
@@ -144,6 +146,7 @@ const ECON = (() => {
   // - a type helpers cannot hit fills its cap and is never popped, so trySpawn turns its share into Rose;
   // - helpers take the best payout per hit first, so every hittable arrival is popped (none waits forever);
   // - so pops/s = helper hits / mean hits per pop, unless the board runs dry: then pops/s = the spawn rate;
+  // - a type duck multiplies its type's share of the mix (a type helpers cannot hit pops as Rose, so the Rose share pays);
   // - helper pops fill the frenzy meter, so a share of the time is frenzy: double pay, rare types twice as likely, 4x spawns.
   function helperIdle(S, pool, L, shinyOn) {
     const shiny = shinyOn === false ? 1 : 1 + shinyChance(L, S.shinyBonus) * (SHINY_MULT - 1);
@@ -151,7 +154,7 @@ const ECON = (() => {
       const ch = poolChances(pool, L, frenzy), mix = {};
       for (const id in ch) { const k = helperCanHit(id, S.power) ? id : 'pearl'; mix[k] = (mix[k] || 0) + ch[id]; }
       let ev = 0, hits = 0;
-      for (const id in mix) { ev += mix[id] * KIND[id].mult; hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
+      for (const id in mix) { ev += mix[id] * KIND[id].mult * typeMult(S, id); hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
       const pops = S.autoRate > 0 ? Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery) : 0;
       return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
@@ -162,7 +165,7 @@ const ECON = (() => {
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, typeMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 

@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 7;
+const SAVE_VERSION = 8;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -90,6 +90,13 @@ const MIGRATIONS = {
       artifacts[k] = Object.assign({}, e, { copies });
     }
     return Object.assign({}, d, { version: 7, artifacts });
+  },
+  // v7 had no equip slots: every relic worked once owned. Now relics work only while equipped, so every relic the save owns
+  // (one with at least one copy) is equipped, in the Hall of Relics order, up to the 5 slots. Frozen here as of 2026-10-23.
+  7: (d) => {
+    const RELICS = ['rose_lantern', 'blue_compass', 'mint_clock'], SLOTS = 5, src = isObj(d.artifacts) ? d.artifacts : {};
+    const artEquip = RELICS.filter((k) => isObj(src[k]) && Array.isArray(src[k].copies) && src[k].copies.length > 0).slice(0, SLOTS);
+    return Object.assign({}, d, { version: 8, artEquip });
   },
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }

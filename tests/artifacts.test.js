@@ -129,7 +129,8 @@ test('only the active copy counts, and swapping changes the bonuses', () => {
   assert.strictEqual(A.setActive(arts, 'pink_duck', 99), false); assert.strictEqual(A.setActive(arts, 'mint_clock', r.id), false);
   assert.strictEqual(arts.pink_duck.active, r.id);
   A.addCopy(arts, 'mint_clock', 'rare', [{ stat: 'away', value: 0.05 }]);
-  b = A.activeBonuses(arts); assert.ok(near(b.away, 0.1 + 0.2 + 0.05), 'other stats add across artifacts');
+  assert.ok(near(A.activeBonuses(arts, []).away, 0.1), 'a relic that is not equipped counts for nothing');
+  b = A.activeBonuses(arts, ['mint_clock']); assert.ok(near(b.away, 0.1 + 0.2 + 0.05), 'other stats add across artifacts');
   assert.strictEqual(A.setActive(arts, 'pink_duck', 1), true); assert.ok(near(A.payoutMult(arts), 1.4), 'and back, freely');
   assert.strictEqual(A.payoutMult(undefined), 1); assert.strictEqual(A.payoutMult({}), 1); assert.strictEqual(A.payoutMult({ pink_duck: true }), 1, 'the old shape counts for nothing');
 });
@@ -140,6 +141,7 @@ test('the active bonuses reach every hook in stats(): payout, helpers, away, shi
   A.addCopy(st.artifacts, 'pink_duck', 'mythic', [{ stat: 'payout', value: 0.1 }, { stat: 'shiny', value: 0.2 }, { stat: 'frenzy', value: 0.25 }]);
   A.addCopy(st.artifacts, 'mint_clock', 'epic', [{ stat: 'spawn', value: 0.1 }, { stat: 'forge', value: 0.15 }]);
   A.addCopy(st.artifacts, 'rose_lantern', 'common', []); A.addCopy(st.artifacts, 'blue_compass', 'common', []);
+  st.artEquip = ['mint_clock', 'rose_lantern', 'blue_compass'];
   const S1 = E.stats(st), pm = 1.4 * 1.1;
   assert.ok(near(S1.artMult, pm));
   for (const [combo, fr, kind] of [[0, false, 'pearl'], [12, false, 'blue'], [0, true, 'black']]) assert.ok(near(E.popValue(S1, combo, fr, kind) / E.popValue(S0, combo, fr, kind), pm), kind);

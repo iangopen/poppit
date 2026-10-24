@@ -59,7 +59,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   st.col.pearl.popped = pop0; st.col.pearl.sPopped = sp0;
 
   // save v4 (artifacts and Keep); v6 turned owned artifacts into copies
-  ok('SAVE_VERSION is 7 (paid costs and locks came after artifact copies)', G.SAVE_VERSION === 7);
+  ok('SAVE_VERSION is 8 (equip slots came after paid costs and locks)', G.SAVE_VERSION === 8);
   const m = G.migrateSave({ version: 3, sparks: 5, inv: { pearl: 50 } }).save;
   ok('a v3 save migrates with no artifacts and nothing kept', m.version === G.SAVE_VERSION && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
   ok('and loads that way', G.loadState({ version: 3, inv: { pearl: 50 } }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && st.inv.pearl === 50);

@@ -72,7 +72,7 @@ module.exports = ({ G, ok, frames, E, els }) => {
   const line1 = els.artSum.textContent;
   ok('Place swaps the active copy and the stat line follows', st.artifacts.pink_duck.active === m.id && line1.startsWith('On your pedestals: Pink Duck (Mythic). Together: Payouts x' + +(1.4 * (1 + pv)).toFixed(3) + ', Shiny chance +') &&
     /Mythic copy/.test(els.artHalls.innerHTML), line1);
-  A.addCopy(st.artifacts, 'rose_lantern', 'rare', [{ stat: 'away', value: 0.1 }]); G.recalc(); G.updateArts();
+  A.addCopy(st.artifacts, 'rose_lantern', 'rare', [{ stat: 'away', value: 0.1 }]); G.equipArt('rose_lantern'); G.updateArts();
   ok('relics join the top line with their own effects', /Rose Lantern \(Rare\)\. Together: .*Away bonus \+10%, Frenzy meter speed \+25%\.$/.test(els.artSum.textContent), els.artSum.textContent);
 
   // ---- the Hall of Relics tab ----

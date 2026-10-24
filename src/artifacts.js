@@ -5,21 +5,40 @@
 // A copy's roll is stored in the save, so loading never re-rolls.
 const ARTS = (() => {
   const PINK_DUCK_PAYOUT = 1.4; // Ian's value (was 1.25); may change again
+  const TYPE_DUCK_PAYOUT = 1.4; // each type duck's base: the payouts of its own pearl type only
+  const EQUIP_SLOTS = 5; // how many artifacts from a hall with slots (the Hall of Relics) can be equipped at once
+  // one duck per pearl type after Rose. qty: the first craft's cost in kept pearls of that type, from "node tools/sim32.js --ducks"
+  // (2026-10-23): about 2 hours of that type's normal pops (the geometric mean of six checkpoint rates), at least 5, falling with
+  // rarity. Untuned starting points: the sim cannot keep pearls, so these come from pop rates.
+  const TYPE_DUCKS = [
+    { pearl: 'blue', name: 'Blue Duck', pearls: 'Blue Pearl', qty: 1600 },
+    { pearl: 'mint', name: 'Mint Duck', pearls: 'Mint Pearl', qty: 760 },
+    { pearl: 'golden', name: 'Golden Duck', pearls: 'Golden Pearl', qty: 410 },
+    { pearl: 'violet', name: 'Violet Duck', pearls: 'Violet Pearl', qty: 300 },
+    { pearl: 'coral', name: 'Coral Duck', pearls: 'Coral Pearl', qty: 120 },
+    { pearl: 'marble', name: 'Marble Duck', pearls: 'Glass Marble', qty: 36 },
+    { pearl: 'opal', name: 'Opal Duck', pearls: 'Opal Pearl', qty: 22 },
+    { pearl: 'ruby', name: 'Ruby Duck', pearls: 'Ruby Pearl', qty: 12 },
+    { pearl: 'black', name: 'Black Duck', pearls: 'Black Pearl', qty: 10 },
+  ];
   const REFUND_SHARE = 0.4; // scrapping a shelf copy refunds floor(this x what it cost when it was crafted), line by line
   const RELIC_HALL_NAME = 'Hall of Relics'; // one string, easy to rename
-  // halls in display order; the Artifacts panel draws one section per hall
+  // halls in display order; the Artifacts panel draws one section per hall. slots: its artifacts work only while equipped
+  // (at most EQUIP_SLOTS at once); a hall without slots works as soon as it has a copy on the pedestal
   const HALLS = [
-    { id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make every pop pay more.' },
-    { id: 'relics', name: RELIC_HALL_NAME, blurb: 'Relics assembled from forge alloys. They help the game run, not the payouts.' },
+    { id: 'ducks', name: 'Hall of Ducks', blurb: 'Lucky ducks that make pops pay more: the Pink Duck every pop, the others their own pearl type.' },
+    { id: 'relics', name: RELIC_HALL_NAME, blurb: 'Relics assembled from forge alloys. They help the game run, not the payouts. Up to ' + EQUIP_SLOTS + ' can be equipped at once.', slots: true },
   ];
   // cost lines: { kind: <pearl id>, qty } spends normal pearls from the backpack; { kind: 'material', id, qty } spends forge
   // materials (dusts or alloys) from the forge stock. The first craft costs qty; every later one costs
   // ceil(qty x repeatFactor x costGrowth^(copies owned - 1)). repeatFactor 1 and costGrowth 1 = flat.
-  // bonus: { type, value }, value is a multiplier. Payout bonuses multiply together; every other stat adds (value - 1).
+  // bonus: { type, value, scope }, value is a multiplier. Payout bonuses multiply together; every other stat adds (value - 1).
+  // scope (a pearl id, payout only): the bonus, and the copy's payout perks, pay on pops of that type only. No scope = global.
   // Bonus types (and perk stats): payout, shiny (shiny chance), frenzy (frenzy length), away (away bonus rate),
   // forge (forge speed), spawn (spawn rate), meter (how fast the frenzy meter fills).
   const ARTIFACTS = [
     { id: 'pink_duck', hall: 'ducks', name: 'Pink Duck', description: 'Every payout x' + PINK_DUCK_PAYOUT + ', for good.', cost: [{ kind: 'pearl', qty: 10000 }], repeatFactor: 0.25, costGrowth: 1, bonus: { type: 'payout', value: PINK_DUCK_PAYOUT } },
+    ...TYPE_DUCKS.map((d) => ({ id: d.pearl + '_duck', hall: 'ducks', name: d.name, description: d.pearls + ' payouts x' + TYPE_DUCK_PAYOUT + ', for good.', cost: [{ kind: d.pearl, qty: d.qty }], repeatFactor: 0.25, costGrowth: 1, bonus: { type: 'payout', value: TYPE_DUCK_PAYOUT, scope: d.pearl } })),
     { id: 'rose_lantern', hall: 'relics', name: 'Rose Lantern', description: 'The frenzy meter fills 25% faster.', cost: [{ kind: 'material', id: 'rosegold', qty: 2 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'meter', value: 1.25 } },
     { id: 'blue_compass', hall: 'relics', name: 'Blue Compass', description: 'Forge speed x1.3.', cost: [{ kind: 'material', id: 'azure_steel', qty: 2 }, { kind: 'material', id: 'rosegold', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'forge', value: 1.3 } },
     { id: 'mint_clock', hall: 'relics', name: 'Mint Clock', description: 'Away bonus x1.2.', cost: [{ kind: 'material', id: 'mintsilver', qty: 2 }, { kind: 'material', id: 'azure_steel', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'away', value: 1.2 } },
@@ -123,13 +142,39 @@ const ARTS = (() => {
     if (!e || !e.copies.some((c) => c.id === copyId)) return false;
     e.active = copyId; return true;
   }
-  // every active bonus: payout as one multiplier, every other stat as an added fraction (0.25 = +25%)
-  function activeBonuses(arts) {
-    const b = {}; for (const s of STATS) b[s] = 0; b.payout = 1;
+  // ---- equip slots: equipped is the saved list of equipped artifact ids (state.artEquip), in slot order ----
+  const usesSlot = (id) => { const a = byId(id); return !!a && HALLS.some((h) => h.id === a.hall && h.slots); };
+  const owns = (arts, id) => !!activeCopy(arts, id);
+  const isEquipped = (equipped, id) => Array.isArray(equipped) && equipped.includes(id);
+  // an artifact counts when it has a copy on its pedestal and, in a hall with slots, is equipped
+  const applies = (a, arts, equipped) => owns(arts, a.id) && (!usesSlot(a.id) || isEquipped(equipped, a.id));
+  // each returns true when it changed the list, false (and changes nothing) otherwise
+  function equip(equipped, arts, id) {
+    if (!usesSlot(id) || !owns(arts, id) || equipped.includes(id) || equipped.length >= EQUIP_SLOTS) return false;
+    equipped.push(id); return true;
+  }
+  function unequip(equipped, id) { const i = equipped.indexOf(id); if (i < 0) return false; equipped.splice(i, 1); return true; }
+  // puts inId in outId's slot
+  function swap(equipped, arts, outId, inId) {
+    const i = equipped.indexOf(outId);
+    if (i < 0 || !usesSlot(inId) || !owns(arts, inId) || equipped.includes(inId)) return false;
+    equipped[i] = inId; return true;
+  }
+  // untrusted input (a save) -> unique, known, owned slot artifacts, at most EQUIP_SLOTS, in their saved order
+  function equippedFromSave(d, arts) {
+    const out = [];
+    for (const id of Array.isArray(d) ? d : []) if (typeof id === 'string' && out.length < EQUIP_SLOTS && !out.includes(id) && usesSlot(id) && owns(arts, id)) out.push(id);
+    return out;
+  }
+  // every active bonus: payout as one global multiplier, typePay as one multiplier per pearl type (scoped ducks and their
+  // payout perks; a missing type is x1), every other stat as an added fraction (0.25 = +25%)
+  function activeBonuses(arts, equipped) {
+    const b = {}; for (const s of STATS) b[s] = 0; b.payout = 1; b.typePay = {};
     for (const a of ARTIFACTS) {
-      const c = activeCopy(arts, a.id); if (!c) continue;
-      if (a.bonus.type === 'payout') b.payout *= a.bonus.value; else b[a.bonus.type] += a.bonus.value - 1;
-      for (const p of c.perks) { if (p.stat === 'payout') b.payout *= 1 + p.value; else b[p.stat] += p.value; }
+      if (!applies(a, arts, equipped)) continue;
+      const c = activeCopy(arts, a.id), k = a.bonus.scope, pay = (m) => { if (k) b.typePay[k] = (b.typePay[k] || 1) * m; else b.payout *= m; };
+      if (a.bonus.type === 'payout') pay(a.bonus.value); else b[a.bonus.type] += a.bonus.value - 1;
+      for (const p of c.perks) { if (p.stat === 'payout') pay(1 + p.value); else b[p.stat] += p.value; }
     }
     return b;
   }
@@ -173,7 +218,7 @@ const ARTS = (() => {
     }
     return out;
   }
-  return { PINK_DUCK_PAYOUT, REFUND_SHARE, refundOf, scrapBlock, scrap, setLocked, RELIC_HALL_NAME, HALLS, ARTIFACTS, RARITIES, PERKS, STATS, byId, rarityById, perkById, isMat, have, count, activeCopy,
+  return { PINK_DUCK_PAYOUT, TYPE_DUCK_PAYOUT, TYPE_DUCKS, EQUIP_SLOTS, usesSlot, isEquipped, applies, equip, unequip, swap, equippedFromSave, REFUND_SHARE, refundOf, scrapBlock, scrap, setLocked, RELIC_HALL_NAME, HALLS, ARTIFACTS, RARITIES, PERKS, STATS, byId, rarityById, perkById, isMat, have, count, activeCopy,
     craftCost, canCraft, roll, addCopy, craft, setActive, activeBonuses, payoutMult, fromSave };
 })();
 if (typeof module !== 'undefined') module.exports = ARTS;

@@ -314,15 +314,19 @@ const CLOCK_SVG = '<svg viewBox="0 0 64 64" fill="none" stroke="#3a2e1c" stroke-
   '<path d="M21 52 L17 58 M43 52 L47 58"/><circle cx="32" cy="35" r="20" fill="#9fe3c4"/><circle cx="32" cy="35" r="14.5" fill="#fffdf6"/>' +
   '<path d="M32 35 L32 25.5 M32 35 L39 39"/><circle cx="32" cy="35" r="1.8" fill="#3a2e1c" stroke="none"/>' +
   '<path d="M32 22.5 L32 24 M44.5 35 L43 35 M32 47.5 L32 46 M19.5 35 L21 35" stroke-width="2"/><path d="M18 29 C19.5 24.5 23 21.5 27 20.5" stroke="#fff" stroke-width="2" opacity="0.85"/></svg>';
+// a type duck is the Pink Duck's drawing in its pearl's colour (PALETTE in src/world.js), lightened so the ink still reads on Black
+const duckSvg = (kind) => { const c = PALETTE[kind]; return DUCK_SVG.replace('#ff9ec4', 'hsl(' + c[0] + ' ' + c[1] + '% ' + Math.max(36, c[2]) + '%)'); };
 const ART_ICON = { pink_duck: DUCK_SVG, rose_lantern: LANTERN_SVG, blue_compass: COMPASS_SVG, mint_clock: CLOCK_SVG };
+for (const d of ARTS.TYPE_DUCKS) ART_ICON[d.pearl + '_duck'] = duckSvg(d.pearl);
 // the small plinth an active copy stands on
 const PEDESTAL_SVG = '<svg class="ped" viewBox="0 0 120 26" fill="none" stroke="#3a2e1c" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M22 3 L98 3 L93 9.5 L27 9.5 Z" fill="#fff4d6"/><path d="M31 9.5 L89 9.5 L89 17 L31 17 Z" fill="#f2e4c2"/><path d="M18 17 L102 17 L105 23.5 L15 23.5 Z" fill="#e2cf9f"/></svg>';
 // plain words for stats: a perk's name from the data, and the one base-only stat
-const statName = (s) => (ARTS.perkById(s) || { name: s === 'meter' ? 'Frenzy meter speed' : s }).name;
+// a: the artifact, so a type duck's payout reads "Blue Pearl payouts" (its bonus and payout perks pay on that type only)
+const statName = (s, a) => (s === 'payout' && a && a.bonus.scope ? pearlName(a.bonus.scope) + ' payouts' : (ARTS.perkById(s) || { name: s === 'meter' ? 'Frenzy meter speed' : s }).name);
 const pctTxt = (v) => +(v * 100).toFixed(1) + '%';
 const statTxt = (s, v) => (s === 'payout' ? 'x' + +v.toFixed(3) : '+' + pctTxt(v));
-const perkText = (p) => statName(p.stat) + ' +' + pctTxt(p.value);
+const perkText = (p, a) => statName(p.stat, a) + ' +' + pctTxt(p.value);
 // what one copy of an artifact gives: payout as a multiplier (base x every payout perk), other stats as added fractions
 function copyStats(a, c) {
   const o = {}; if (!c) return o;
@@ -337,7 +341,7 @@ function statDiff(a, from, to) {
   return ARTS.STATS.filter((s) => s in f || s in t).map((s) => ({ stat: s, from: s in f ? f[s] : zeroOf(s), to: s in t ? t[s] : zeroOf(s) })).filter((d) => Math.abs(d.from - d.to) > 1e-9);
 }
 // "Placing it: Payouts x1.4 → x1.49, Shiny chance +16% → +0%"
-const placeText = (a, from, to) => { const d = statDiff(a, from, to); return d.length ? 'Placing it: ' + d.map((x) => statName(x.stat) + ' ' + statTxt(x.stat, x.from) + ' → ' + statTxt(x.stat, x.to)).join(', ') : 'Placing it changes no stats'; };
+const placeText = (a, from, to) => { const d = statDiff(a, from, to); return d.length ? 'Placing it: ' + d.map((x) => statName(x.stat, a) + ' ' + statTxt(x.stat, x.from) + ' → ' + statTxt(x.stat, x.to)).join(', ') : 'Placing it changes no stats'; };
 // the odds line, built from the rarity table
 function oddsText() { const tot = ARTS.RARITIES.reduce((n, r) => n + r.weight, 0); return 'Each craft rolls ' + ARTS.RARITIES.map((r) => r.name + ' ' + pctTxt(r.weight / tot)).join(', '); }
 // why the next craft cannot happen, naming the first missing item ('' = it can)
@@ -351,16 +355,18 @@ function craftReason(id) {
   if (state.autoSell && !isKept(miss.kind)) return 'Need ' + short + ' more ' + nm + ': turn on Keep for them in your backpack';
   return 'Need ' + short + ' more ' + nm + ' in your backpack';
 }
-const copyView = (c) => ({ id: c.id, rarity: c.rarity, rarityName: ARTS.rarityById(c.rarity).name, perks: c.perks.map(perkText) });
+const copyView = (c) => ({ id: c.id, rarity: c.rarity, rarityName: ARTS.rarityById(c.rarity).name, perks: c.perks.map((p) => perkText(p, ARTS.byId(c.art))) });
 // rarity rank: 0 for the first (Common) up to the last (Mythic)
 const rarityRank = (id) => Math.max(0, ARTS.RARITIES.findIndex((r) => r.id === id));
 // the top line: every active pedestal and what they do together
 function pedestalLine() {
   const on = ARTS.ARTIFACTS.map((a) => ({ a, c: ARTS.activeCopy(state.artifacts, a.id) })).filter((x) => x.c);
   if (!on.length) return 'Nothing on a pedestal yet. Craft an artifact and it goes on one by itself.';
-  const b = ARTS.activeBonuses(state.artifacts);
+  const b = ARTS.activeBonuses(state.artifacts, state.artEquip);
   const fx = ARTS.STATS.filter((s) => (s === 'payout' ? Math.abs(b.payout - 1) > 1e-9 : b[s] > 1e-9)).map((s) => statName(s) + ' ' + statTxt(s, b[s]));
-  return 'On your pedestals: ' + on.map((x) => x.a.name + ' (' + ARTS.rarityById(x.c.rarity).name + ')').join(', ') + '. Together: ' + fx.join(', ') + '.';
+  for (const t of ECON.PEARLS) if (b.typePay[t.id]) fx.push(t.name + ' payouts ' + statTxt('payout', b.typePay[t.id]));
+  const off = (a) => (ARTS.usesSlot(a.id) && !ARTS.isEquipped(state.artEquip, a.id) ? ', not equipped' : '');
+  return 'On your pedestals: ' + on.map((x) => x.a.name + ' (' + ARTS.rarityById(x.c.rarity).name + off(x.a) + ')').join(', ') + '. Together: ' + (fx.join(', ') || 'nothing yet') + '.';
 }
 let artSig = '', artTab = ARTS.HALLS[0].id, shelfSort = 'best'; // shelfSort: 'best' (rarity, then oldest) or 'new' (newest first)
 // "+1,000 Rose Pearls" or "+1 Azure Steel, +1 Rosegold"; lines that refund 0 are left out ('' = nothing back)
@@ -387,11 +393,17 @@ function shelfView(a, act) {
   for (const c of off) if (c.rarity !== ARTS.RARITIES[0].id) rows.push(Object.assign(copyView(c), { key: String(c.id), newest: c.id, locked: !!c.locked, change: placeText(a, act, c), refund: refundText(ARTS.refundOf(c)) }));
   return rows.sort(shelfSort === 'new' ? (x, y) => y.newest - x.newest : (x, y) => rarityRank(y.rarity) - rarityRank(x.rarity) || (x.stack ? -1 : y.stack ? 1 : x.id - y.id));
 }
+// a relic's slot line: "Equipped (slot 2 of 5)", or why it is not working
+function slotText(id) {
+  if (!ARTS.usesSlot(id)) return '';
+  const i = state.artEquip.indexOf(id);
+  return i >= 0 ? 'Equipped (slot ' + (i + 1) + ' of ' + ARTS.EQUIP_SLOTS + ')' : 'Not equipped: it does nothing until it has a slot' + (state.artEquip.length >= ARTS.EQUIP_SLOTS ? ' (all ' + ARTS.EQUIP_SLOTS + ' are full)' : '');
+}
 function artView() {
   return ARTS.HALLS.map((h) => ({ id: h.id, name: h.name, blurb: h.blurb, items: ARTS.ARTIFACTS.filter((a) => a.hall === h.id).map((a) => {
     const n = ARTS.count(state.artifacts, a.id), act = ARTS.activeCopy(state.artifacts, a.id), reason = craftReason(a.id);
     return {
-      id: a.id, name: a.name, desc: a.description, owned: n > 0, count: n, can: !reason, reason, odds: oddsText(),
+      id: a.id, name: a.name, desc: a.description, owned: n > 0, count: n, can: !reason, reason, odds: oddsText(), slot: n > 0 ? slotText(a.id) : '',
       cost: ARTS.craftCost(a.id, state.artifacts).map((c) => (ARTS.isMat(c) ? { kind: c.id, mat: true, qty: c.qty, have: ARTS.have(c, state.inv, state.forge.stock), kept: true, text: FORGE.costText(ARTS.have(c, state.inv, state.forge.stock), c.qty, c.id) }
         : { kind: c.kind, qty: c.qty, have: state.inv[c.kind] || 0, kept: isKept(c.kind), label: pearlName(c.kind) + 's', unit: 'kept' })),
       active: act ? copyView(act) : null,
@@ -405,7 +417,7 @@ function artCard(a) {
   const r = a.active;
   return '<div class="acard' + (a.owned ? ' own r-' + r.rarity : '') + '"><div class="aicon">' + (ART_ICON[a.id] || '') + '</div>' +
     (a.owned ? PEDESTAL_SVG + '<span class="abadge">On pedestal</span>' : '') + '<h5>' + a.name + '</h5>' +
-    (a.owned ? '<p class="arar">' + r.rarityName + ' copy</p>' : '') + '<p class="ad">' + (a.owned ? 'Base: ' : '') + a.desc + '</p>' +
+    (a.owned ? '<p class="arar">' + r.rarityName + ' copy</p>' : '') + (a.slot ? '<p class="aslot">' + a.slot + '</p>' : '') + '<p class="ad">' + (a.owned ? 'Base: ' : '') + a.desc + '</p>' +
     (a.owned ? (r.perks.length ? '<ul class="aperks">' + r.perks.map((t) => '<li>' + t + '</li>').join('') + '</ul>' : '<p class="anone">No perks</p>') : '') +
     (a.owned ? '<p class="anext">Next copy costs</p>' : '') +
     a.cost.map((c) => '<div class="acost"><span>' + (c.mat ? c.text : whole2(Math.min(c.have, c.qty)) + ' of ' + whole2(c.qty) + ' ' + c.label + ' ' + c.unit) + '</span><span class="abar"><i style="transform:scaleX(' + Math.min(1, c.have / c.qty).toFixed(3) + ')"></i></span>' +
@@ -445,10 +457,16 @@ function craftArtifact(id, rng) {
   const prev = ARTS.activeCopy(state.artifacts, id);
   const c = collapse ? null : ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock, rng);
   if (!c) return null;
+  ARTS.equip(state.artEquip, state.artifacts, id); // a relic takes a free slot by itself; with all slots full it waits unequipped
   recalc(); Snd.chime(rarityRank(c.rarity)); addShake(1 + rarityRank(c.rarity) * 0.6);
   openReveal(id, c, prev);
   artSig = ''; forgeSig = ''; updateArts(); updateForge(); updatePack(); updateHud(0.016); save(); return c;
 }
+// equip slots (relics): each changes state.artEquip through ARTS and returns whether it did; the gallery's equip row will call them
+function equipChanged(ok) { if (ok) { recalc(); artSig = ''; forgeSig = ''; updateArts(); updateForge(); updateHud(0.016); save(); } return ok; }
+const equipArt = (id) => equipChanged(ARTS.equip(state.artEquip, state.artifacts, id));
+const unequipArt = (id) => equipChanged(ARTS.unequip(state.artEquip, id));
+const swapArt = (outId, inId) => equipChanged(ARTS.swap(state.artEquip, state.artifacts, outId, inId));
 // puts an owned copy on its artifact's pedestal (the swap is free)
 function setActiveCopy(id, copyId) {
   if (!ARTS.setActive(state.artifacts, id, copyId)) return false;
@@ -487,7 +505,7 @@ function shelfAction(act, id, key) {
     if (ARTS.scrapBlock(state.artifacts, id, c.id)) return false;
     if (rarityRank(c.rarity) < 2) return !!scrapCopies(id, [c.id]);
     const back = refundText(ARTS.refundOf(c));
-    openConfirm('Scrap this ' + ARTS.rarityById(c.rarity).name + ' ' + a.name + '?', 'It has ' + (c.perks.length ? c.perks.map(perkText).join(', ') : 'no perks') + '. You get ' + (back || 'nothing') + ' back. This cannot be undone.', 'Scrap it', () => scrapCopies(id, [c.id]));
+    openConfirm('Scrap this ' + ARTS.rarityById(c.rarity).name + ' ' + a.name + '?', 'It has ' + (c.perks.length ? c.perks.map((x) => perkText(x, a)).join(', ') : 'no perks') + '. You get ' + (back || 'nothing') + ' back. This cannot be undone.', 'Scrap it', () => scrapCopies(id, [c.id]));
     return true;
   }
   if (act === 'scrapall' && stack && open.length) {
@@ -548,9 +566,9 @@ function revealView() {
   const a = ARTS.byId(rv.id), c = rv.c, diff = statDiff(a, rv.prev, c);
   return {
     art: a.name, rarity: c.rarity, rarityName: ARTS.rarityById(c.rarity).name, first: rv.first, done: rv.done,
-    perks: c.perks.map(perkText), shown: rv.shown,
+    perks: c.perks.map((p) => perkText(p, a)), shown: rv.shown,
     compare: rv.first ? 'Placed on your pedestal: ' + a.description
-      : diff.length ? diff.map((d) => statName(d.stat) + ' ' + statTxt(d.stat, d.to) + ' vs your current ' + statTxt(d.stat, d.from)).join('; ') : 'The same stats as the copy on your pedestal',
+      : diff.length ? diff.map((d) => statName(d.stat, a) + ' ' + statTxt(d.stat, d.to) + ' vs your current ' + statTxt(d.stat, d.from)).join('; ') : 'The same stats as the copy on your pedestal',
   };
 }
 function paintReveal() {
@@ -915,7 +933,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, keep: state.keep, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -963,8 +981,9 @@ function loadState(raw) {
   if (!state.pool.length) state.pool = ['pearl'];
   const dk = objOf(d.keep); // only known ids set to true; anything else is dropped
   state.artifacts = ARTS.fromSave(d.artifacts); // copies and pedestals, clamped: rarities, perks, active copy, known ids
+  state.artEquip = ARTS.equippedFromSave(d.artEquip, state.artifacts); // unique, owned relics, at most EQUIP_SLOTS
   state.keep = {}; for (const t of ECON.PEARLS) if (dk[t.id] === true) state.keep[t.id] = true;
-  state.forge = FORGE.fromSave(d.forge, ARTS.activeBonuses(state.artifacts).forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
+  state.forge = FORGE.fromSave(d.forge, ARTS.activeBonuses(state.artifacts, state.artEquip).forge); // jobs, stock and forge upgrades, clamped; finished jobs are collected by awayBonus or the next frame
   syncTop();
   return 'ok';
 }
@@ -1013,15 +1032,18 @@ function startReason(m) {
   if (!spawning) return nm + ' are not spawning right now: unlock them in the shop or add them to your pool';
   return 'Need ' + whole2(miss.short) + ' more ' + nm + ' in your backpack';
 }
-// the duck stash warning: a Start that would leave fewer pearls than an artifact's next craft needs says so (it never blocks)
+// the duck stash warning, for any pearl type: a Start that would leave fewer pearls of its type than the cheapest next craft
+// (first or repeat) of an artifact made from that type needs says so. It informs and never blocks.
 function stashWarn(m) {
   const p = m.recipe.inputs.find((i) => i.kind === 'pearl'); if (!p) return '';
   const have = state.inv[p.id] || 0; if (have < p.qty) return '';
+  let need = null;
   for (const a of ARTS.ARTIFACTS) {
     const line = ARTS.craftCost(a.id, state.artifacts).find((c) => !ARTS.isMat(c) && c.kind === p.id);
-    if (line && have - p.qty < line.qty) return 'Uses ' + whole2(p.qty) + ' of your ' + whole2(have) + (isKept(p.id) ? ' kept ' : ' ') + pearlName(p.id) + 's (the ' + a.name + ' needs ' + whole2(line.qty) + ')';
+    if (line && (!need || line.qty < need.qty)) need = { a, qty: line.qty };
   }
-  return '';
+  if (!need || have - p.qty >= need.qty) return '';
+  return 'Uses ' + whole2(p.qty) + ' of your ' + whole2(have) + (isKept(p.id) ? ' kept ' : ' ') + pearlName(p.id) + 's (the ' + need.a.name + ' needs ' + whole2(need.qty) + ')';
 }
 const forgeSpeedText = () => { const f = state.forge; return 'Forge speed x' + +f.rate.toFixed(2) + ': level ' + f.lv.speed + (f.frenzy ? ', frenzy x' + FORGE.FRENZY_FACTOR : ''); };
 const FORGE_UPG_DESC = {
@@ -1146,7 +1168,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); updateShelf(); toast('Save erased');
 });
 

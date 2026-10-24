@@ -75,7 +75,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     // ---- the away bonus with an away perk ----
     G.setLv(Object.assign(E.zeroLevels(), { auto: 3, lucky: 2 })); st.autoSell = true;
     const a0 = G.awayBonus(3600).gain;
-    A.addCopy(st.artifacts, 'mint_clock', 'rare', [{ stat: 'away', value: 0.1 }]); G.recalc();
+    A.addCopy(st.artifacts, 'mint_clock', 'rare', [{ stat: 'away', value: 0.1 }]); G.equipArt('mint_clock');
     const a1 = G.awayBonus(3600).gain;
     run.push('Away 1 h: ' + a0.toFixed(0) + ' juice -> ' + a1.toFixed(0) + ' with a Mint Clock (x1.2) and its +10% away perk');
     ok('the away bonus pays the Mint Clock and its away perk: x1.3', near(a1 / a0, 1.3), (a1 / a0).toFixed(4));
