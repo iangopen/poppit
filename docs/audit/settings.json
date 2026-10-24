@@ -1,0 +1,24 @@
+{
+ "label": "settings",
+ "width": 390,
+ "height": 844,
+ "moments": [],
+ "settings": [
+  {
+   "screen": "settings",
+   "file": "settings-390.png",
+   "fx": "Off (reduceFx false)",
+   "page": "390/390",
+   "panel": "316/316",
+   "past": []
+  },
+  {
+   "screen": "stats",
+   "file": "stats-390.png",
+   "text": "Totals | Juice earned | 2.40M | Pearls popped | 71.7K | Shiny pops | 90 | Taps | 18.3K | Time played | 2h 3m | Fresh Batches | Fresh Batches taken | 2 | Flavors | 4 | Fastest run | 12m 22s | Biggest Fresh Batch | +3 Flavors | Best moments | Best single pop | 98.8K juice | Highest combo | 61 | Pops by pearl | Rose Pearl | 48.0K + 40 shiny | Blue Pearl | 12.0K + 30 shiny | Mint Pearl | 5,333 + 20 shiny | Golden Pearl | 3,000 | Violet Pearl | 1,920 | Coral Pearl | 1,333",
+   "page": "390/390",
+   "panel": "316/316",
+   "past": []
+  }
+ ]
+}

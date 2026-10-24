@@ -142,3 +142,11 @@
 - Layout at 360, 390 and 430 px: the HUD column (juice, payout line, goal, toast) never overlaps the hint or the bottom bar,
   no sideways scroll; one overlap found and fixed (the payout line's 44 px hit box under the goal line).
 - Two fixture saves past every threshold show exactly the controls they showed under commit 50de9ac.
+
+## 2026-10-24: Artifacts and Forge gate at 500K, Stats screen, Reduce effects
+
+- Artifacts and the Forge now come with the Fresh Batch box (500K lifetime juice), or with any artifact or forge state, a Keep, or
+  a Fresh Batch. The 3-minute audit count fell from 18 to 16 (11 on screen).
+- Save v9: a stats object (taps, time played, run timer, best pop, highest combo, biggest Fresh Batch, fastest run).
+- Reduce effects in Settings (defaults to the browser's reduced motion): no bursts, shake, floating text or flash; sounds stay.
+- Settings and Stats checked in headless Chrome at 390x844: page 390/390, panels 316/316, nothing past the edge.

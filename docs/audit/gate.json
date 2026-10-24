@@ -1,0 +1,189 @@
+{
+ "label": "gate",
+ "width": 390,
+ "height": 844,
+ "moments": [
+  {
+   "name": "0s",
+   "at": 1,
+   "juice": 0,
+   "file": "gate-0s.png",
+   "total": 2,
+   "onScreen": 2,
+   "goal": "Pop pearls to earn 20 juice for your first upgrade.",
+   "controls": [
+    {
+     "id": "goalX",
+     "name": "Hide this goal",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    }
+   ]
+  },
+  {
+   "name": "first-pop",
+   "at": 2,
+   "juice": 2,
+   "file": "gate-first-pop.png",
+   "total": 3,
+   "onScreen": 3,
+   "goal": "Pop pearls to earn 20 juice for your first upgrade.",
+   "controls": [
+    {
+     "id": "goalX",
+     "name": "Hide this goal",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    }
+   ]
+  },
+  {
+   "name": "first-purchase",
+   "at": 6,
+   "juice": 27,
+   "file": "gate-first-purchase.png",
+   "total": 6,
+   "onScreen": 6,
+   "goal": "Unlock Blue Pearls in the shop. Each pays x7.5.",
+   "controls": [
+    {
+     "id": "goalX",
+     "name": "Hide this goal",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Richer Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Faster Fill",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Combo Window",
+     "onScreen": true
+    }
+   ]
+  },
+  {
+   "name": "3min",
+   "at": 182,
+   "juice": 27339,
+   "file": "gate-3min.png",
+   "total": 16,
+   "onScreen": 11,
+   "goal": "Open Tools (the hammer) and buy the Awl: power 2.",
+   "controls": [
+    {
+     "id": "goalX",
+     "name": "Hide this goal",
+     "onScreen": true
+    },
+    {
+     "id": "poolBtn",
+     "name": "Pearl pool",
+     "onScreen": true
+    },
+    {
+     "id": "setBtn",
+     "name": "Settings",
+     "onScreen": true
+    },
+    {
+     "id": "packBtn",
+     "name": "Backpack",
+     "onScreen": true
+    },
+    {
+     "id": "toolBtn",
+     "name": "Tools",
+     "onScreen": true
+    },
+    {
+     "id": "bookBtn",
+     "name": "Collection book",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Blue Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Mint Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Golden Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Violet Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Richer Pearls",
+     "onScreen": true
+    },
+    {
+     "id": "",
+     "name": "shop: Shiny Hunter",
+     "onScreen": false
+    },
+    {
+     "id": "",
+     "name": "shop: Faster Fill",
+     "onScreen": false
+    },
+    {
+     "id": "",
+     "name": "shop: Combo Window",
+     "onScreen": false
+    },
+    {
+     "id": "",
+     "name": "shop: Frenzy Fuel",
+     "onScreen": false
+    },
+    {
+     "id": "",
+     "name": "shop: Bigger Board",
+     "onScreen": false
+    }
+   ]
+  }
+ ],
+ "firstBuy": "sharp",
+ "levels": "{\"golden\":1,\"sharp\":11,\"lucky\":6,\"spawn\":8,\"combo\":9,\"fuel\":4,\"board\":1,\"mint\":3,\"shiny\":1}",
+ "errors": []
+}
