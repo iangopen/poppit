@@ -5,11 +5,13 @@
 //   node tools/sim32.js --compare       one summary line per variant, profile and player policy
 //   node tools/sim32.js --duck          the player owns a plain Pink Duck (Common, x1.4) from the start (no ducks by default)
 //   node tools/sim32.js --duck=best     the best-case duck instead: a Mythic copy with a top payout perk (+15%), x1.61
+//   node tools/sim32.js --ducks         the Hall of Ducks report: per-type pop rates, suggested duck costs, cycle times with ducks
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
 const E = require('../src/econ.js'), A = require('../src/artifacts.js');
 const CELLS = [120, 252, 440];
 const CAP = {}; E.PEARLS.forEach((p) => { CAP[p.id] = p.cap; });
 const CYCLES = 6, MAX_CYCLE_MIN = 120;
+const TYPE_WIN = 300; // seconds of normal pops behind each per-type rate in the --ducks report (60 s is too noisy for rare types)
 const PROFILES = [['casual', 1.5, 0.3, 1], ['engaged', 2.5, 0.7, 2]]; // label, taps/s, skill, seed
 
 // small seeded generator (mulberry32) so runs can be compared
@@ -31,6 +33,7 @@ const VARIANTS = {
   flavor5: { flavorBonus: 0.05 },
   pinkDuck: { duck: 'plain' }, // same as --duck
   pinkDuckBest: { duck: 'best' }, // same as --duck=best
+  allDucks: { artifacts: A.ARTIFACTS.filter((a) => a.hall === 'ducks').map((a) => a.id) }, // every duck as one plain Common copy
 };
 // the duck the duck flags give: plain is one Common copy (x1.4); best is a Mythic copy whose payout perk is at its top roll (x1.61).
 // Only payout is modelled: a real Mythic also carries two other perks.
@@ -121,6 +124,9 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
   const roseWin = [], roseSnap = () => { const w = roseWin.filter((r) => r[0] > t - 60), juice = win.reduce((a, x) => a + x[1], 0), n = w.length, rj = w.reduce((a, r) => a + r[1], 0);
     return { perMin: n * 60 / Math.min(60, t), juiceEach: n ? rj / n : 0, share: juice > 0 ? rj / juice : 0 }; };
   let roseHelper = null, roseReady = null;
+  // per-type duck stash rates: normal (not shiny) pops of every type over the TYPE_WIN seconds before a checkpoint
+  const typeWin = [], typeSnap = () => { const span = Math.min(TYPE_WIN, t), o = {}; X.PEARLS.forEach((p) => { o[p.id] = 0; }); for (const w of typeWin) if (w[0] > t - TYPE_WIN) o[w[1]]++; for (const k in o) o[k] *= 60 / span; return o; };
+  let typeHelper = null, typeReady = null;
   const black = { at: null, spawnsAfter: 0, expected: 0, spawned: 0, capped: 0, byTap: 0, byHelper: 0, hitsAtUnlock: null, hitsAtEnd: null, powerAtEnd: null };
   const pearls = [], log = [], bought = [], marks = [60, 120, 300, 600, 900, 1200];
   const fill = () => CELLS[st.lv.board];
@@ -168,6 +174,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
       gain += val; income[p.kind] += val; if (val > top.pop) top.pop = val;
       if (p.kind === 'black') black[manual ? 'byTap' : 'byHelper']++;
       if (p.kind === 'pearl' && !p.sh) roseWin.push([t, val]);
+      if (!p.sh) typeWin.push([t, p.kind]);
       if (manual) meter += S.meterMult;
     };
     tapAcc += dt * tapsPerSec * S.toolSpeed * (S.sweep ? 2 : 1);
@@ -185,6 +192,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     if (gain > 0) win.push([t, gain]);
     while (win.length && win[0][0] <= t - 60) win.shift();
     while (roseWin.length && roseWin[0][0] <= t - 60) roseWin.shift();
+    while (typeWin.length && typeWin[0][0] <= t - TYPE_WIN) typeWin.shift();
     const cands = candidates();
     let best = null; for (const c of cands) if (c.c <= sparks && (!best || c.s < best.s)) best = c;
     if (best) { sparks -= best.c; best.f(); if (best.n.startsWith('buy')) bought.push(best.n.slice(4) + '@' + (t / 60).toFixed(1)); }
@@ -196,20 +204,20 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure) {
     for (const c of left) if (c.c > top.cost) top.cost = c.c;
     // awayBonus() in src/ui.js for a 1 hour absence: idle rate at the pool's expected payout, times AWAY_SHARE (half)
     const away1h = () => X.idleRate(X.stats(st), X.PEARLS.map((p) => p.id), st.lv) * 3600 * X.stats(st).awayShare;
-    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); roseHelper = roseSnap(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
+    if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); roseHelper = roseSnap(); typeHelper = typeSnap(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
     if (black.at == null && st.lv.black > 0) { black.at = t / 60; black.hitsAtUnlock = X.hitsNeeded('black', X.stats(st).power); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
-    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); roseReady = roseSnap(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
+    if (ready == null && X.collapseReady(runEarned, st.echoes)) { ready = t; awayReady = away1h(); roseReady = roseSnap(); typeReady = typeSnap(); if (measure) idleReady = helperHours(X, st, pearls, fill(), measure + 1); }
   }
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
   const gainF = ready == null ? 0 : X.collapseGain(runEarned);
   st.echoes += gainF;
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
-  return { furthest, helperAt, roseHelper, roseReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose, measure) {
@@ -218,8 +226,8 @@ function play(v, profile, verbose, measure) {
 }
 function playRun(v, profile, verbose, measure) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
-  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {} };
-  for (const id of v.artifacts || []) A.addCopy(st.artifacts, id, 'common', []); // one Common copy on its pedestal; artifacts are never wiped by Fresh Batch
+  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [] };
+  for (const id of v.artifacts || []) { A.addCopy(st.artifacts, id, 'common', []); A.equip(st.artEquip, st.artifacts, id); } // one Common copy on its pedestal (a relic also takes a free slot); artifacts are never wiped by Fresh Batch
   if (v.duck) A.addCopy(st.artifacts, 'pink_duck', DUCKS[v.duck].rarity, DUCKS[v.duck].perks);
   const out = [];
   for (let c = 0; c < CYCLES; c++) { const r = cycle(X, st, rng, taps, skill, verbose, v.waitMin, measure ? 1000 * seed + 10 * c : 0); out.push(r); if (r.ready == null) break; }
@@ -264,6 +272,46 @@ function report(name, v, verbose) {
     if (verbose) rs.forEach((r, i) => { console.log('\ncycle ' + (i + 1) + ' log:'); r.log.forEach((l) => console.log(l)); });
   }
 }
+// The Hall of Ducks report. The sim cannot keep pearls, so a duck's collection time is its cost over the rate at which its type
+// pops (normal pops, manual and helper, over the TYPE_WIN seconds before each checkpoint, or the whole run if shorter), averaged
+// over DUCK_SEEDS seeds per profile (the reference seed first). Suggested cost: the geometric mean of the six checkpoint rates
+// (two profiles x three checkpoints; the profiles differ up to 10x) x DUCK_TARGET_MIN, two significant figures, at least 5,
+// falling with rarity.
+const DUCK_TARGET_MIN = 120, DUCK_SEEDS = 4;
+function duckReport() {
+  const pad = (x, n) => String(x).padStart(n), padE = (x, n) => String(x).padEnd(n);
+  const ducks = A.ARTIFACTS.filter((a) => a.hall === 'ducks' && a.bonus.scope);
+  const runs = PROFILES.map((p) => play({}, p, false, false));
+  const avg = (xs) => { const o = {}; for (const t of E.PEARLS) o[t.id] = xs.reduce((a, x) => a + (x ? x[t.id] : 0), 0) / xs.length; return o; };
+  const seeded = PROFILES.map((p, i) => [runs[i]].concat([1, 2, 3].slice(0, DUCK_SEEDS - 1).map((k) => play({}, [p[0], p[1], p[2], p[3] + 100 * k], false, false))));
+  const last = (rs) => (rs.length === CYCLES ? rs[CYCLES - 1].typeReady : null);
+  const marks = seeded.map((ss) => [['first helper', avg(ss.map((rs) => rs[0].typeHelper))], ['first Fresh Batch', avg(ss.map((rs) => rs[0].typeReady))], ['C' + CYCLES + ' Fresh Batch', avg(ss.map(last))]]);
+  console.log('# Hall of Ducks report (seeded; normal pops per minute over the ' + TYPE_WIN + ' s before each checkpoint; keeping is not simulated)');
+  console.log('Rates are the mean of ' + DUCK_SEEDS + ' seeds per profile; the checkpoint minutes are the reference seed\'s.\n');
+  for (let i = 0; i < PROFILES.length; i++) console.log(PROFILES[i][0] + ' checkpoints: ' + marks[i].map((m, k) => m[0] + ' ' + f1(k ? (k === 1 ? runs[i][0].ready : runs[i][runs[i].length - 1].ready) / 60 : runs[i][0].helperAt) + ' min').join(', '));
+  console.log('\nPops per minute: casual (helper / first FB / C6), engaged (same)\n');
+  console.log(padE('type', 8) + pad('casual', 26) + pad('engaged', 26));
+  let prev = Infinity; const suggest = {};
+  for (const t of E.PEARLS) {
+    const rates = [].concat(...marks.map((ms) => ms.map((m) => (m[1] ? m[1][t.id] : 0))));
+    console.log(padE(t.id, 8) + pad(rates.slice(0, 3).map((r) => r.toFixed(2)).join(' / '), 26) + pad(rates.slice(3).map((r) => r.toFixed(2)).join(' / '), 26));
+    if (t.id === 'pearl') continue;
+    const nz = rates.filter((r) => r > 0), gm = nz.length ? Math.exp(nz.reduce((a, r) => a + Math.log(r), 0) / nz.length) : 0;
+    let n = Math.max(5, E.sig2(Math.max(1, gm * DUCK_TARGET_MIN)));
+    if (n >= prev) n = Math.max(5, E.sig2(prev * 0.9)); // keep it falling: the next lower two-figure count
+    prev = n; suggest[t.id] = n;
+  }
+  console.log('\nDuck first-craft cost (data) against the suggestion, and minutes to collect it at each checkpoint rate (- = none popped)\n');
+  console.log(padE('duck', 13) + pad('data', 7) + pad('suggest', 9) + pad('casual min', 22) + pad('engaged min', 22));
+  for (const a of ducks) {
+    const k = a.bonus.scope, q = a.cost[0].qty, mins = marks.map((ms) => ms.map((m) => (m[1] && m[1][k] > 0 ? (q / m[1][k]).toFixed(0) : '-')).join(' / '));
+    console.log(padE(a.name, 13) + pad(q, 7) + pad(suggest[k], 9) + pad(mins[0], 22) + pad(mins[1], 22));
+  }
+  console.log('\nCycle times (min, Fresh Batch taken as soon as ready), C1..C' + CYCLES + '\n');
+  for (const [name, v] of [['no ducks', {}], ['Pink Duck only (Common)', VARIANTS.pinkDuck], ['all ' + VARIANTS.allDucks.artifacts.length + ' ducks (Common)', VARIANTS.allDucks]]) {
+    for (const p of PROFILES) { const rs = name === 'no ducks' ? runs[PROFILES.indexOf(p)] : play(v, p, false, false); console.log(padE(name, 28) + padE(p[0], 9) + rs.map((r) => (r.ready == null ? '>' + MAX_CYCLE_MIN : f1(r.minutes))).join(' / ') + '   Flavors ' + rs[rs.length - 1].echoes + ', global payout x ' + rs[rs.length - 1].mult.toFixed(1)); }
+  }
+}
 function compare() {
   console.log('| variant | profile | taken min C1..C6 | Flavors total | payout x | upgrades maxed in C1 | nothing-to-want ignoring Sharp, min C1..C6 | furthest pearl C1..C6 |');
   console.log('|---|---|---|---|---|---|---|---|');
@@ -279,5 +327,6 @@ module.exports = { play, PROFILES, VARIANTS, DUCKS, econ, helperHour }; // tests
 if (require.main === module) {
   const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
   if (arg('compare')) compare();
+  else if (arg('ducks')) duckReport();
   else { const name = arg('variant') || 'baseline'; if (!VARIANTS[name]) { console.error('unknown variant ' + name + '; have: ' + Object.keys(VARIANTS).join(', ')); process.exit(1); } report(name, Object.assign({}, VARIANTS[name], arg('wait') ? { waitMin: +arg('wait') } : {}, arg('duck') ? { duck: arg('duck') === 'best' ? 'best' : 'plain' } : {}), !!arg('log')); }
 }
