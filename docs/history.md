@@ -156,3 +156,16 @@
 - tools/sim32.js --flavors / --flavors-ducks: rule A (live) against lifetime rules B-E over six cycles, three reset strategies over
   3 hours, and early timings. docs/flavor-study.md recommends rule C (lifetime sqrt, ready at +50% of Flavors held): the reset
   habits end 1.2-1.9x apart instead of 3.8-11.7x. No game code changed.
+
+## 2026-10-24: rule C in the game
+
+- src/econ.js: Flavors owed = floor(sqrt(flavorJuice / 1.25M)); a Fresh Batch pays owed minus held and is ready at the 5M floor
+  once the gain is at least max(2, ceil(0.5 x held)). FLAVOR_NEED and FLAVOR_MIN_GAIN are named constants; flavorsOwed,
+  flavorJuiceFor, flavorNeed and collapseProgress are exported.
+- Save v10: state.flavorJuice, grown wherever lifetime grows; the v9 -> v10 step sets max(lifetime, 1.25M x Flavors^2).
+- The Fresh Batch box: "Now: +N Flavors. Ready at +M", a progress bar, and the gate that is further away.
+- Sim: the default plays rule C from src/econ.js; --variant=ruleA reproduces the 2026-10-22 baseline byte for byte.
+  docs/balance-report.md regenerated.
+- The away bonus's frenzy share now counts the meter a frenzy fills itself (tests/away.test.js failed at engaged C6, 0.83). A
+  first attempt (greedy helper hits in both phases) made first-helper checkpoints 6-7x too high and was reverted.
+- tests/flavor_tests.js, new econ tests; audit mode `node tools/audit.js batch` (screenshots in docs/audit/batch-390-*.png).

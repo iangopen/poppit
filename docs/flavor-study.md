@@ -1,5 +1,8 @@
 # Flavor study (2026-10-24)
 
+**Decision (2026-10-24): rule C is adopted and live in the game** (save v10, `flavorJuice`). The sim now plays it by default and rule A
+is `--variant=ruleA`; the `--flavors` output below is unchanged. Current numbers: docs/balance-report.md.
+
 A study only: the game code, saves and tests did not change. All numbers come from `node tools/sim32.js --flavors` and
 `node tools/sim32.js --flavors-ducks=C` (seeded; two runs give identical output; the default sim output is unchanged).
 Each lifetime rule can also be played through the usual report with `--variant=flavorB` to `--variant=flavorE`.

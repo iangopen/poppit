@@ -1,99 +1,76 @@
-Session: Flavor study. A study only: no change to src/, saves or tests.
+Session: rule C is in the game (Flavors from all juice so far), save v10, the Fresh Batch box.
 
 What changed
-- tools/sim32.js, all behind flags (the default output is byte-identical):
-  - variants flavorB to flavorE (lever flavor: { div, exp, need });
-  - cycle() carries lifetime juice and an optional take-policy;
-  - --flavors prints the whole study; --flavors-ducks=C plays rule C with ducks.
-- docs/flavor-study.md: the tables, the recommendation, the exact code changes, the save
-  impact and what the player would notice.
-- CLAUDE.md: the study's location and the open decision.
-
-Rules (all keep the 5M run floor and 10% per Flavor)
-- A: today: floor(sqrt(run / 1.25M)), ready at 5M with a gain of at least 2.
-- B: owed = floor(sqrt(lifetime / 1.25M)), a reset pays owed minus held, at least 2.
-- C: B, ready only once the gain is at least 50% of the Flavors held.
-- D: B, ready only once the gain is at least 100% of the Flavors held.
-- E: B with exponent 0.4 (divisor 883,883, still exactly 2 at the first 5M).
-
-Strategy comparison: Flavors held at 1h / 2h / 3h, then the 3-hour spread
-(best payout over worst; 1.00 = level)
-- A casual: at once 19 / 99 / 273; +100% 82 / 658 / 1316; minute 25 167 / 863 / 3293.
-  Spread 11.67
-- A engaged: at once 137 / 697 / 1853; +100% 1025 / 2050 / 4101; minute 25 338 / 1828 /
-  7101. Spread 3.82
-- B casual: at once 10 / 35 / 67; +100% 32 / 256 / 512; minute 25 133 / 423 / 970.
-  Spread 12.73
-- B engaged: at once 52 / 154 / 296; +100% 448 / 896 / 1792; minute 25 275 / 937 / 2193.
-  Spread 7.20
-- C casual: at once 18 / 216 / 486; +100% 32 / 256 / 512; minute 25 133 / 423 / 953.
-  Spread 1.94
-- C engaged: at once 434 / 977 / 2199; +100% 448 / 896 / 1792; minute 25 275 / 937 /
-  2109. Spread 1.23
-- D casual: at once 32 / 256 / 512; +100% 32 / 256 / 512; minute 25 133 / 266 / 532.
-  Spread 1.04
-- D engaged: at once 448 / 896 / 1792 (stalled); +100% the same (stalled); minute 25
-  275 / 1146 / 1146. Spread 1.56
-- E casual: at once 10 / 30 / 52; +100% 16 / 64 / 64; minute 25 46 / 89 / 144.
-  Spread 2.48
-- E engaged: at once 37 / 87 / 139; +100% 96 / 96 / 192; minute 25 77 / 153 / 253.
-  Spread 1.77
-- "Stalled": a run passed 120 minutes without a Fresh Batch.
-
-Early timings, Fresh Batch at once: C1 ready, then C2 to C6 (minutes)
-(* under 4 min, ^ longer than the cycle before)
-- A casual: 12.8, 12.9^, 10.2, 8.6, 6.6, 5.4
-- A engaged: 6.0, 3.6*, 3.4*, 3.0*, 2.2*, 2.3*^
-- B casual: 12.8, 12.9^, 11.7, 9.0, 7.9, 7.3
-- B engaged: 6.0, 3.7*, 3.8*^, 3.3*, 3.0*, 2.5*
-- C casual: 12.8, 12.9^, 11.7, 9.2, 7.7, 6.4
-- C engaged: 6.0, 3.7*, 4.0*^ (3.98), 4.5^, 3.9*, 3.0*
-- D casual: 12.8, 12.9^, 12.2, 10.4, 9.1, 10.9^
-- D engaged: 6.0, 3.8*, 5.5^, 4.6, 4.5, 6.3^
-- E casual: 12.8, 13.2^, 12.0, 10.0, 8.0, 8.2^
-- E engaged: 6.0, 3.8*, 4.4^, 3.7*, 3.3*, 3.3*
-
-Rule C with ducks (Flavors at 1h / 2h / 3h, spread at 3h)
-- Pink Duck casual: 63 / 485 / 1092, 113 / 454 / 908, 172 / 584 / 1314. Spread 1.44
-- Pink Duck engaged: 649 / 1464 / 3294, 620 / 1241 / 2482, 387 / 1304 / 2937. Spread 1.33
-- All ten casual: 213 / 1080 / 1620, 192 / 770 / 1540, 249 / 827 / 1864. Spread 1.21
-- All ten engaged: 853 / 2887 / 4331, 621 / 2486 / 2486, 499 / 1827 / 4114. Spread 1.74
-- Ducks shorten runs (all ten: engaged runs 2 to 3 min) but the spread stays small.
-
-Recommendation: rule C
-- The reset habit no longer decides the outcome: 1.2 to 1.9 apart, against 3.8 to 11.7
-  today. It avoids D's walls (stalls, longer runs) and E's flatness (x6 to x26 after 3 h).
-- The first Fresh Batch is unchanged (2 Flavors at 5M), and so is the 10% per Flavor.
-- It does not fix engaged cycles under 4 minutes; that needs a run-length lever.
-- Saves: add flavorJuice with a v9 to v10 migration, flavorJuice = max(lifetime,
-  1.25M x Flavors^2), so every existing Flavor stays valid. Without it, players would
-  need 9 to 10 times their lifetime juice before the next Fresh Batch; with it,
-  2.25 to 2.33 times.
-- Exact code changes are listed in docs/flavor-study.md.
-
-Found while studying (reported, not fixed)
-- Selling backpack pearls adds their value to the current run's juice, and kept stacks
-  survive a Fresh Batch. Pearls kept over several runs and sold in one raise that run's
-  Flavors under today's rule. The away bonus counts as run juice the same way.
+- src/econ.js: Flavors owed = floor(sqrt(flavorJuice / 1.25M)). A Fresh Batch pays owed minus
+  held. It is ready at 5M run juice once the gain is at least max(2, ceil(0.5 x held)).
+  - Named constants: COLLAPSE_GAIN_DIV 1.25M, FLAVOR_NEED 0.5, FLAVOR_MIN_GAIN 2.
+  - New helpers: flavorsOwed, flavorJuiceFor, flavorNeed, collapseProgress.
+- Save v10: state.flavorJuice grows wherever lifetime grows (auto-sold pops, sold pearls, away
+  bonus). The v9 -> v10 step sets it to max(lifetime, 1.25M x Flavors^2). It is clamped on
+  load, carried by save codes, import, backup and Restore, kept by Fresh Batch, and zeroed by
+  Reset save. The lifetime stat is unchanged.
+- Fresh Batch box: "Now: +67 Flavors. Ready at +150 (half your 300).", a progress bar, then
+  whichever gate is further away ("Earn 84.4B more juice to reach +150." or "Earn 5.00M juice
+  in this run to unlock it (3.00M so far)."). The goal line now names the +2 Flavors.
+- Sim: the default plays the game's rule from src/econ.js (checkCopies compares the two on a
+  grid). --variant=ruleA is the old rule and reproduces the 2026-10-22 baseline byte for byte.
+  docs/balance-report.md is regenerated (rule C and A, with and without the Pink Duck).
+- Away bonus fix (needed for npm test): tests/away.test.js failed at the engaged C6 checkpoint
+  (0.83, limit 0.85), because rule C ends runs later. Cause: helperIdle counted the frenzy meter
+  as filled only at the normal pop rate. The game keeps filling it during a frenzy at 4x.
+  The frenzy share now counts that. When helpers are the limit it equals the old formula, and
+  every rule A checkpoint is unchanged.
+- Tests: new rule C tests in tests/econ32.test.js and a new tests/flavor_tests.js. Every test
+  that forces a Fresh Batch now also sets flavorJuice.
+- tools/audit.js batch: screenshots of the box at 390x844 (docs/audit/batch-390-*.png).
 
 Verification
-- npm run build: built index.html (unchanged). npm test: exit 0; node test files 0
-  failures (32, 19, 9, 21, 8, 2); the harness prints ALL PASSED.
-- npm run sim twice: identical, and identical to the saved earlier output.
-- --flavors twice: identical. --flavors-ducks=C twice: identical.
-- git diff --stat for the session: only tools/sim32.js, docs/ and CLAUDE.md.
+- npm run build: "built index.html". npm test: exit 0; node test files 36, 19, 9, 21, 8 and 2
+  pass, 0 fail; the harness prints ALL PASSED (430 PASS lines).
+- npm run sim twice: identical output.
+- Six cycles, rule C, no duck (minutes; Flavors held after each cycle):
+  - casual 12.8 / 12.9 / 11.7 / 9.2 / 7.7 / 6.4; Flavors 2 / 4 / 6 / 12 / 18 / 27 (x3.7)
+  - engaged 6.0 / 3.7 / 4.0 / 4.5 / 3.9 / 3.0; Flavors 3 / 5 / 9 / 14 / 21 / 37 (x4.7)
+  - rule A was casual 19 Flavors (x2.9), engaged 19 (x2.9)
+- With the Pink Duck: casual 11.0 / 8.6 / 6.5 / 5.5 / 5.5 / 5.1 (27 Flavors); engaged
+  3.6 / 3.3 / 2.7 / 2.9 / 3.1 / 3.0 (23 Flavors).
+- First Fresh Batch: casual ready at 12.8 min with +2 Flavors (6.0M run juice). Engaged ready
+  at 6.0 min (5.97) with +3, not +2: its first run ends on a Black pop at 14.0M run juice. Rule A
+  gave the same +3, so nothing changed there.
+- Harness, a v9 save with 300 Flavors and 3.0e10 lifetime juice:
+  - after migration: flavorJuice 1.125e11, owed 300, gain +0, gain needed +150, 1.406e11
+    more juice to go (gate at 2.531e11), progress 0%, not ready, button disabled
+  - 25%: gain +43, bar 25%, not ready; 50%: +82, 50%, not ready; 99.9%: +149, 99%, not ready
+  - a click before the gate does nothing
+  - at the gate: +150, 100%, ready, "Fresh Batch for +150 Flavors"; taking it gives 450 Flavors,
+    flavorJuice kept, next need +225, progress 0%
+- Kept pearls sold in run 3, one stack per run, or all in run 4 all end at the same flavor juice
+  and 6 Flavors.
+- Migration checks: 0 Flavors (3M lifetime) -> 3M; 15 Flavors (1.2e8) -> 2.81e8; 15 Flavors
+  (5e8) -> 5e8; 300 Flavors -> 1.125e11.
+- 390x844, headless Chrome: the page is 390/390 and the box 356/356 in all three states (new
+  player, not ready, ready). Every part of the box has scrollWidth = clientWidth, nothing sticks
+  out, and there are no console errors. I looked at the screenshots: both states read cleanly.
 
 Choices I made
-- Lifetime in the sim is the sum of run juice (the sim takes no away bonus and sells
-  nothing).
-- "At least 50% / 100% of held" is rounded up, and never below 2.
-- The +100% strategy under A waits for the run's own gain to reach the Flavors held.
-- A strategy run stops if a single run passes 120 minutes without a Fresh Batch, and is
-  marked "stalled".
-- Rule C was picked for the duck runs: it has the smallest spread without stalling.
-- One seed per profile, like the other reports.
+- The study's call shape collapseGain(run, echoes, life) is kept; the gain ignores run.
+- The bar shows the slower of the two gates, counted from the juice the Flavors held stand for,
+  so it starts at 0 after a Fresh Batch or the migration.
+- "(half your N)" shows only when the need is above 2. With 0 Flavors and 3M juice the box says
+  "+1 Flavor" now, which is honest under rule C.
+- The not-ready line names only the gate that is further away, because run juice feeds both.
+- A loaded flavorJuice is not raised to lifetime; only the migration does that.
+- The away frenzy-share fix is a model fix, not a balance dial. CLAUDE.md says to fix the
+  formula, not the target. A first attempt (greedy helper hits) made first-helper checkpoints
+  6-7x too high and was reverted before this one.
+- Commits: game, tests and sim are one commit, because each needs the others to pass npm test.
+  The audit tool and the docs are separate commits.
 
 Still open
-- The Flavors decision (Ian): adopt rule C, or keep today's rule.
-- Engaged cycles under 4 minutes (any rule), and how hard ducks stack.
-- The real-phone check.
+- Engaged cycles near 4 min: C2 3.7, C3 3.997, C5 3.9, C6 3.0 (4 of 5 under, against 5 of 5
+  under rule A). This needs a run-length lever.
+- Ducks stack hard: with the Pink Duck every engaged cycle is 2.7-3.6 min.
+- With --wait=25, rule C runs from C5 take 29 and 44 min: the gate is not met by minute 25.
+- Away calibration at four mid-run checkpoints the test does not check: 0.60-0.80 (frenzy
+  limited by helper hits, so helpers cherry-pick; not modelled).
+- Real-phone check of the box, and whether players understand "Ready at +M".
