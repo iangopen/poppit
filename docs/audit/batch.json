@@ -1,0 +1,74 @@
+{
+ "label": "batch",
+ "width": 390,
+ "height": 844,
+ "moments": [],
+ "batch": [
+  {
+   "state": "new",
+   "file": "batch-390-new.png",
+   "page": "390/390",
+   "box": "356/356",
+   "parts": [
+    "collapseNow 324/324",
+    "collapseBar 320/320",
+    "collapseText 324/324",
+    "collapseBtn 322/322"
+   ],
+   "past": [],
+   "hidden": false,
+   "box_px": "356x145",
+   "text": [
+    "Now: +1 Flavor. Ready at +2.",
+    "Earn 5.00M juice in this run to unlock it (3.00M so far).",
+    "Fresh Batch"
+   ],
+   "bar": "60",
+   "disabled": true
+  },
+  {
+   "state": "notready",
+   "file": "batch-390-notready.png",
+   "page": "390/390",
+   "box": "356/356",
+   "parts": [
+    "collapseNow 324/324",
+    "collapseBar 320/320",
+    "collapseText 324/324",
+    "collapseBtn 322/322"
+   ],
+   "past": [],
+   "hidden": false,
+   "box_px": "356x145",
+   "text": [
+    "Now: +67 Flavors. Ready at +150 (half your 300).",
+    "Earn 84.4B more juice to reach +150.",
+    "Fresh Batch"
+   ],
+   "bar": "40",
+   "disabled": true
+  },
+  {
+   "state": "ready",
+   "file": "batch-390-ready.png",
+   "page": "390/390",
+   "box": "356/356",
+   "parts": [
+    "collapseNow 324/324",
+    "collapseBar 320/320",
+    "collapseText 324/324",
+    "collapseBtn 322/322"
+   ],
+   "past": [],
+   "hidden": false,
+   "box_px": "356x163",
+   "text": [
+    "Now: +156 Flavors. Ready at +150 (half your 300).",
+    "Pops the whole board and restarts. Each Flavor adds 10% to every payout, permanently.",
+    "Fresh Batch for +156 Flavors"
+   ],
+   "bar": "100",
+   "disabled": false
+  }
+ ]
+}

@@ -1,6 +1,7 @@
 // Onboarding audit: a fresh profile in headless Chrome at WxH (default 390x844, mobile, touch). At four moments (0 s, after the
 // first pop, after the first purchase, about 3 minutes of play) it saves a screenshot and lists every visible interactive control.
 //   node tools/audit.js <label> [width] [height]     writes docs/audit/<label>-<moment>.png and docs/audit/<label>.json
+//   node tools/audit.js batch                         the Fresh Batch box at 390x844: new player, 300 Flavors not ready, ready
 // Play is a small in-page bot: about 2.5 hits a second on the best live pearl (as tools/sim32.js picks), and the cheapest affordable
 // shop row bought by a real tap. The first pop is a real touch on a pearl. Needs Chrome; no npm dependencies (Node 22+ WebSocket).
 const { spawn } = require('child_process'), http = require('http'), fs = require('fs'), path = require('path'), os = require('os');
@@ -94,6 +95,32 @@ async function settingsChecks() {
   fs.writeFileSync(path.join(OUT, 'stats-390-end.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   return out;
 }
+// node tools/audit.js batch: the Fresh Batch box (rule C) on three saves at 390x844: a new player at 3M juice, 300 Flavors 40% of
+// the way to the gate (not ready) and 300 Flavors past it (ready). Screenshots, the box's text and widths.
+async function batchChecks() {
+  const out = [], col = Object.fromEntries(['pearl', 'blue', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black'].map((k, i) => [k, { found: i < 6, popped: i < 6 ? 400 : 0, sFound: false, sPopped: 0 }]));
+  const base = { version: 10, lv: { sharp: 20, lucky: 6, mint: 3, golden: 2, violet: 1, coral: 1, spawn: 8, combo: 6 }, col, pool: ['pearl', 'blue', 'mint', 'golden', 'violet', 'coral'], autoSell: true };
+  const from = 1.25e6 * 300 * 300, to = 1.25e6 * 450 * 450;
+  const saves = [['new', { version: 10, sparks: 3e6, runEarned: 3e6, lifetime: 3e6, flavorJuice: 3e6, lv: { sharp: 20, lucky: 6, mint: 3 }, col, pool: ['pearl', 'blue', 'mint'] }],
+    ['notready', Object.assign({}, base, { sparks: 8e6, runEarned: 8e6, lifetime: 3e10, flavorJuice: from + 0.4 * (to - from), echoes: 300, collapses: 6 })],
+    ['ready', Object.assign({}, base, { sparks: 8e6, runEarned: 8e6, lifetime: 3e10, flavorJuice: to * 1.03, echoes: 300, collapses: 6 })]];
+  for (const [name, save] of saves) {
+    await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/package.json' }); await sleep(500);
+    await ev('localStorage.clear(); localStorage.setItem("poppit.v1", ' + JSON.stringify(JSON.stringify(Object.assign({ t: Date.now() }, save))) + '); true');
+    await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(1800);
+    await ev('document.getElementById("collapseBox").scrollIntoView({ block: "center" }); true'); await sleep(300);
+    const m = await ev(`(() => { const d = document.documentElement, b = document.getElementById('collapseBox'), r = b.getBoundingClientRect();
+      const past = [...b.querySelectorAll('*')].filter((e) => { const q = e.getBoundingClientRect(); return q.width && (q.right > r.right + 0.5 || q.left < r.left - 0.5); }).map((e) => e.id || e.tagName);
+      const ids = ['collapseNow', 'collapseBar', 'collapseText', 'collapseBtn'], w = ids.map((id) => { const e = document.getElementById(id); return id + ' ' + e.scrollWidth + '/' + e.clientWidth; });
+      return { page: d.scrollWidth + '/' + d.clientWidth, box: b.scrollWidth + '/' + b.clientWidth, parts: w, past, hidden: b.hidden, box_px: Math.round(r.width) + 'x' + Math.round(r.height),
+        text: ids.filter((id) => id !== 'collapseBar').map((id) => document.getElementById(id).textContent), bar: document.getElementById('collapseBar').getAttribute('aria-valuenow'), disabled: document.getElementById('collapseBtn').disabled }; })()`);
+    const file = 'batch-390-' + name + '.png';
+    fs.writeFileSync(path.join(OUT, file), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    out.push(Object.assign({ state: name, file }, m));
+    console.log(name + ': page ' + m.page + ', box ' + m.box + ' (' + m.box_px + '), ' + m.parts.join(', ') + ', past the box: ' + (m.past.join(' ') || 'none') + ', bar ' + m.bar + '%, button disabled ' + m.disabled + ' -> ' + file + '\n  ' + m.text.join(' | '));
+  }
+  return out;
+}
 (async () => {
   const result = { label, width: +W, height: +H, moments: [] };
   try {
@@ -106,6 +133,7 @@ async function settingsChecks() {
     await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(2000);
     if (label === 'layout') { result.layout = await layoutChecks(); return; }
     if (label === 'settings') { result.settings = await settingsChecks(); return; }
+    if (label === 'batch') { result.batch = await batchChecks(); return; }
     const t0 = Date.now();
     const moment = async (name) => {
       await sleep(400);
