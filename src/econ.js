@@ -86,7 +86,10 @@ const ECON = (() => {
   const FLAVOR_BONUS = 0.1; // each Flavor adds this much to every payout (was 0.2 until 2026-10-22: artifacts now stack on top)
   const COST_SCALE = 2.5; // global dial: how long each upgrade takes to afford
   const COLLAPSE_MIN_RUN = 5000000; // run juice needed before a Fresh Batch
-  const COLLAPSE_GAIN_DIV = 1250000; // Flavors = floor(sqrt(run / this)): exactly 2 at the floor, so cycles shrink slowly
+  // Rule C (2026-10-24): the Flavors a player is owed come from all the juice ever earned (the saved flavorJuice), not one run.
+  const COLLAPSE_GAIN_DIV = 1250000; // Flavors owed = floor(sqrt(flavor juice / this)): exactly 2 at the first 5M
+  const FLAVOR_NEED = 0.5; // a Fresh Batch is ready only once its gain is at least this share of the Flavors held (rounded up)
+  const FLAVOR_MIN_GAIN = 2; // ... and never less than this
 
   const zeroLevels = () => { const o = {}; for (const k in UPG) o[k] = 0; return o; };
   const cost = (id, lvl) => Math.ceil(UPG[id].base * COST_SCALE * Math.pow(UPG[id].grow, lvl));
@@ -136,8 +139,20 @@ const ECON = (() => {
     return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
-  const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
-  const collapseReady = (run) => run >= COLLAPSE_MIN_RUN && collapseGain(run) >= 2;
+  // life = the flavor juice, this run included. The 1e-9 keeps an exact 2 from flooring to 1 after rounding.
+  const flavorsOwed = (life) => Math.floor(Math.sqrt(Math.max(0, life) / COLLAPSE_GAIN_DIV) + 1e-9);
+  const flavorJuiceFor = (flavors) => COLLAPSE_GAIN_DIV * flavors * flavors; // the flavor juice at which that many Flavors are owed
+  const flavorNeed = (echoes) => Math.max(FLAVOR_MIN_GAIN, Math.ceil(FLAVOR_NEED * echoes)); // the smallest gain a Fresh Batch pays
+  // a Fresh Batch pays what is owed minus the Flavors held; run is unused here, kept so every caller passes the same three values
+  const collapseGain = (run, echoes, life) => Math.max(0, flavorsOwed(life) - (echoes || 0));
+  const collapseReady = (run, echoes, life) => run >= COLLAPSE_MIN_RUN && collapseGain(run, echoes, life) >= flavorNeed(echoes || 0);
+  // how far the Fresh Batch gate is, 0..1: the slower of the run floor and the flavor juice for the smallest gain, counted from the
+  // juice the Flavors held stand for (so a migrated save, and a save right after a Fresh Batch, start near 0)
+  function collapseProgress(run, echoes, life) {
+    if (collapseReady(run, echoes, life)) return 1;
+    const e = echoes || 0, from = flavorJuiceFor(e), to = flavorJuiceFor(e + flavorNeed(e));
+    return Math.min(1, Math.max(0, run / COLLAPSE_MIN_RUN), Math.max(0, (life - from) / (to - from)));
+  }
   // Helpers (stepAuto in src/world.js, and the sim) only hit pearls they can break in three hits,
   // and pick the one with the best payout per remaining hit; -1 means "never".
   const helperCanHit = (kind, power) => KIND[kind].hp <= power * 3;
@@ -159,13 +174,16 @@ const ECON = (() => {
       return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
     const normal = phase(false), fr = phase(true);
-    // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds
-    const frenzyShare = normal.pops > 0 ? Math.min(1, (S.frenzySecs || FRENZY_SECS) * normal.pops * HELPER_METER * (S.meterMult || 1) / S.frenzyNeed) : 0;
+    // the meter keeps filling during a frenzy, at the frenzy's pop rate (src/world.js), and a new frenzy starts with the next pop
+    // after one ends once the meter is full. One cycle is a frenzy plus the normal time that fills what the frenzy left to fill.
+    // When helpers are the limit in both phases this is frenzySecs x pops x HELPER_METER / frenzyNeed, as before 2026-10-24.
+    const secs = S.frenzySecs || FRENZY_SECS, fill = HELPER_METER * (S.meterMult || 1), left = Math.max(0, S.frenzyNeed - secs * fr.pops * fill);
+    const frenzyShare = normal.pops > 0 ? secs / (secs + left / (normal.pops * fill)) : 0;
     return Object.assign({}, normal, { frenzy: fr, frenzyShare, rate: (1 - frenzyShare) * normal.rate + frenzyShare * fr.rate });
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, typeMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, FLAVOR_NEED, FLAVOR_MIN_GAIN, flavorsOwed, flavorJuiceFor, flavorNeed, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, typeMult, popValue, hitsNeeded, collapseGain, collapseReady, collapseProgress, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 

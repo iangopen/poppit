@@ -44,7 +44,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
 
   // Fresh Batch keeps kept stacks and owned artifacts
   st.inv.pearl = 7000; st.invV.pearl = 7000; st.inv.blue = 4; st.invV.blue = 40; st.inv['pearl:s'] = 2;
-  st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; const echo0 = st.echoes; G.updateShelf();
+  st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); const echo0 = st.echoes; G.updateShelf();
   els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
   ok('Fresh Batch keeps the kept Rose stacks and the duck, and wipes the rest', !G.getCollapse() && st.echoes > echo0 && st.inv.pearl === 7000 && st.inv['pearl:s'] === 2 && st.inv.blue === 0 && ducks() === 1 && st.keep.pearl === true && G.getS().artMult === A.PINK_DUCK_PAYOUT, 'pearl ' + st.inv.pearl + ', blue ' + st.inv.blue);
 
@@ -59,7 +59,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   st.lifetime = life0; st.keep = keep0; st.echoes = ech0; st.collapses = col0;
 
   // save v4 (artifacts and Keep); v6 turned owned artifacts into copies
-  ok('SAVE_VERSION is 9 (the stats object came after equip slots)', G.SAVE_VERSION === 9);
+  ok('SAVE_VERSION is 10 (the flavor juice came after the stats object)', G.SAVE_VERSION === 10);
   const m = G.migrateSave({ version: 3, sparks: 5, inv: { pearl: 50 } }).save;
   ok('a v3 save migrates with no artifacts and nothing kept', m.version === G.SAVE_VERSION && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
   ok('and loads that way', G.loadState({ version: 3, inv: { pearl: 50 } }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && st.inv.pearl === 50);

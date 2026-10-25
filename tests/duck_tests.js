@@ -84,7 +84,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     ok('a loaded list is clamped: unknown, unowned, duplicate and duck ids dropped, five at most',
       G.loadState({ version: 8, artifacts: JSON.parse(artJ), artEquip: ['ghost', 'mint_clock', 'mint_clock', 'blue_duck', fx[0].id, 'rose_lantern', fx[1].id, fx[2].id, 'blue_compass'] }) === 'ok' && st.artEquip.join() === ['mint_clock', fx[0].id, 'rose_lantern', fx[1].id, fx[2].id].join(), st.artEquip.join());
     G.loadState(G.decodeSave(code));
-    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.updateShelf();
+    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); G.updateShelf();
     els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
     ok('Fresh Batch keeps the equipped relics and the ducks', !G.getCollapse() && JSON.stringify(st.artEquip) === eqJ && JSON.stringify(st.artifacts) === artJ && near(G.getS().typeMult.blue, 1.4));
     G.ARTS.ARTIFACTS.splice(G.ARTS.ARTIFACTS.indexOf(fx[0]), 3);

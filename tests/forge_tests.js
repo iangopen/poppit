@@ -50,7 +50,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     // Fresh Batch keeps the forge; saves carry it; Reset forgets it
     st.forge.stock = { rose_dust: 5, blue_dust: 1 }; st.inv.pearl = 300; G.forgeStart(0, 'rose_dust');
     const keep = JSON.stringify(F.toSave(st.forge, now));
-    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.updateShelf(); els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
+    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); G.updateShelf(); els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
     ok('Fresh Batch keeps forge jobs, stock and upgrades', st.collapses > 0 && JSON.stringify(F.toSave(st.forge, now)) === keep, keep);
     const code = G.encodeSave(G.serialize()); G.loadState({ version: 5 });
     ok('a save code carries the forge', G.loadState(G.decodeSave(code)) === 'ok' && JSON.stringify(F.toSave(st.forge, now)) === keep);

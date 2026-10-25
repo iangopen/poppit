@@ -93,7 +93,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
 
     // Fresh Batch and loads refresh the open panel
     els.forge.hidden = false; G.updateForge(); const stockBefore = els.fStock.textContent;
-    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.updateShelf(); els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
+    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); G.updateShelf(); els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
     ok('Fresh Batch keeps the panel open and its stock', els.forge.hidden === false && els.fStock.textContent === stockBefore && st.forge.lv.speed === 1, els.fStock.textContent);
     const code = G.encodeSave(Object.assign(G.serialize(), { forge: { slots: [null], stock: { blue_dust: 7 }, lv: { speed: 3, slot: 0 } } }));
     ok('importing a save leaves no stale numbers in the open panel', G.checkImport(code) === 'ok' && G.applyImport() === true && els.fStock.textContent === 'Blue Dust 7' && els.fSpeed.textContent === 'Forge speed x1.75: level 3', els.fStock.textContent + ' / ' + els.fSpeed.textContent);

@@ -92,7 +92,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     G.save(); ok('alloys survive a save and reload', G.loadState(JSON.parse(store['poppit.v1'])) === 'ok' && JSON.stringify(st.forge.stock) === stockJ, JSON.stringify(st.forge.stock) + ' ' + store['poppit.v1'].slice(0, 0));
     const code2 = G.encodeSave(G.serialize()); G.loadState({ version: 6 });
     ok('and a save code', G.loadState(G.decodeSave(code2)) === 'ok' && JSON.stringify(st.forge.stock) === stockJ);
-    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.updateShelf();
+    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); G.updateShelf();
     els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
     ok('Fresh Batch keeps every copy, the pedestals and the alloys', !G.getCollapse() && JSON.stringify(st.artifacts) === artJson && JSON.stringify(st.forge.stock) === stockJ && near(G.getS().artMult, 1.4));
     els.resetBtn.fire('click', {}); els.resetBtn.fire('click', {});

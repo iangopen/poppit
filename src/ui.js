@@ -85,13 +85,27 @@ function updateShelf() {
   for (const g in SHOP_GROUPS) $(SHOP_GROUPS[g]).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === g && !rows[id].el.hidden); // no empty headings
   $('shopEmpty').hidden = Object.values(SHOP_GROUPS).some((h) => !$(h).hidden); // an empty shop says why
   syncShopDots();
-  const run = state.runEarned, ready = ECON.collapseReady(run), btn = $('collapseBtn');
-  $('collapseBox').hidden = !(REVEAL.collapse() || ready);
-  btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
-  if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
-  $('collapseText').textContent = ready
-    ? 'Pops the whole board and restarts. Each Flavor adds ' + Math.round(ECON.FLAVOR_BONUS * 100) + '% to every payout, permanently.'
-    : 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run to unlock a Fresh Batch (' + fmt(run) + ' so far).';
+  const v = batchView(), btn = $('collapseBtn');
+  $('collapseBox').hidden = !(REVEAL.collapse() || v.ready);
+  btn.disabled = !v.ready || !!collapse; btn.classList.toggle('ready', v.ready && !collapse);
+  if (!armed) btn.textContent = v.ready ? 'Fresh Batch for +' + fmt(v.gain) + ' Flavors' : 'Fresh Batch';
+  setLbl('collapseNow', v.now); setLbl('collapseText', v.text);
+  const bar = $('collapseBar'), pct = Math.floor(v.progress * 100 + 1e-9);
+  bar.firstElementChild.style.transform = 'scaleX(' + v.progress.toFixed(3) + ')';
+  if (lblCache.collapsePct !== pct) { lblCache.collapsePct = pct; bar.setAttribute('aria-valuenow', pct); }
+}
+// The Fresh Batch box, rule C: the gain is the Flavors owed for all the juice so far minus the Flavors held, and it is ready at the
+// run floor once that gain is at least half the Flavors held (at least 2). It says what the player would get now and what is missing.
+function batchView() {
+  const run = state.runEarned, e = state.echoes, life = state.flavorJuice;
+  const ready = ECON.collapseReady(run, e, life), gain = ECON.collapseGain(run, e, life), need = ECON.flavorNeed(e);
+  const now = 'Now: +' + fmt(gain) + ' Flavor' + (gain === 1 ? '' : 's') + '. Ready at +' + fmt(need) + (e > 0 && need > ECON.FLAVOR_MIN_GAIN ? ' (half your ' + fmt(e) + ')' : '') + '.';
+  // run juice counts toward both gates, so name the one that is further away
+  const more = Math.max(0, ECON.flavorJuiceFor(e + need) - life), runLeft = Math.max(0, ECON.COLLAPSE_MIN_RUN - run);
+  const text = ready ? 'Pops the whole board and restarts. Each Flavor adds ' + Math.round(ECON.FLAVOR_BONUS * 100) + '% to every payout, permanently.'
+    : more > runLeft ? 'Earn ' + fmt(Math.ceil(more)) + ' more juice to reach +' + fmt(need) + '.'
+    : 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in this run to unlock it (' + fmt(run) + ' so far).';
+  return { ready, gain, need, more, progress: ECON.collapseProgress(run, e, life), now, text };
 }
 function buy(id) {
   const u = ECON.UPG[id], lvl = state.lv[id];
@@ -243,7 +257,7 @@ function updatePack() {
 }
 // pay for items, shared by "sell all" and "sell some"
 function cashIn(total) {
-  state.sparks += total; state.runEarned += total; state.lifetime += total; incomeLog.push([time, total]);
+  state.sparks += total; state.runEarned += total; state.lifetime += total; state.flavorJuice += total; incomeLog.push([time, total]);
   const bump = $('sparks'); bump.classList.remove('bump'); void bump.offsetWidth; bump.classList.add('bump');
 }
 function sellSome(kind, q) {
@@ -383,7 +397,7 @@ const GOALS = [
   { id: 'blue', text: () => 'Unlock Blue Pearls in the shop. Each pays x' + fmtX(ECON.KIND.blue.mult) + '.', done: () => state.col.blue.found || veteran() },
   { id: 'tool', text: () => 'Open Tools (the hammer) and buy the ' + ECON.TOOLS[1].name + ': power ' + ECON.TOOLS[1].power + '.', done: () => state.owned.some((o, i) => o && i > 0) || veteran() },
   { id: 'helpers', text: () => 'Unlock Coral Pearls, then hire Helpers to pop for you.', done: () => state.lv.auto > 0 || veteran() },
-  { id: 'fresh', text: () => 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run, then take a Fresh Batch.', done: veteran },
+  { id: 'fresh', text: () => 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run, then take a Fresh Batch for +' + ECON.FLAVOR_MIN_GAIN + ' Flavors.', done: veteran },
   { id: 'duck', when: () => DOCK_GATES.arts(), text: () => 'Keep Rose Pearls in your backpack and craft the Pink Duck in Artifacts.', done: ownsArtifact },
   { id: 'forge', when: () => DOCK_GATES.forge(), text: () => 'Start a job in the Forge: it turns kept pearls into dust.', done: forgeUsed },
 ];
@@ -1142,13 +1156,13 @@ function drawPedestal(ts) {
 /* ----- fresh batch (prestige) ----- */
 let armed = false, armTimer = 0;
 $('collapseBtn').addEventListener('click', () => {
-  if (!ECON.collapseReady(state.runEarned) || collapse) return;
+  if (!ECON.collapseReady(state.runEarned, state.echoes, state.flavorJuice) || collapse) return;
   if (!armed) {
     armed = true; $('collapseBtn').textContent = 'Click again to confirm';
     clearTimeout(armTimer); armTimer = setTimeout(() => { armed = false; updateShelf(); }, 3500); return;
   }
   armed = false; clearTimeout(armTimer);
-  collapse = { t: 0, dur: 1.9, gain: ECON.collapseGain(state.runEarned) };
+  collapse = { t: 0, dur: 1.9, gain: ECON.collapseGain(state.runEarned, state.echoes, state.flavorJuice) };
   Snd.batch(); toast('Pop everything for a fresh batch!'); updateShelf();
   // a wave of free pops sweeps outward from the middle of the board
   const cx = W / 2, cy = H / 2, far = Math.max(1, Math.hypot(W / 2, H / 2));
@@ -1222,7 +1236,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, flavorJuice: state.flavorJuice, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -1253,7 +1267,7 @@ function statsFromSave(o) {
 function loadState(raw) {
   const m = migrateSave(raw); if (!m.save) return m.error;
   const d = m.save, lv = objOf(d.lv), toolUp = objOf(d.toolUp), inv = objOf(d.inv), invV = objOf(d.invV), seen = objOf(d.seen), dc = objOf(d.col);
-  state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime);
+  state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime); state.flavorJuice = fin(d.flavorJuice); // the juice behind the Flavors owed (rule C)
   state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
   state.reduceFx = typeof d.reduceFx === 'boolean' ? d.reduceFx : calm; // no saved choice: the browser's reduced-motion setting
   state.stats = statsFromSave(d.stats);
@@ -1288,7 +1302,7 @@ function awayBonus(secs) {
   recalc();
   const jobs = forgeCatchUp(), helped = S.autoRate > 0 && secs >= 20; // secs >= 20 also refuses NaN from a broken save time
   const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * S.awayShare : 0; // what helpers alone would earn, halved (more with an away bonus artifact)
-  if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; }
+  if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; state.flavorJuice += gain; }
   const done = jobs + (jobs === 1 ? ' forge job' : ' forge jobs') + ' finished';
   if (gain > 0) toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice' + (jobs ? ' and ' + done : '') + ' while you were away');
   else if (jobs) toast('Welcome back! ' + done[0].toUpperCase() + done.slice(1) + ' while you were away');
@@ -1482,7 +1496,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); resetGoals(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
 });
 

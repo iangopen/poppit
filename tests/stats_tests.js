@@ -44,7 +44,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
 
     // ---- migration ----
     const m = G.migrateSave({ version: 8, sparks: 5, lv: {} }).save;
-    ok('a v8 save migrates to v9 with every counter at zero and its run not timed', m.version === 9 && G.SAVE_VERSION === 9 && JSON.stringify(m.stats) === '{"taps":0,"secs":0,"runSecs":-1,"bestPop":0,"bestCombo":0,"bestGain":0,"fastest":0}');
+    ok('a v8 save migrates through v9 with every counter at zero and its run not timed', m.version === G.SAVE_VERSION && JSON.stringify(m.stats) === '{"taps":0,"secs":0,"runSecs":-1,"bestPop":0,"bestCombo":0,"bestGain":0,"fastest":0}');
     load({ version: 8, lv: {}, reduceFx: 'yes' });
     ok('and loads with them; a missing Reduce effects takes the browser default (off here)', st.stats.taps === 0 && st.stats.runSecs === -1 && st.reduceFx === false);
     load({ version: 9, lv: {}, stats: { taps: -3, secs: 'x', runSecs: 1e99, bestPop: 7.5, bestCombo: 2.7, bestGain: NaN, fastest: -1 }, reduceFx: true });
@@ -53,10 +53,10 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     // ---- Fresh Batch keeps them and records the run ----
     const S9 = { taps: 40, secs: 900, runSecs: 600, bestPop: 1234, bestCombo: 33, bestGain: 0, fastest: 0 };
     load({ version: 9, lv: {}, stats: S9, reduceFx: false }); fresh();
-    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.updateShelf(); const gain = E.collapseGain(st.runEarned);
+    st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); G.updateShelf(); const gain = E.collapseGain(st.runEarned, st.echoes, st.flavorJuice);
     els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
     ok('Fresh Batch keeps the stats and records the biggest gain and the fastest run', !G.getCollapse() && st.stats.taps === 40 && st.stats.bestPop === 1234 && st.stats.bestCombo === 33 && st.stats.bestGain === gain && st.stats.fastest >= 600 && st.stats.fastest < 604 && st.stats.runSecs >= 0 && st.stats.runSecs < 4, JSON.stringify(st.stats));
-    load({ version: 9, lv: {}, stats: Object.assign({}, S9, { runSecs: -1 }) }); fresh(); st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; G.updateShelf();
+    load({ version: 9, lv: {}, stats: Object.assign({}, S9, { runSecs: -1 }) }); fresh(); st.runEarned = E.COLLAPSE_MIN_RUN * 1.2; st.flavorJuice = E.flavorJuiceFor(st.echoes + E.flavorNeed(st.echoes)); G.updateShelf();
     els.collapseBtn.fire('click', {}); els.collapseBtn.fire('click', {}); frames(160);
     ok('a run that was not timed (from before stats) never counts as the fastest', st.stats.fastest === 0 && st.stats.runSecs >= 0 && st.stats.runSecs < 4);
 

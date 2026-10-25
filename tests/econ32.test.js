@@ -69,7 +69,8 @@ function hittableRate(S, pool, L) {
     const pops = Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery);
     return { mix, pops, rate: pops * S.popBase * S.echoMult * ev * (1 + E.shinyChance(L) * (E.SHINY_MULT - 1)) * (frenzy ? 2 : 1) };
   };
-  const n = one(false), f = one(true), share = Math.min(1, 7 * n.pops * 0.25 / S.frenzyNeed);
+  // the meter fills during a frenzy too (at the frenzy's pop rate); the normal phase fills the rest, then the next frenzy starts
+  const n = one(false), f = one(true), left = Math.max(0, S.frenzyNeed - 7 * f.pops * 0.25), share = 7 / (7 + left / (n.pops * 0.25));
   return { mix: n.mix, rate: (1 - share) * n.rate + share * f.rate };
 }
 test('away bonus equals the helper-hittable expected value at three tool powers', () => {
@@ -87,6 +88,16 @@ test('away bonus equals the helper-hittable expected value at three tool powers'
   assert.ok(E.idleRate(S, pool, lv, false) < E.idleRate(S, pool, lv), 'shinies off pays a little less');
   assert.strictEqual(E.FRENZY_SECS, 7); assert.strictEqual(E.HELPER_METER, 0.25);
 });
+test('the frenzy share counts the meter a frenzy fills itself, and is unchanged when helpers are the limit in both phases', () => {
+  const S = { autoRate: 1e9, spawnEvery: 0.5, power: 1, popBase: 1, echoMult: 1, frenzyNeed: 100, frenzySecs: 7, meterMult: 1, shinyBonus: 0 };
+  const lv = E.zeroLevels(), h = E.helperIdle(S, ['pearl'], lv); // spawn-limited: 2 pops/s normal, 8 in a frenzy
+  // a frenzy fills 7 x 8 x 0.25 = 14 of 100, the normal phase the other 86 at 0.5/s = 172 s: share 7 / 179
+  assert.ok(Math.abs(h.pops - 2) < 1e-12 && Math.abs(h.frenzy.pops - 8) < 1e-12 && Math.abs(h.frenzyShare - 7 / 179) < 1e-12, String(h.frenzyShare));
+  const T = Object.assign({}, S, { autoRate: 1 }), g = E.helperIdle(T, ['pearl'], lv); // helpers are the limit: 1 pop/s in both phases
+  assert.ok(Math.abs(g.frenzyShare - 7 * 1 * 0.25 / 100) < 1e-12, 'the old formula: ' + g.frenzyShare);
+  const R = Object.assign({}, S, { frenzyNeed: 10 }); // a frenzy fills its own meter: back to back
+  assert.strictEqual(E.helperIdle(R, ['pearl'], lv).frenzyShare, 1);
+});
 test('a pool of only unhittable types pays nothing for them: only the Roses the caps turn them into', () => {
   const lv = Object.assign(gates(), { auto: 4 }), S = E.stats({ lv, echoes: 0, equip: 0, toolUp: {} }); // Steel Pin, power 1
   assert.deepStrictEqual(E.effectivePool(['ruby', 'black'], lv), ['ruby', 'black']);
@@ -103,8 +114,46 @@ test('idle rate grows with a richer hittable pool', () => {
 });
 test('global dials', () => {
   assert.strictEqual(E.COST_SCALE, 2.5); assert.strictEqual(E.COLLAPSE_MIN_RUN, 5e6); assert.strictEqual(E.UPG.auto.base, 45000);
-  assert.strictEqual(E.collapseGain(5e6), 2); assert.strictEqual(E.collapseGain(11.25e6), 3);
-  assert.strictEqual(E.collapseReady(5e6 - 1), false); assert.strictEqual(E.collapseReady(5e6), true);
+  assert.strictEqual(E.collapseGain(5e6, 0, 5e6), 2); assert.strictEqual(E.collapseGain(11.25e6, 0, 11.25e6), 3);
+  assert.strictEqual(E.collapseReady(5e6 - 1, 0, 5e6 - 1), false); assert.strictEqual(E.collapseReady(5e6, 0, 5e6), true);
+});
+// ---- rule C (2026-10-24): Flavors owed = floor(sqrt(flavor juice / 1.25M)); a Fresh Batch pays owed minus held, and is ready at the
+// 5M run floor once that gain is at least half the Flavors held, rounded up, never below 2 ----
+test('rule C: the constants and the Flavors owed', () => {
+  assert.strictEqual(E.COLLAPSE_GAIN_DIV, 1.25e6); assert.strictEqual(E.FLAVOR_NEED, 0.5); assert.strictEqual(E.FLAVOR_MIN_GAIN, 2);
+  for (let n = 0; n <= 5000; n++) {
+    assert.strictEqual(E.flavorsOwed(E.flavorJuiceFor(n)), n, 'exactly ' + n + ' at its own juice');
+    if (n > 0) assert.strictEqual(E.flavorsOwed(E.flavorJuiceFor(n) * (1 - 1e-6)), n - 1, 'one less just below it');
+  }
+  assert.strictEqual(E.flavorsOwed(0), 0); assert.strictEqual(E.flavorsOwed(-5), 0);
+});
+test('rule C: the gain and the readiness gate at several held-Flavor counts', () => {
+  const needs = { 0: 2, 1: 2, 2: 2, 3: 2, 4: 2, 5: 3, 15: 8, 41: 21, 300: 150, 4871: 2436 };
+  for (const k in needs) {
+    const e = +k, need = needs[k], at = E.flavorJuiceFor(e + need), below = E.flavorJuiceFor(e + need - 1), run = 6e6;
+    assert.strictEqual(E.flavorNeed(e), need, 'the gain needed with ' + e + ' held');
+    assert.strictEqual(E.collapseGain(run, e, at), need); assert.strictEqual(E.collapseReady(run, e, at), true, e + ' held: ready at +' + need);
+    assert.strictEqual(E.collapseGain(run, e, below), need - 1); assert.strictEqual(E.collapseReady(run, e, below), false, e + ' held: not ready at +' + (need - 1));
+    assert.strictEqual(E.collapseReady(E.COLLAPSE_MIN_RUN - 1, e, at * 4), false, e + ' held: never below the run floor');
+    assert.strictEqual(E.collapseReady(E.COLLAPSE_MIN_RUN, e, at), true);
+  }
+  // the minimum of 2: with nothing or one Flavor held, a gain of 1 is never enough
+  assert.strictEqual(E.collapseReady(6e6, 0, E.flavorJuiceFor(1)), false); assert.strictEqual(E.collapseReady(6e6, 1, E.flavorJuiceFor(2)), false);
+  assert.strictEqual(E.collapseReady(6e6, 1, E.flavorJuiceFor(3)), true);
+  // more held than owed (a hand-edited save): the gain is 0, never negative
+  assert.strictEqual(E.collapseGain(6e6, 50, E.flavorJuiceFor(10)), 0);
+  // the first Fresh Batch is unchanged: 2 Flavors at the 5M floor, 3 at 11.25M
+  assert.strictEqual(E.collapseGain(5e6, 0, 5e6), 2); assert.strictEqual(E.collapseGain(11.25e6, 0, 11.25e6), 3);
+});
+test('rule C: progress toward the gate is the slower of the run floor and the flavor juice', () => {
+  assert.strictEqual(E.collapseProgress(0, 0, 0), 0);
+  assert.strictEqual(E.collapseProgress(2.5e6, 0, 2.5e6), 0.5);
+  assert.strictEqual(E.collapseProgress(5e6, 0, 5e6), 1);
+  const from = E.flavorJuiceFor(300), to = E.flavorJuiceFor(450);
+  assert.strictEqual(E.collapseProgress(6e6, 300, from), 0, 'a save right after its migration starts at 0');
+  assert.ok(Math.abs(E.collapseProgress(6e6, 300, (from + to) / 2) - 0.5) < 1e-12, 'halfway in juice is halfway');
+  assert.strictEqual(E.collapseProgress(1e6, 300, to), 0.2, 'the run floor holds it back');
+  assert.strictEqual(E.collapseProgress(6e6, 300, to), 1);
 });
 // ---- pool lock: a type can only be switched off once the next type up has its unlock maxed ----
 const maxed = () => { const lv = E.zeroLevels(); for (const id of ['lucky', 'golden', 'mint', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black']) lv[id] = E.UPG[id].max; return lv; };
@@ -178,7 +227,7 @@ test('the 2026-10-22 pacing dials: 10% per Flavor, Black at base 55,000 with fir
   assert.strictEqual(E.stats({ lv: E.zeroLevels(), echoes: 7, equip: -1, toolUp: {} }).echoMult, 1 + 0.1 * 7);
   assert.strictEqual(E.UPG.black.base, 55000); assert.strictEqual(E.cost('black', 0), Math.ceil(55000 * E.COST_SCALE));
   assert.strictEqual(E.NEW_BASE.black, 0.8); assert.strictEqual(E.typeWeight('black', Object.assign(E.zeroLevels(), { black: 1 })), 0.8);
-  assert.strictEqual(E.COLLAPSE_MIN_RUN, 5e6); assert.strictEqual(E.collapseReady(5e6), true); assert.strictEqual(E.collapseReady(5e6 - 1), false);
+  assert.strictEqual(E.COLLAPSE_MIN_RUN, 5e6); assert.strictEqual(E.collapseReady(5e6, 0, 5e6), true); assert.strictEqual(E.collapseReady(5e6 - 1, 0, 5e6 - 1), false);
   const A = require('../src/artifacts.js'), { DUCKS } = require('../tools/sim32.js'), mult = (d) => A.payoutMult({ pink_duck: { copies: [Object.assign({ id: 1 }, DUCKS[d])], active: 1 } });
   assert.ok(Math.abs(mult('plain') - 1.4) < 1e-12 && Math.abs(mult('best') - 1.61) < 1e-12, 'the sim ducks are x1.4 and x1.61');
 });

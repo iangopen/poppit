@@ -1,5 +1,6 @@
 // Pacing sim: plays several Fresh Batch cycles per player profile. Seeded, so two runs print the same thing.
-//   node tools/sim32.js                 baseline (the live numbers in src/econ.js)
+//   node tools/sim32.js                 baseline (the live numbers and the live Flavor rule, rule C, from src/econ.js)
+//   node tools/sim32.js --variant=ruleA the Flavor rule before 2026-10-24 (Flavors from one run's juice), for comparison
 //   node tools/sim32.js --variant=NAME  one tuning option from VARIANTS below (nothing in src/ changes)
 //   node tools/sim32.js --wait=25       the player keeps playing until minute 25 even if Fresh Batch is ready sooner
 //   node tools/sim32.js --compare       one summary line per variant, profile and player policy
@@ -23,20 +24,21 @@ function mulberry32(a) {
 }
 
 // Tuning options for docs/balance-report.md. Each overrides only the levers it names; the sim never edits src/econ.js.
-// minRun may depend on Flavors (echoes); gain replaces collapseGain(run); base and max override an upgrade's base cost or max level;
+// minRun may depend on Flavors (echoes); gain(run) plays a run rule (rule A) instead of the live lifetime rule; base and max override an upgrade's base cost or max level;
 // flavorBonus replaces FLAVOR_BONUS (what each Flavor adds to every payout); artifacts lists artifact ids owned from the start;
 // newBase overrides first-level spawn weights in NEW_BASE (set on ECON's own table for the run, then restored).
 const VARIANTS = {
   baseline: {},
   oldDials: { flavorBonus: 0.2, base: { black: 60000 }, newBase: { black: 0.15 } }, // the dials before 2026-10-22, for before / after
   scaledFloor: { minRun: (e) => E.COLLAPSE_MIN_RUN * (1 + E.FLAVOR_BONUS * e) }, // the floor rises with the Flavor payout multiplier
-  moreFlavors: { gain: (run) => Math.floor(Math.sqrt(run / 312500)) }, // 4 Flavors at the floor instead of 2
+  ruleA: { gain: (run) => Math.floor(Math.sqrt(run / E.COLLAPSE_GAIN_DIV)) }, // the live rule until 2026-10-24: Flavors from this run's juice alone
+  moreFlavors: { gain: (run) => Math.floor(Math.sqrt(run / 312500)) }, // a run rule with 4 Flavors at the floor instead of 2
   moreTuneLevels: { max: { combo: 20, fuel: 8, spawn: 18, lucky: 12 } },
   flavor20: { flavorBonus: 0.2 }, // each Flavor adds 20% (the old value) instead of 10%
   flavor5: { flavorBonus: 0.05 },
   pinkDuck: { duck: 'plain' }, // same as --duck
   pinkDuckBest: { duck: 'best' }, // same as --duck=best
-  // the Flavor study (docs/flavor-study.md): lifetime rules B-E; A (the live rule) is baseline
+  // the Flavor study (docs/flavor-study.md): lifetime rules B-E against rule A (ruleA); C is the live rule since 2026-10-24
   flavorB: { flavor: { div: 1.25e6, exp: 0.5, need: 0 } },
   flavorC: { flavor: { div: 1.25e6, exp: 0.5, need: 0.5 } },
   flavorD: { flavor: { div: 1.25e6, exp: 0.5, need: 1 } },
@@ -61,9 +63,12 @@ function econ(v) {
   // owed minus the Flavors already held, and is ready at the run floor once that gain is at least max(2, ceil(need x Flavors held)).
   // life = lifetime juice including this run. The 1e-9 keeps an exact 2.0 from flooring to 1 after pow's rounding.
   const LF = v.flavor, owed = LF ? (life) => Math.floor(Math.pow(Math.max(0, life) / LF.div, LF.exp) + 1e-9) : null;
-  const collapseGain = LF ? (run, echoes, life) => Math.max(0, owed(life) - echoes) : v.gain || E.collapseGain;
+  // Without a lever the sim plays the game's rule: ECON's collapseGain and flavorNeed (only the run floor can be swapped by minRun).
+  // A run rule (v.gain, e.g. rule A): Flavors = gain(run juice), ready at the floor with a gain of at least 2.
+  const collapseGain = LF ? (run, echoes, life) => Math.max(0, owed(life) - echoes) : v.gain ? (run) => v.gain(run) : E.collapseGain;
   const collapseReady = LF ? (run, echoes, life) => run >= minRun(echoes) && collapseGain(run, echoes, life) >= Math.max(2, Math.ceil(LF.need * echoes - 1e-9))
-    : (run, echoes) => run >= minRun(echoes) && collapseGain(run) >= 2;
+    : v.gain ? (run, echoes) => run >= minRun(echoes) && v.gain(run) >= 2
+    : (run, echoes, life) => run >= minRun(echoes) && E.collapseGain(run, echoes, life) >= E.flavorNeed(echoes);
   const FLAVOR_BONUS = v.flavorBonus != null ? v.flavorBonus : E.FLAVOR_BONUS;
   const stats = (st) => Object.assign(E.stats(st), { echoMult: 1 + FLAVOR_BONUS * st.echoes });
   return Object.assign({}, E, { UPG, cost, toolUpCost, toolPrice, uniqueCost, collapseGain, collapseReady, minRun, FLAVOR_BONUS, stats });
@@ -76,7 +81,9 @@ function checkCopies() {
     if (E.TOOLS[i].unique) for (let l = 0; l < E.TOOLS[i].unique.max; l++) if (X.uniqueCost(i, l) !== E.uniqueCost(i, l)) throw new Error('sim uniqueCost copy drifted');
     for (let l = 0; l < E.TOOL_UP_MAX; l++) for (const k of ['power', 'speed']) if (X.toolUpCost(i, k, l) !== E.toolUpCost(i, k, l)) throw new Error('sim toolUpCost copy drifted');
   }
-  for (const r of [0, 5e4, 1.2e6, 3e7]) if (X.collapseReady(r, 0) !== E.collapseReady(r)) throw new Error('sim collapseReady copy drifted');
+  for (const r of [0, 5e4, 1.2e6, 5e6, 3e7]) for (const e of [0, 2, 15, 300]) for (const life of [r, r + E.flavorJuiceFor(e), E.flavorJuiceFor(e + E.flavorNeed(e))]) {
+    if (X.collapseReady(r, e, life) !== E.collapseReady(r, e, life) || X.collapseGain(r, e, life) !== E.collapseGain(r, e, life)) throw new Error('sim Fresh Batch rule drifted');
+  }
   const st = { lv: E.zeroLevels(), echoes: 7, equip: -1, toolUp: {} }; if (X.stats(st).echoMult !== E.stats(st).echoMult) throw new Error('sim echoMult copy drifted');
 }
 
@@ -345,9 +352,9 @@ function earlyReport() {
   }
 }
 /* ----- The Flavor study (--flavors): docs/flavor-study.md. Report only. ----- */
-const FLAVOR_RULES = [['A', 'baseline', 'live rule: floor(sqrt(run / 1.25M)), ready at 5M run juice with a gain of at least 2'],
+const FLAVOR_RULES = [['A', 'ruleA', 'the rule until 2026-10-24: floor(sqrt(run / 1.25M)), ready at 5M run juice with a gain of at least 2'],
   ['B', 'flavorB', 'lifetime: owed floor(sqrt(lifetime / 1.25M)), pays the difference, at least 2'],
-  ['C', 'flavorC', 'B, and ready only once the gain is at least 50% of the Flavors held'],
+  ['C', 'flavorC', 'B, and ready only once the gain is at least 50% of the Flavors held (the live rule since 2026-10-24)'],
   ['D', 'flavorD', 'B, and ready only once the gain is at least 100% of the Flavors held'],
   ['E', 'flavorE', 'B with exponent 0.4: owed floor((lifetime / ' + Math.round(5e6 / Math.pow(2, 2.5)) + ')^0.4), still 2 at the first 5M']];
 const STRATEGIES = [['at once', null, 0], ['+100%', (g, e) => g >= e, 0], ['minute 25', null, 25]];

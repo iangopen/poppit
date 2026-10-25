@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 10;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -101,6 +101,14 @@ const MIGRATIONS = {
   // v8 had no stats object: every new counter starts at zero. The run in progress is not timed (runSecs -1), so a run that began
   // before this version can never count as the fastest Fresh Batch. Reduce effects is absent, so it takes the browser's default.
   8: (d) => Object.assign({}, d, { version: 9, stats: { taps: 0, secs: 0, runSecs: -1, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 } }),
+  // v9 earned Flavors from one run's juice (rule A). Rule C owes floor(sqrt(flavorJuice / 1.25M)) for all the juice so far, so the
+  // flavor juice starts at max(lifetime, 1.25M x Flavors^2): every Flavor held stays owed, and the next Fresh Batch is the same step
+  // a player at that count faces. 1.25M is COLLAPSE_GAIN_DIV, frozen here as of 2026-10-24. Bad numbers count as 0 (loadState clamps).
+  9: (d) => {
+    const num = (x) => { const n = +x; return Number.isFinite(n) && n > 0 ? n : 0; };
+    const e = Math.floor(num(d.echoes));
+    return Object.assign({}, d, { version: 10, flavorJuice: Math.max(num(d.lifetime), 1250000 * e * e) });
+  },
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {

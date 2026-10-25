@@ -13,7 +13,9 @@ const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { 
 // seconds (-1 = not timed: a save from before stats started mid-run), the best single pop, the highest combo, the biggest Fresh Batch
 // (Flavors) and the fastest Fresh Batch run (seconds, 0 = none yet). Kept through Fresh Batch; Reset save starts them again.
 const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 });
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
+// flavorJuice grows with every juice gain (pops, sales, the away bonus), like lifetime; the Flavors owed come from it
+// (ECON.flavorsOwed). Kept through Fresh Batch; Reset save starts it at 0. A v9 save gets it from its migration.
+const state = { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
@@ -175,7 +177,7 @@ function radiusOf(p) { return PR * 0.74 * (isBig(p.kind) ? 1.1 : 1); }
 function award(val, x, y, col, big, kind) {
   // popped pearls go into the backpack; juice only arrives when they are sold
   kind = kind || 'pearl'; state.seen[kind] = true;
-  if (state.autoSell && !isKept(kind)) { state.sparks += val; state.runEarned += val; state.lifetime += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
+  if (state.autoSell && !isKept(kind)) { state.sparks += val; state.runEarned += val; state.lifetime += val; state.flavorJuice += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
   else { state.inv[kind] = (state.inv[kind] || 0) + 1; state.invV[kind] = (state.invV[kind] || 0) + val; } // auto-sell off, or a kept type: into the backpack
   floatText(x, y - PR * 0.9, '+' + fmtV(val), 'hsl(' + col[0] + ',' + Math.min(95, col[1]) + '%,' + Math.max(28, col[2] - 12) + '%)', big ? 24 : clamp(PR * 0.55, 13, 19));
   motes(x, y, clamp(Math.round(2 + Math.log2(val + 1)), 2, 6) + (big ? 3 : 0), col, !state.autoSell || isKept(kind));

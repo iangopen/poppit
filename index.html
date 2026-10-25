@@ -138,6 +138,9 @@ body {
 @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(240, 40, 108, 0.45); } 100% { box-shadow: 0 0 0 14px rgba(240, 40, 108, 0); } }
 #collapseBox { padding: 12px 16px 16px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
 #collapseBox p { margin: 0; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+#collapseBox #collapseNow { color: var(--fg); font-weight: 700; }
+#collapseBar { display: block; height: 12px; background: #fffdf6; border: 2px solid #3a2e1c; border-radius: 255px 8px 225px 8px / 8px 225px 8px 255px; overflow: hidden; }
+#collapseBar i { display: block; height: 100%; width: 100%; background: repeating-linear-gradient(-55deg, #f0286c 0 4px, #ff86ae 4px 7px); transform-origin: left center; transform: scaleX(0); }
 .big { font: 800 14px var(--font-ui); color: var(--muted); background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; cursor: pointer; transition: transform 80ms ease; }
 .big:disabled { cursor: default; }
 .big:active:not(:disabled) { transform: scale(0.98); }
@@ -731,6 +734,8 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
       <div id="listTune"></div>
     </div>
     <div id="collapseBox" hidden>
+      <p id="collapseNow">Now: +0 Flavors. Ready at +2.</p>
+      <span id="collapseBar" role="progressbar" aria-label="Progress to the next Fresh Batch" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></span>
       <p id="collapseText">A fresh batch resets the run for permanent Flavors.</p>
       <button class="big" id="collapseBtn" type="button" disabled>Fresh Batch</button>
     </div>
@@ -1240,7 +1245,10 @@ const ECON = (() => {
   const FLAVOR_BONUS = 0.1; // each Flavor adds this much to every payout (was 0.2 until 2026-10-22: artifacts now stack on top)
   const COST_SCALE = 2.5; // global dial: how long each upgrade takes to afford
   const COLLAPSE_MIN_RUN = 5000000; // run juice needed before a Fresh Batch
-  const COLLAPSE_GAIN_DIV = 1250000; // Flavors = floor(sqrt(run / this)): exactly 2 at the floor, so cycles shrink slowly
+  // Rule C (2026-10-24): the Flavors a player is owed come from all the juice ever earned (the saved flavorJuice), not one run.
+  const COLLAPSE_GAIN_DIV = 1250000; // Flavors owed = floor(sqrt(flavor juice / this)): exactly 2 at the first 5M
+  const FLAVOR_NEED = 0.5; // a Fresh Batch is ready only once its gain is at least this share of the Flavors held (rounded up)
+  const FLAVOR_MIN_GAIN = 2; // ... and never less than this
 
   const zeroLevels = () => { const o = {}; for (const k in UPG) o[k] = 0; return o; };
   const cost = (id, lvl) => Math.ceil(UPG[id].base * COST_SCALE * Math.pow(UPG[id].grow, lvl));
@@ -1290,8 +1298,20 @@ const ECON = (() => {
     return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
-  const collapseGain = (run) => Math.floor(Math.sqrt(run / COLLAPSE_GAIN_DIV));
-  const collapseReady = (run) => run >= COLLAPSE_MIN_RUN && collapseGain(run) >= 2;
+  // life = the flavor juice, this run included. The 1e-9 keeps an exact 2 from flooring to 1 after rounding.
+  const flavorsOwed = (life) => Math.floor(Math.sqrt(Math.max(0, life) / COLLAPSE_GAIN_DIV) + 1e-9);
+  const flavorJuiceFor = (flavors) => COLLAPSE_GAIN_DIV * flavors * flavors; // the flavor juice at which that many Flavors are owed
+  const flavorNeed = (echoes) => Math.max(FLAVOR_MIN_GAIN, Math.ceil(FLAVOR_NEED * echoes)); // the smallest gain a Fresh Batch pays
+  // a Fresh Batch pays what is owed minus the Flavors held; run is unused here, kept so every caller passes the same three values
+  const collapseGain = (run, echoes, life) => Math.max(0, flavorsOwed(life) - (echoes || 0));
+  const collapseReady = (run, echoes, life) => run >= COLLAPSE_MIN_RUN && collapseGain(run, echoes, life) >= flavorNeed(echoes || 0);
+  // how far the Fresh Batch gate is, 0..1: the slower of the run floor and the flavor juice for the smallest gain, counted from the
+  // juice the Flavors held stand for (so a migrated save, and a save right after a Fresh Batch, start near 0)
+  function collapseProgress(run, echoes, life) {
+    if (collapseReady(run, echoes, life)) return 1;
+    const e = echoes || 0, from = flavorJuiceFor(e), to = flavorJuiceFor(e + flavorNeed(e));
+    return Math.min(1, Math.max(0, run / COLLAPSE_MIN_RUN), Math.max(0, (life - from) / (to - from)));
+  }
   // Helpers (stepAuto in src/world.js, and the sim) only hit pearls they can break in three hits,
   // and pick the one with the best payout per remaining hit; -1 means "never".
   const helperCanHit = (kind, power) => KIND[kind].hp <= power * 3;
@@ -1313,13 +1333,16 @@ const ECON = (() => {
       return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
     const normal = phase(false), fr = phase(true);
-    // the meter keeps filling during a frenzy, so one frenzy comes every frenzyNeed / (pops x HELPER_METER) seconds
-    const frenzyShare = normal.pops > 0 ? Math.min(1, (S.frenzySecs || FRENZY_SECS) * normal.pops * HELPER_METER * (S.meterMult || 1) / S.frenzyNeed) : 0;
+    // the meter keeps filling during a frenzy, at the frenzy's pop rate (src/world.js), and a new frenzy starts with the next pop
+    // after one ends once the meter is full. One cycle is a frenzy plus the normal time that fills what the frenzy left to fill.
+    // When helpers are the limit in both phases this is frenzySecs x pops x HELPER_METER / frenzyNeed, as before 2026-10-24.
+    const secs = S.frenzySecs || FRENZY_SECS, fill = HELPER_METER * (S.meterMult || 1), left = Math.max(0, S.frenzyNeed - secs * fr.pops * fill);
+    const frenzyShare = normal.pops > 0 ? secs / (secs + left / (normal.pops * fill)) : 0;
     return Object.assign({}, normal, { frenzy: fr, frenzyShare, rate: (1 - frenzyShare) * normal.rate + frenzyShare * fr.rate });
   }
   const idleRate = (S, pool, L, shinyOn) => helperIdle(S, pool, L, shinyOn).rate;
 
-  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, typeMult, popValue, hitsNeeded, collapseGain, collapseReady, helperCanHit, helperScore, helperIdle, idleRate };
+  return { UPG, ORDER, TOOLS, KIND, PEARLS, NEW_BASE, PAYOUT_STEEPNESS, sig2, SHINY_MULT, COST_SCALE, FLAVOR_BONUS, AWAY_SHARE, FRENZY_SECS, HELPER_METER, typeWeight, isUnlocked, poolChances, canToggleOff, effectivePool, unlockUpg, shinyChance, COLLAPSE_MIN_RUN, COLLAPSE_GAIN_DIV, FLAVOR_NEED, FLAVOR_MIN_GAIN, flavorsOwed, flavorJuiceFor, flavorNeed, zeroLevels, cost, toolPrice, TOOL_UP_MAX, powerStep, toolPower, toolSpeed, toolUpCost, uniqueCost, uniqueLevel, stats, comboMult, typeMult, popValue, hitsNeeded, collapseGain, collapseReady, collapseProgress, helperCanHit, helperScore, helperIdle, idleRate };
 })();
 if (typeof module !== 'undefined') module.exports = ECON;
 
@@ -1374,7 +1397,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 10;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -1445,6 +1468,14 @@ const MIGRATIONS = {
   // v8 had no stats object: every new counter starts at zero. The run in progress is not timed (runSecs -1), so a run that began
   // before this version can never count as the fastest Fresh Batch. Reduce effects is absent, so it takes the browser's default.
   8: (d) => Object.assign({}, d, { version: 9, stats: { taps: 0, secs: 0, runSecs: -1, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 } }),
+  // v9 earned Flavors from one run's juice (rule A). Rule C owes floor(sqrt(flavorJuice / 1.25M)) for all the juice so far, so the
+  // flavor juice starts at max(lifetime, 1.25M x Flavors^2): every Flavor held stays owed, and the next Fresh Batch is the same step
+  // a player at that count faces. 1.25M is COLLAPSE_GAIN_DIV, frozen here as of 2026-10-24. Bad numbers count as 0 (loadState clamps).
+  9: (d) => {
+    const num = (x) => { const n = +x; return Number.isFinite(n) && n > 0 ? n : 0; };
+    const e = Math.floor(num(d.echoes));
+    return Object.assign({}, d, { version: 10, flavorJuice: Math.max(num(d.lifetime), 1250000 * e * e) });
+  },
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
@@ -1708,7 +1739,9 @@ const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { 
 // seconds (-1 = not timed: a save from before stats started mid-run), the best single pop, the highest combo, the biggest Fresh Batch
 // (Flavors) and the fastest Fresh Batch run (seconds, 0 = none yet). Kept through Fresh Batch; Reset save starts them again.
 const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 });
-const state = { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
+// flavorJuice grows with every juice gain (pops, sales, the away bonus), like lifetime; the Flavors owed come from it
+// (ECON.flavorsOwed). Kept through Fresh Batch; Reset save starts it at 0. A v9 save gets it from its migration.
+const state = { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
@@ -1870,7 +1903,7 @@ function radiusOf(p) { return PR * 0.74 * (isBig(p.kind) ? 1.1 : 1); }
 function award(val, x, y, col, big, kind) {
   // popped pearls go into the backpack; juice only arrives when they are sold
   kind = kind || 'pearl'; state.seen[kind] = true;
-  if (state.autoSell && !isKept(kind)) { state.sparks += val; state.runEarned += val; state.lifetime += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
+  if (state.autoSell && !isKept(kind)) { state.sparks += val; state.runEarned += val; state.lifetime += val; state.flavorJuice += val; incomeLog.push([time, val]); } // auto-sell: straight to juice, the backpack is untouched
   else { state.inv[kind] = (state.inv[kind] || 0) + 1; state.invV[kind] = (state.invV[kind] || 0) + val; } // auto-sell off, or a kept type: into the backpack
   floatText(x, y - PR * 0.9, '+' + fmtV(val), 'hsl(' + col[0] + ',' + Math.min(95, col[1]) + '%,' + Math.max(28, col[2] - 12) + '%)', big ? 24 : clamp(PR * 0.55, 13, 19));
   motes(x, y, clamp(Math.round(2 + Math.log2(val + 1)), 2, 6) + (big ? 3 : 0), col, !state.autoSell || isKept(kind));
@@ -2494,13 +2527,27 @@ function updateShelf() {
   for (const g in SHOP_GROUPS) $(SHOP_GROUPS[g]).hidden = !ECON.ORDER.some((id) => ECON.UPG[id].group === g && !rows[id].el.hidden); // no empty headings
   $('shopEmpty').hidden = Object.values(SHOP_GROUPS).some((h) => !$(h).hidden); // an empty shop says why
   syncShopDots();
-  const run = state.runEarned, ready = ECON.collapseReady(run), btn = $('collapseBtn');
-  $('collapseBox').hidden = !(REVEAL.collapse() || ready);
-  btn.disabled = !ready || !!collapse; btn.classList.toggle('ready', ready && !collapse);
-  if (!armed) btn.textContent = ready ? 'Fresh Batch for +' + ECON.collapseGain(run) + ' Flavors' : 'Fresh Batch';
-  $('collapseText').textContent = ready
-    ? 'Pops the whole board and restarts. Each Flavor adds ' + Math.round(ECON.FLAVOR_BONUS * 100) + '% to every payout, permanently.'
-    : 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run to unlock a Fresh Batch (' + fmt(run) + ' so far).';
+  const v = batchView(), btn = $('collapseBtn');
+  $('collapseBox').hidden = !(REVEAL.collapse() || v.ready);
+  btn.disabled = !v.ready || !!collapse; btn.classList.toggle('ready', v.ready && !collapse);
+  if (!armed) btn.textContent = v.ready ? 'Fresh Batch for +' + fmt(v.gain) + ' Flavors' : 'Fresh Batch';
+  setLbl('collapseNow', v.now); setLbl('collapseText', v.text);
+  const bar = $('collapseBar'), pct = Math.floor(v.progress * 100 + 1e-9);
+  bar.firstElementChild.style.transform = 'scaleX(' + v.progress.toFixed(3) + ')';
+  if (lblCache.collapsePct !== pct) { lblCache.collapsePct = pct; bar.setAttribute('aria-valuenow', pct); }
+}
+// The Fresh Batch box, rule C: the gain is the Flavors owed for all the juice so far minus the Flavors held, and it is ready at the
+// run floor once that gain is at least half the Flavors held (at least 2). It says what the player would get now and what is missing.
+function batchView() {
+  const run = state.runEarned, e = state.echoes, life = state.flavorJuice;
+  const ready = ECON.collapseReady(run, e, life), gain = ECON.collapseGain(run, e, life), need = ECON.flavorNeed(e);
+  const now = 'Now: +' + fmt(gain) + ' Flavor' + (gain === 1 ? '' : 's') + '. Ready at +' + fmt(need) + (e > 0 && need > ECON.FLAVOR_MIN_GAIN ? ' (half your ' + fmt(e) + ')' : '') + '.';
+  // run juice counts toward both gates, so name the one that is further away
+  const more = Math.max(0, ECON.flavorJuiceFor(e + need) - life), runLeft = Math.max(0, ECON.COLLAPSE_MIN_RUN - run);
+  const text = ready ? 'Pops the whole board and restarts. Each Flavor adds ' + Math.round(ECON.FLAVOR_BONUS * 100) + '% to every payout, permanently.'
+    : more > runLeft ? 'Earn ' + fmt(Math.ceil(more)) + ' more juice to reach +' + fmt(need) + '.'
+    : 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in this run to unlock it (' + fmt(run) + ' so far).';
+  return { ready, gain, need, more, progress: ECON.collapseProgress(run, e, life), now, text };
 }
 function buy(id) {
   const u = ECON.UPG[id], lvl = state.lv[id];
@@ -2652,7 +2699,7 @@ function updatePack() {
 }
 // pay for items, shared by "sell all" and "sell some"
 function cashIn(total) {
-  state.sparks += total; state.runEarned += total; state.lifetime += total; incomeLog.push([time, total]);
+  state.sparks += total; state.runEarned += total; state.lifetime += total; state.flavorJuice += total; incomeLog.push([time, total]);
   const bump = $('sparks'); bump.classList.remove('bump'); void bump.offsetWidth; bump.classList.add('bump');
 }
 function sellSome(kind, q) {
@@ -2792,7 +2839,7 @@ const GOALS = [
   { id: 'blue', text: () => 'Unlock Blue Pearls in the shop. Each pays x' + fmtX(ECON.KIND.blue.mult) + '.', done: () => state.col.blue.found || veteran() },
   { id: 'tool', text: () => 'Open Tools (the hammer) and buy the ' + ECON.TOOLS[1].name + ': power ' + ECON.TOOLS[1].power + '.', done: () => state.owned.some((o, i) => o && i > 0) || veteran() },
   { id: 'helpers', text: () => 'Unlock Coral Pearls, then hire Helpers to pop for you.', done: () => state.lv.auto > 0 || veteran() },
-  { id: 'fresh', text: () => 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run, then take a Fresh Batch.', done: veteran },
+  { id: 'fresh', text: () => 'Earn ' + fmt(ECON.COLLAPSE_MIN_RUN) + ' juice in one run, then take a Fresh Batch for +' + ECON.FLAVOR_MIN_GAIN + ' Flavors.', done: veteran },
   { id: 'duck', when: () => DOCK_GATES.arts(), text: () => 'Keep Rose Pearls in your backpack and craft the Pink Duck in Artifacts.', done: ownsArtifact },
   { id: 'forge', when: () => DOCK_GATES.forge(), text: () => 'Start a job in the Forge: it turns kept pearls into dust.', done: forgeUsed },
 ];
@@ -3551,13 +3598,13 @@ function drawPedestal(ts) {
 /* ----- fresh batch (prestige) ----- */
 let armed = false, armTimer = 0;
 $('collapseBtn').addEventListener('click', () => {
-  if (!ECON.collapseReady(state.runEarned) || collapse) return;
+  if (!ECON.collapseReady(state.runEarned, state.echoes, state.flavorJuice) || collapse) return;
   if (!armed) {
     armed = true; $('collapseBtn').textContent = 'Click again to confirm';
     clearTimeout(armTimer); armTimer = setTimeout(() => { armed = false; updateShelf(); }, 3500); return;
   }
   armed = false; clearTimeout(armTimer);
-  collapse = { t: 0, dur: 1.9, gain: ECON.collapseGain(state.runEarned) };
+  collapse = { t: 0, dur: 1.9, gain: ECON.collapseGain(state.runEarned, state.echoes, state.flavorJuice) };
   Snd.batch(); toast('Pop everything for a fresh batch!'); updateShelf();
   // a wave of free pops sweeps outward from the middle of the board
   const cx = W / 2, cy = H / 2, far = Math.max(1, Math.hypot(W / 2, H / 2));
@@ -3631,7 +3678,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, flavorJuice: state.flavorJuice, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -3662,7 +3709,7 @@ function statsFromSave(o) {
 function loadState(raw) {
   const m = migrateSave(raw); if (!m.save) return m.error;
   const d = m.save, lv = objOf(d.lv), toolUp = objOf(d.toolUp), inv = objOf(d.inv), invV = objOf(d.invV), seen = objOf(d.seen), dc = objOf(d.col);
-  state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime);
+  state.sparks = fin(d.sparks); state.runEarned = fin(d.runEarned); state.lifetime = fin(d.lifetime); state.flavorJuice = fin(d.flavorJuice); // the juice behind the Flavors owed (rule C)
   state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
   state.reduceFx = typeof d.reduceFx === 'boolean' ? d.reduceFx : calm; // no saved choice: the browser's reduced-motion setting
   state.stats = statsFromSave(d.stats);
@@ -3697,7 +3744,7 @@ function awayBonus(secs) {
   recalc();
   const jobs = forgeCatchUp(), helped = S.autoRate > 0 && secs >= 20; // secs >= 20 also refuses NaN from a broken save time
   const gain = helped ? ECON.idleRate(S, state.pool, state.lv, state.shinyOn) * Math.min(secs, 28800) * S.awayShare : 0; // what helpers alone would earn, halved (more with an away bonus artifact)
-  if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; }
+  if (gain > 0) { state.sparks += gain; state.runEarned += gain; state.lifetime += gain; state.flavorJuice += gain; }
   const done = jobs + (jobs === 1 ? ' forge job' : ' forge jobs') + ' finished';
   if (gain > 0) toast('Welcome back! Your helpers popped ' + fmt(gain) + ' juice' + (jobs ? ' and ' + done : '') + ' while you were away');
   else if (jobs) toast('Welcome back! ' + done[0].toUpperCase() + done.slice(1) + ' while you were away');
@@ -3891,7 +3938,7 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
   collapse = null; resetRun(); resetGoals(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
 });
 
