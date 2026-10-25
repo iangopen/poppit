@@ -51,6 +51,7 @@ Verification
 - 390x844, headless Chrome: the page is 390/390 and the box 356/356 in all three states (new
   player, not ready, ready). Every part of the box has scrollWidth = clientWidth, nothing sticks
   out, and there are no console errors. I looked at the screenshots: both states read cleanly.
+- Pushed to main (3 commits). The CI run on main (40144996835) finished green.
 
 Choices I made
 - The study's call shape collapseGain(run, echoes, life) is kept; the gain ignores run.
