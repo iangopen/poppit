@@ -2,6 +2,7 @@
 // first pop, after the first purchase, about 3 minutes of play) it saves a screenshot and lists every visible interactive control.
 //   node tools/audit.js <label> [width] [height]     writes docs/audit/<label>-<moment>.png and docs/audit/<label>.json
 //   node tools/audit.js batch                         the Fresh Batch box at 390x844: new player, 300 Flavors not ready, ready
+//   node tools/audit.js ach                           the book's Achievements tab at 390x844: achieved, next and hidden tiers, two categories
 // Play is a small in-page bot: about 2.5 hits a second on the best live pearl (as tools/sim32.js picks), and the cheapest affordable
 // shop row bought by a real tap. The first pop is a real touch on a pearl. Needs Chrome; no npm dependencies (Node 22+ WebSocket).
 const { spawn } = require('child_process'), http = require('http'), fs = require('fs'), path = require('path'), os = require('os');
@@ -121,6 +122,43 @@ async function batchChecks() {
   }
   return out;
 }
+// node tools/audit.js ach: a mid-game save (achievements granted on load, so achieved, next and ??? tiers mix), the book opened by
+// a real tap, the Achievements tab tapped, then the Popping and Collecting categories. Screenshots, and every part's widths.
+async function achChecks() {
+  const out = [], col = Object.fromEntries(['pearl', 'blue', 'mint', 'golden', 'violet', 'coral', 'marble', 'opal', 'ruby', 'black'].map((k, i) => [k, { found: i < 6, popped: [12000, 1300, 600, 120, 60, 20][i] || 0, sFound: i < 2, sPopped: i < 2 ? 3 : 0 }]));
+  const save = { version: 10, sparks: 5e5, runEarned: 2e6, lifetime: 4e7, flavorJuice: 4e7, echoes: 4, collapses: 2, lv: { sharp: 20, lucky: 6, mint: 3, golden: 2, violet: 1, coral: 1, spawn: 8, combo: 6, board: 2 }, col,
+    pool: ['pearl', 'blue', 'mint', 'golden', 'violet', 'coral'], autoSell: true, stats: { taps: 7000, secs: 4000, runSecs: 100, bestPop: 3e6, bestCombo: 35, bestGain: 2, fastest: 420 } };
+  await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/package.json' }); await sleep(500);
+  await ev('localStorage.clear(); localStorage.setItem("poppit.v1", ' + JSON.stringify(JSON.stringify(Object.assign({ t: Date.now() }, save))) + '); true');
+  await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(1800);
+  const tap = async (sel) => { const r = await ev('(() => { const e = document.querySelector(' + JSON.stringify(sel) + '); if (!e) return null; const q = e.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; })()'); if (!r) throw new Error('no ' + sel); await touch(r[0], r[1]); await sleep(500); };
+  const toast = await ev('document.getElementById("toast").textContent');
+  await tap('#bookBtn'); await sleep(900); await tap('#bkTabAch');
+  for (const cat of ['popping', 'collecting']) {
+    if (cat !== 'popping') await tap('[data-acat="' + cat + '"]');
+    // scroll the list so the first "next" tier sits near its top: an achieved tier above it, ??? tiers below
+    await ev('(() => { const l = document.getElementById("achList"), n = l.querySelector(".achT.next"); if (n) l.scrollTop = n.offsetTop - l.offsetTop - 70; return true; })()'); await sleep(200);
+    const m = await ev(`(() => { const d = document.documentElement, v = document.getElementById('achView'), r = v.getBoundingClientRect();
+      const past = [...v.querySelectorAll('*')].filter((e) => { const q = e.getBoundingClientRect(); return q.width && (q.right > r.right + 0.5 || q.left < r.left - 0.5); }).map((e) => e.className || e.tagName);
+      const w = (e) => e.scrollWidth + '/' + e.clientWidth, wide = [...v.querySelectorAll('.achT, .achLad, .achCats, .atab')].filter((e) => e.scrollWidth > e.clientWidth).length;
+      const st = (c) => v.querySelectorAll('.achT.' + c).length;
+      return { page: w(d), book: w(document.getElementById('book')), card: w(v), list: w(document.getElementById('achList')), cats: w(document.getElementById('achCats')), overflowing: wide, past,
+        card_px: Math.round(r.width) + 'x' + Math.round(r.height), tiers: { done: st('done'), next: st('next'), hidden: st('hid') }, sum: document.getElementById('achSum').textContent,
+        tabs: [...document.querySelectorAll('#achCats .atab')].map((b) => Math.round(b.getBoundingClientRect().height)).join(',') }; })()`);
+    const file = 'ach-390-' + cat + '.png';
+    fs.writeFileSync(path.join(OUT, file), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    out.push(Object.assign({ category: cat, file }, m));
+    console.log(cat + ': page ' + m.page + ', book ' + m.book + ', card ' + m.card + ' (' + m.card_px + '), list ' + m.list + ', categories ' + m.cats + ' (tab heights ' + m.tabs + '), rows wider than themselves ' + m.overflowing + ', past the card: ' + (m.past.join(' ') || 'none') + ', tiers ' + JSON.stringify(m.tiers) + ' -> ' + file + '\n  ' + m.sum);
+  }
+  await tap('#bkTabPearls'); await sleep(1200);
+  const pm = await ev(`(() => { const d = document.documentElement, b = document.getElementById('book'), k = document.getElementById('bkWrap').getBoundingClientRect(), t = document.querySelector('.bkTabs').getBoundingClientRect();
+    return { page: d.scrollWidth + '/' + d.clientWidth, book: b.scrollWidth + '/' + b.clientWidth, spread: Math.round(k.width) + 'x' + Math.round(k.height) + ' at y ' + Math.round(k.top), tabs_bottom: Math.round(t.bottom) }; })()`);
+  fs.writeFileSync(path.join(OUT, 'ach-390-pearls.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  out.push(Object.assign({ category: 'pearls tab', file: 'ach-390-pearls.png' }, pm));
+  console.log('pearls tab: page ' + pm.page + ', book ' + pm.book + ', spread ' + pm.spread + ', tabs end at y ' + pm.tabs_bottom + ' -> ach-390-pearls.png');
+  console.log('load toast: ' + JSON.stringify(toast));
+  return out;
+}
 (async () => {
   const result = { label, width: +W, height: +H, moments: [] };
   try {
@@ -134,6 +172,7 @@ async function batchChecks() {
     if (label === 'layout') { result.layout = await layoutChecks(); return; }
     if (label === 'settings') { result.settings = await settingsChecks(); return; }
     if (label === 'batch') { result.batch = await batchChecks(); return; }
+    if (label === 'ach') { result.ach = await achChecks(); return; }
     const t0 = Date.now();
     const moment = async (name) => {
       await sleep(400);
