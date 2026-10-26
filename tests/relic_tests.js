@@ -6,8 +6,8 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   const near = (a, b) => Math.abs(a - b) < 1e-9 * Math.max(1, Math.abs(b));
   const seq = (...xs) => { let i = 0; return () => xs[i++ % xs.length]; };
   const fresh = () => { G.resetRun(); G.clearBoard(); G.setMeter(0); };
-  // one auto-sold Rose pop at combo 0, no frenzy: what it pays
-  const rosePay = (src) => { st.autoSell = true; const k = st.keep.pearl; delete st.keep.pearl; const c = G.cells.find((x) => !x.p), p = G.spawnAt(c, 'pearl', false); p.born = 1; G.setCombo(0); const s0 = st.sparks; G.popPearl(p, src || 'tap'); if (k) st.keep.pearl = true; return st.sparks - s0; };
+  // one auto-sold Rose pop at combo 0, no frenzy: what it pays, without the achievements' part (a craft can earn some, see achievement_tests.js)
+  const rosePay = (src) => { st.autoSell = true; const k = st.keep.pearl; delete st.keep.pearl; const c = G.cells.find((x) => !x.p), p = G.spawnAt(c, 'pearl', false); p.born = 1; G.setCombo(0); const s0 = st.sparks; G.popPearl(p, src || 'tap'); if (k) st.keep.pearl = true; return (st.sparks - s0) / G.getS().achMult; };
   const perkTxt = (c) => (c.perks.length ? c.perks.map((p) => p.stat + ' +' + +(p.value * 100).toFixed(1) + '%').join(', ') : 'no perks');
   const stockTxt = () => F.ALL.filter((m) => st.forge.stock[m.id]).map((m) => m.name + ' ' + st.forge.stock[m.id]).join(', ') || 'empty';
   try {

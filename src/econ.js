@@ -2,6 +2,8 @@
 /* ---------- Economy: pure functions, no DOM. Tested headlessly in node. ---------- */
 const ECON = (() => {
   const ART = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js'); // the page concatenates src/artifacts.js first
+  // src/achievements.js comes after this file (it reads the pearl roster), so it is looked up when stats() runs, never at load
+  const ACHV = () => (typeof ACH !== 'undefined' ? ACH : require('./achievements.js'));
   // base cost, growth per level, max level, optional requirement on current levels
   const UPG = {
     tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
@@ -115,6 +117,7 @@ const ECON = (() => {
       echoMult,
       art: B,
       artMult: B.payout, // global payout: the Pink Duck's base x1.4 times every active global payout perk
+      achMult: ACHV().mult(st.achieved), // global payout from achievements: 1 + the sum of the earned rewards, capped (ACH.ACH_CAP)
       typeMult: B.typePay, // per pearl type: { blue: 1.4, ... } from the type ducks and their payout perks (a missing type is x1)
       shinyBonus: B.shiny, // the rest add up: +0.1 = +10%
       frenzySecs: FRENZY_SECS * (1 + B.frenzy),
@@ -136,7 +139,7 @@ const ECON = (() => {
   const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
   const typeMult = (S, kind) => (S.typeMult && S.typeMult[kind]) || 1; // a type duck's payout on its own pearl type
   function popValue(S, combo, frenzy, kind) {
-    return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
+    return S.popBase * S.echoMult * (S.artMult || 1) * (S.achMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
   // life = the flavor juice, this run included. The 1e-9 keeps an exact 2 from flooring to 1 after rounding.
@@ -171,7 +174,7 @@ const ECON = (() => {
       let ev = 0, hits = 0;
       for (const id in mix) { ev += mix[id] * KIND[id].mult * typeMult(S, id); hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
       const pops = S.autoRate > 0 ? Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery) : 0;
-      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
+      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * (S.achMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
     const normal = phase(false), fr = phase(true);
     // the meter keeps filling during a frenzy, at the frenzy's pop rate (src/world.js), and a new frenzy starts with the next pop

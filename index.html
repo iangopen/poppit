@@ -371,7 +371,31 @@ button.eslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .prow .why { min-height: 14px; }
 .prow .tgl { min-width: 96px; }
 .prow.lk .tgl { background: rgba(240, 40, 108, 0.12); color: var(--accent); }
-#book { left: 0; right: 0; top: 0; bottom: 0; margin: auto; width: min(640px, calc(100% - 16px)); height: fit-content; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; transform-origin: center; }
+/* the book is a sheet over the whole board: its two tabs (Pearls, Achievements) and the close button on top, then the book spread
+   (centred) or the Achievements card, which fills the rest and scrolls inside */
+#book { left: 0; right: 0; top: 0; bottom: 0; width: auto; height: auto; margin: 0; padding: 8px; gap: 8px; background: #f4ecd8; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; transform-origin: center; }
+.bkTabs { display: flex; gap: 8px; align-items: center; }
+.bkTabs .bkClose { margin-left: auto; min-width: 44px; min-height: 44px; }
+#book .bkWrap { width: min(640px, 100%); margin: auto; }
+.achView { flex: 1; min-height: 0; width: min(640px, 100%); align-self: center; display: flex; flex-direction: column; gap: 8px; background: #fbf6e8; border: 3px solid #6b3a20; border-radius: 12px; padding: 10px 12px 12px; box-shadow: 0 12px 26px -12px rgba(30, 15, 5, 0.8); }
+.achSum { margin: 0; font: 800 13.5px var(--font-ui); color: var(--fg); }
+.achCats { display: flex; flex-wrap: wrap; gap: 6px; }
+.achCats .atab { padding: 6px 10px; font-size: 12px; }
+.achCats .atab small { font-weight: 600; opacity: 0.75; }
+.achList { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; }
+.achLad h4 { margin: 0 0 4px; display: flex; justify-content: space-between; gap: 8px; font: 400 20px/1.1 var(--font-brand); color: var(--fg); }
+.achLad h4 small { font: 700 11.5px var(--font-ui); color: var(--muted); align-self: center; }
+.achT { display: grid; grid-template-columns: 22px 1fr auto; column-gap: 6px; align-items: baseline; padding: 6px 8px; margin-top: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.55); border: 1px solid #e3d8bd; font: 600 12px/1.3 var(--font-ui); color: var(--muted); }
+.achT b { color: var(--fg); font-weight: 800; font-size: 13px; }
+.achT .ic { font-weight: 800; color: #8a6f4a; text-align: center; }
+.achT .rw { font-weight: 800; color: #8a6f4a; white-space: nowrap; }
+.achT .ds { grid-column: 2 / 4; overflow-wrap: anywhere; }
+.achT.done { background: #fff3c4; border-color: #e7c35a; }
+.achT.done .ic { color: #b07a00; }
+.achT.hid { opacity: 0.6; }
+.achBar { grid-column: 2 / 4; height: 8px; margin-top: 5px; border-radius: 999px; background: #e8dfc6; overflow: hidden; }
+.achBar i { display: block; height: 100%; background: var(--accent); transform-origin: left center; }
+.achT .pg2 { grid-column: 2 / 4; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .bkFoot { position: absolute; bottom: 12px; z-index: 4; font: 400 17px var(--font-brand); color: #8a6f4a; opacity: 0; transition: opacity 300ms ease 700ms; pointer-events: none; }
 .bkFoot.l { left: 50%; transform: translateX(-120%); } .bkFoot.r { left: 50%; transform: translateX(20%); }
 .bk.open .bkFoot, .bk.open .bkArr, .bk.open .bkX { opacity: 1; }
@@ -586,8 +610,18 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <label class="auto"><input type="checkbox" id="autoSell"><span>Auto-sell</span></label>
       </div>
     </section>
-    <section class="panel" id="book" hidden aria-label="Pearl collection book">
-      <div class="bkWrap"><div class="bk" id="bk"><div class="bkPages">
+    <section class="panel" id="book" hidden aria-label="Collection book">
+      <div class="bkTabs" role="tablist" aria-label="Collection book">
+        <button type="button" class="chip atab on" id="bkTabPearls" role="tab" aria-selected="true" aria-controls="bkWrap" data-btab="pearls">Pearls</button>
+        <button type="button" class="chip atab" id="bkTabAch" role="tab" aria-selected="false" aria-controls="achView" data-btab="ach">Achievements</button>
+        <button class="x bkClose" type="button" data-close="book" aria-label="Close collection">&#10005;</button>
+      </div>
+      <div class="achView" id="achView" role="tabpanel" aria-label="Achievements" hidden>
+        <p class="achSum" id="achSum"></p>
+        <div class="achCats" id="achCats" role="group" aria-label="Category"></div>
+        <div class="achList" id="achList"></div>
+      </div>
+      <div class="bkWrap" id="bkWrap"><div class="bk" id="bk"><div class="bkPages">
         <div class="bkBackR"></div><div class="pg pgR" id="pgR"></div>
         <div class="cov"><div class="covF"><span>Pearl<br>Collection</span><i></i></div><div class="covB"><div class="pg pgL" id="pgL"></div></div></div>
         <span class="bkFoot l" id="bkCount">0 / 20 found</span><span class="bkFoot r" id="bkPage">1 / 10</span>
@@ -1161,6 +1195,8 @@ if (typeof module !== 'undefined') module.exports = FORGE;
 /* ---------- Economy: pure functions, no DOM. Tested headlessly in node. ---------- */
 const ECON = (() => {
   const ART = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js'); // the page concatenates src/artifacts.js first
+  // src/achievements.js comes after this file (it reads the pearl roster), so it is looked up when stats() runs, never at load
+  const ACHV = () => (typeof ACH !== 'undefined' ? ACH : require('./achievements.js'));
   // base cost, growth per level, max level, optional requirement on current levels
   const UPG = {
     tool:   { base: 60,  grow: 6.5,  max: 5,  group: 'verb' },
@@ -1274,6 +1310,7 @@ const ECON = (() => {
       echoMult,
       art: B,
       artMult: B.payout, // global payout: the Pink Duck's base x1.4 times every active global payout perk
+      achMult: ACHV().mult(st.achieved), // global payout from achievements: 1 + the sum of the earned rewards, capped (ACH.ACH_CAP)
       typeMult: B.typePay, // per pearl type: { blue: 1.4, ... } from the type ducks and their payout perks (a missing type is x1)
       shinyBonus: B.shiny, // the rest add up: +0.1 = +10%
       frenzySecs: FRENZY_SECS * (1 + B.frenzy),
@@ -1295,7 +1332,7 @@ const ECON = (() => {
   const comboMult = (combo) => 1 + Math.min(combo, 60) * 0.02;
   const typeMult = (S, kind) => (S.typeMult && S.typeMult[kind]) || 1; // a type duck's payout on its own pearl type
   function popValue(S, combo, frenzy, kind) {
-    return S.popBase * S.echoMult * (S.artMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
+    return S.popBase * S.echoMult * (S.artMult || 1) * (S.achMult || 1) * comboMult(combo) * (frenzy ? 2 : 1) * KIND[kind].mult * typeMult(S, kind);
   }
   const hitsNeeded = (kind, power) => Math.ceil(KIND[kind].hp / power);
   // life = the flavor juice, this run included. The 1e-9 keeps an exact 2 from flooring to 1 after rounding.
@@ -1330,7 +1367,7 @@ const ECON = (() => {
       let ev = 0, hits = 0;
       for (const id in mix) { ev += mix[id] * KIND[id].mult * typeMult(S, id); hits += mix[id] * Math.ceil(KIND[id].hp / S.power); }
       const pops = S.autoRate > 0 ? Math.min(S.autoRate / hits, (frenzy ? 4 : 1) / S.spawnEvery) : 0;
-      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
+      return { mix, evPop: ev * shiny, hitsPerPop: hits, pops, rate: pops * S.popBase * S.echoMult * (S.artMult || 1) * (S.achMult || 1) * ev * shiny * (frenzy ? 2 : 1) };
     };
     const normal = phase(false), fr = phase(true);
     // the meter keeps filling during a frenzy, at the frenzy's pop rate (src/world.js), and a new frenzy starts with the next pop
@@ -1365,6 +1402,132 @@ function fmtX(n) {
   return m && m[1].includes('.') ? m[1].replace(/\.?0+$/, '') + m[2] : s;
 }
 function fmtV(n) { return n < 10 ? String(Math.round(n * 10) / 10) : fmt(n); }
+/* ---------- Achievements: milestones that each add a small permanent payout bonus. Pure, no DOM. ---------- */
+// The earned set is a pure function of the state (view(st) reads the counters the game already keeps), so a save can always be
+// re-derived: the game grants every id that earned() returns and keeps the granted list (state.achieved) for good.
+// Every achievement adds its reward to one global payout multiplier, 1 + the sum, never above 1 + ACH_CAP (ECON.stats: achMult).
+const ACH = (() => {
+  const EC = typeof ECON !== 'undefined' ? ECON : require('./econ.js'); // the page concatenates econ.js and artifacts.js first
+  const AR = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js');
+  const FG = typeof FORGE !== 'undefined' ? FORGE : require('./forge.js');
+  const ACH_REWARD = 0.005; // what an achievement adds to every payout (+0.5%)
+  const ACH_REWARD_TOP = 0.01; // the hardest tier of each ladder adds this instead (+1%)
+  const ACH_CAP = 0.25; // the achievements' payout bonus never goes above +25%, however many are earned
+  const CATEGORIES = [
+    { id: 'popping', name: 'Popping' },
+    { id: 'collecting', name: 'Collecting' },
+    { id: 'economy', name: 'Economy' },
+    { id: 'batch', name: 'Fresh Batch' },
+    { id: 'crafting', name: 'Crafting' },
+  ];
+  // 1,000 / 25K / 1M / 1B: short, the way the game writes juice
+  const num = (n) => { for (const [v, s] of [[1e12, 'T'], [1e9, 'B'], [1e6, 'M']]) if (n >= v) return +(n / v).toFixed(1) + s; return n.toLocaleString('en-US'); };
+  const mins = (s) => s / 60 + ' minutes';
+  // Pops per pearl type: about an hour of that type's normal pops, by the duck-cost method ("node tools/sim32.js --achievements":
+  // the geometric mean of six checkpoint pop rates x ACH_TYPE_MIN, two significant figures, at least 5, falling with rarity).
+  // Untuned starting points, like the duck costs.
+  const TYPE_POPS = { pearl: 8800, blue: 1200, mint: 520, golden: 290, violet: 230, coral: 84, marble: 39, opal: 28, ruby: 17, black: 15 };
+  const TYPE_NAMES = { pearl: 'Rose Garden', blue: 'Feeling Blue', mint: 'Fresh Mint', golden: 'Golden Touch', violet: 'Ultra Violet', coral: 'Coral Reef', marble: 'Lost Marbles', opal: 'Opal Eyes', ruby: 'Ruby Red', black: 'Black Pearl' };
+  // ladders: each tier is one achievement. stat names a number in view(); a tier is earned at view[stat] >= need, or with lower,
+  // at 0 < view[stat] < need (a best time). A tier may name its own stat, id and description. Every threshold here is data.
+  const LADDERS = [
+    { id: 'pops', cat: 'popping', name: 'Pearls popped', stat: 'pops', desc: (n) => 'Pop ' + num(n) + ' pearls.',
+      tiers: [[100, 'Popper'], [1000, 'Pop Star'], [10000, 'Pop Art'], [100000, 'Pop Culture'], [1000000, 'Pop Legend'], [10000000, 'Popocalypse']] },
+    { id: 'taps', cat: 'popping', name: 'Taps', stat: 'taps', desc: (n) => 'Tap the board ' + num(n) + ' times.',
+      tiers: [[500, 'Tapper'], [5000, 'Busy Fingers'], [50000, 'Iron Thumb'], [500000, 'Tap Master']] },
+    { id: 'combo', cat: 'popping', name: 'Highest combo', stat: 'combo', desc: (n) => 'Reach a ' + n + ' combo.',
+      tiers: [[10, 'Combo'], [30, 'Combo Streak'], [60, 'Combo King']] },
+    { id: 'bestpop', cat: 'popping', name: 'Best single pop', stat: 'bestPop', desc: (n) => 'Get ' + num(n) + ' juice from one pop.',
+      tiers: [[1e6, 'Gusher'], [1e9, 'Juice Flood']] },
+    { id: 'found', cat: 'collecting', name: 'Pearl types found', stat: 'found', desc: (n) => (n >= EC.PEARLS.length ? 'Discover every pearl type.' : 'Discover ' + n + ' pearl types.'),
+      tiers: [[3, 'Collector'], [5, 'Curator'], [7, 'Archivist'], [EC.PEARLS.length, 'Full Set']] },
+    { id: 'shiny', cat: 'collecting', name: 'Shiny types found', stat: 'shinies', desc: (n) => (n === 1 ? 'Discover a shiny pearl.' : n >= EC.PEARLS.length ? 'Discover the shiny of every pearl type.' : 'Discover ' + n + ' shiny types.'),
+      tiers: [[1, 'Shiny!'], [5, 'Sparkle Hunter'], [EC.PEARLS.length, 'All That Glitters']] },
+    { id: 'type', cat: 'collecting', name: 'Pearl by pearl', stat: null, desc: null,
+      tiers: EC.PEARLS.map((t) => ({ id: 'type_' + t.id, need: TYPE_POPS[t.id], name: TYPE_NAMES[t.id], stat: 'pop_' + t.id, desc: 'Pop ' + num(TYPE_POPS[t.id]) + ' ' + t.name + 's.' })) },
+    { id: 'life', cat: 'economy', name: 'Juice earned', stat: 'lifetime', desc: (n) => 'Earn ' + num(n) + ' juice in all.',
+      tiers: [[1e6, 'Juice Box'], [1e9, 'Juice Bar'], [1e12, 'Juice Empire']] },
+    { id: 'maxed', cat: 'economy', name: 'Upgrades at max', stat: 'maxed', desc: (n) => (n === 1 ? 'Have an upgrade at its max level.' : 'Have ' + n + ' upgrades at their max level at once.'),
+      tiers: [[1, 'Maxed Out'], [10, 'Fully Loaded']] },
+    { id: 'batches', cat: 'batch', name: 'Fresh Batches taken', stat: 'batches', desc: (n) => (n === 1 ? 'Take a Fresh Batch.' : 'Take ' + n + ' Fresh Batches.'),
+      tiers: [[1, 'Fresh Start'], [10, 'Batch Cook'], [50, 'Head Chef']] },
+    { id: 'flavors', cat: 'batch', name: 'Flavors held', stat: 'flavors', desc: (n) => 'Hold ' + num(n) + ' Flavors.',
+      tiers: [[10, 'Flavorful'], [100, 'Flavor Town'], [1000, 'Flavor Legend']] },
+    { id: 'fastest', cat: 'batch', name: 'Fastest run', stat: 'fastest', lower: true, desc: (s) => 'Take a Fresh Batch less than ' + mins(s) + ' into a run.',
+      tiers: [[600, 'Quick Batch'], [300, 'Speed Batch'], [180, 'Flash Batch']] },
+    { id: 'crafts', cat: 'crafting', name: 'Copies crafted', stat: 'crafts', desc: (n) => (n === 1 ? 'Craft an artifact.' : 'Craft ' + n + ' artifact copies.'),
+      tiers: [[1, 'First Craft'], [25, 'Workshop']] },
+    { id: 'rarity', cat: 'crafting', name: 'Rarest copy', stat: 'rarity', desc: (n) => 'Own ' + (/^[AEIOU]/.test(AR.RARITIES[n].name) ? 'an ' : 'a ') + AR.RARITIES[n].name + ' copy.',
+      tiers: [{ id: 'rarity_rare', need: 1, name: 'Rare Find' }, { id: 'rarity_epic', need: 2, name: 'Epic Find' }, { id: 'rarity_mythic', need: 3, name: 'Mythic Find' }] },
+    { id: 'ducks', cat: 'crafting', name: 'Ducks owned', stat: 'ducks', desc: (n) => (n === 1 ? 'Own a duck.' : 'Own ' + n + ' different ducks.'),
+      tiers: [[1, 'Lucky Duck'], [10, 'Duck Pond']] },
+    { id: 'relics', cat: 'crafting', name: 'Relics equipped', stat: 'relics', desc: (n) => 'Have ' + n + ' relics equipped at once.', tiers: [[3, 'Relic Keeper']] },
+    { id: 'forged', cat: 'crafting', name: 'Forge jobs finished', stat: 'forged', desc: (n) => 'Finish ' + n + ' forge jobs.', tiers: [[25, 'Smith']] },
+    { id: 'mats', cat: 'crafting', name: 'Forge materials', stat: null, desc: null,
+      tiers: [{ id: 'mats_dust', need: 1, name: 'Dusty', stat: 'dust', desc: 'Make your first dust in the forge.' }, { id: 'mats_alloy', need: 1, name: 'Alloyed', stat: 'alloy', desc: 'Make your first alloy in the forge.' }] },
+  ];
+  // one entry per tier, ids stable: '<ladder><tier number>' unless the tier names its own
+  const ACHIEVEMENTS = [];
+  for (const L of LADDERS) L.tiers.forEach((t, i) => {
+    const o = Array.isArray(t) ? { need: t[0], name: t[1] } : t, stat = o.stat || L.stat, need = o.need, lower = !!L.lower;
+    const have = (v) => v[stat] || 0, last = i === L.tiers.length - 1;
+    ACHIEVEMENTS.push({
+      id: o.id || L.id + (i + 1), name: o.name, description: o.desc || L.desc(need), category: L.cat, ladder: L.id, tier: i + 1, need, stat, lower,
+      reward: last ? ACH_REWARD_TOP : ACH_REWARD,
+      test: lower ? (v) => have(v) > 0 && have(v) < need : (v) => have(v) >= need,
+      // { have, need } for the progress bar; a best time counts as need / time (1 = there)
+      progress: lower ? (v) => ({ have: have(v) > 0 ? Math.min(1, need / have(v)) : 0, need: 1, best: have(v) }) : (v) => ({ have: Math.min(need, have(v)), need }),
+    });
+  });
+  const BY_ID = {}; for (const a of ACHIEVEMENTS) BY_ID[a.id] = a;
+  const byId = (id) => BY_ID[id] || null;
+  const ladderOf = (id) => LADDERS.find((L) => L.id === id) || null;
+  // the numbers every test reads, from the game state (state shape as in src/world.js; a missing part counts as nothing)
+  function view(st) {
+    st = st || {};
+    const col = st.col || {}, sx = st.stats || {}, arts = st.artifacts || {}, stock = (st.forge && st.forge.stock) || {}, lv = st.lv || {};
+    const v = { pops: 0, found: 0, shinies: 0 };
+    for (const t of EC.PEARLS) {
+      const c = col[t.id] || {}, n = (c.popped || 0) + (c.sPopped || 0);
+      v['pop_' + t.id] = n; v.pops += n; if (c.found) v.found++; if (c.sFound) v.shinies++;
+    }
+    v.taps = sx.taps || 0; v.combo = sx.bestCombo || 0; v.bestPop = sx.bestPop || 0; v.fastest = sx.fastest || 0;
+    v.lifetime = st.lifetime || 0;
+    v.maxed = Object.keys(EC.UPG).filter((k) => (lv[k] || 0) >= EC.UPG[k].max).length;
+    v.batches = st.collapses || 0; v.flavors = st.echoes || 0;
+    let copies = 0, rar = 0, relicOwned = false;
+    for (const a of AR.ARTIFACTS) {
+      const e = arts[a.id]; if (!e || !Array.isArray(e.copies)) continue;
+      copies += e.copies.length; if (e.copies.length && AR.usesSlot(a.id)) relicOwned = true;
+      for (const c of e.copies) rar = Math.max(rar, AR.RARITIES.findIndex((r) => r.id === c.rarity));
+    }
+    // copies on hand are a floor for the crafts counter (a save from before it, or one that never scrapped)
+    v.crafts = Math.max(sx.crafts || 0, copies); v.rarity = rar;
+    v.ducks = AR.ARTIFACTS.filter((a) => a.hall === 'ducks' && AR.count(arts, a.id) > 0).length;
+    v.relics = AR.ARTIFACTS.filter((a) => AR.usesSlot(a.id) && AR.applies(a, arts, st.artEquip)).length;
+    // the forge: stock on hand is a floor for jobs finished (each unit is one job), and an alloy or a relic means a dust was made
+    const held = Object.keys(stock).filter((k) => stock[k] > 0 && FG.byId(k)), dustStock = held.filter((k) => !FG.isAlloy(k)), alloyStock = held.filter(FG.isAlloy);
+    const units = held.reduce((n, k) => n + stock[k], 0);
+    v.forged = Math.max(sx.forged || 0, units);
+    v.alloy = (sx.alloys || 0) > 0 || alloyStock.length > 0 || relicOwned ? 1 : 0;
+    v.dust = (sx.forged || 0) - (sx.alloys || 0) > 0 || dustStock.length > 0 || v.alloy ? 1 : 0;
+    return v;
+  }
+  // every id the state satisfies now, in table order
+  const earned = (st) => { const v = view(st); return ACHIEVEMENTS.filter((a) => a.test(v)).map((a) => a.id); };
+  // the payout bonus of a granted list: each known id once, summed, never above ACH_CAP (rounded so +0.5% steps stay exact)
+  function bonus(ids) {
+    const seen = new Set(); let s = 0;
+    for (const id of Array.isArray(ids) ? ids : []) { const a = BY_ID[id]; if (a && !seen.has(id)) { seen.add(id); s += a.reward; } }
+    return Math.min(ACH_CAP, Math.round(s * 1e6) / 1e6);
+  }
+  const mult = (ids) => 1 + bonus(ids);
+  const total = () => ACHIEVEMENTS.reduce((s, a) => s + a.reward, 0);
+  // untrusted input (a save) -> known ids, each once, in saved order
+  function fromSave(d) { const out = []; for (const id of Array.isArray(d) ? d : []) if (typeof id === 'string' && BY_ID[id] && !out.includes(id)) out.push(id); return out; }
+  return { ACH_REWARD, ACH_REWARD_TOP, ACH_CAP, CATEGORIES, LADDERS, TYPE_POPS, ACHIEVEMENTS, byId, ladderOf, view, earned, bonus, mult, total, fromSave };
+})();
+if (typeof module !== 'undefined') module.exports = ACH;
 /* ---------- Save codes and save versions: pure functions, no DOM. ---------- */
 // A save code is POPPIT2: + base64 of the UTF-8 JSON + '.' + 8 hex digits of FNV-1a over the base64 text.
 // Whitespace is ignored, so a code that wrapped across lines still loads; anything else that is off returns null.
@@ -1397,7 +1560,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 10;
+const SAVE_VERSION = 11;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -1476,6 +1639,9 @@ const MIGRATIONS = {
     const e = Math.floor(num(d.echoes));
     return Object.assign({}, d, { version: 10, flavorJuice: Math.max(num(d.lifetime), 1250000 * e * e) });
   },
+  // v10 had no achievements: the earned set starts empty. The game grants, on load, every achievement the saved state already
+  // satisfies (ACH.earned), silently, with one toast that says how many came from the player's history.
+  10: (d) => Object.assign({}, d, { version: 11, achieved: [] }),
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
@@ -1650,6 +1816,12 @@ const Snd = (() => {
       steps.forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.4 + 0.1 * k, gain: 0.1, at: i * 0.07, echo: 0.6 + 0.1 * k }));
       if (k >= 2) tone({ f: hz(15), dur: 0.9, gain: 0.06, at: steps.length * 0.07, echo: 0.9 });
     },
+    // an achievement: two bright notes and a high one; soft (Reduce effects) plays one quiet note instead. Silent when Sound is off
+    achieve(soft) {
+      if (!allow(1)) return;
+      if (soft) { tone({ f: hz(12), type: 'triangle', dur: 0.3, gain: 0.06, echo: 0.4 }); return; }
+      [9, 12, 16].forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.35, gain: 0.09, at: i * 0.08, echo: 0.6 }));
+    },
     tick() { tone({ f: hz(9), type: 'triangle', dur: 0.12, gain: 0.05, echo: 0.3 }); },
     frenzy() { [3, 5, 7, 9, 12, 14].forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.4, gain: 0.12, at: i * 0.05, echo: 0.7 })); },
     batch() {
@@ -1737,11 +1909,13 @@ const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); ret
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
 // lifetime stats beyond the collection counters: taps on the board, seconds played (the page open and running), the current run's
 // seconds (-1 = not timed: a save from before stats started mid-run), the best single pop, the highest combo, the biggest Fresh Batch
-// (Flavors) and the fastest Fresh Batch run (seconds, 0 = none yet). Kept through Fresh Batch; Reset save starts them again.
-const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 });
+// (Flavors), the fastest Fresh Batch run (seconds, 0 = none yet), artifact copies crafted, forge jobs finished and the alloys among
+// them (the achievements read these three). Kept through Fresh Batch; Reset save starts them again.
+const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0, crafts: 0, forged: 0, alloys: 0 });
 // flavorJuice grows with every juice gain (pops, sales, the away bonus), like lifetime; the Flavors owed come from it
 // (ECON.flavorsOwed). Kept through Fresh Batch; Reset save starts it at 0. A v9 save gets it from its migration.
-const state = { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
+// achieved: the achievement ids granted so far (ACH), in the order they came; kept through Fresh Batch, cleared by Reset save.
+const state = { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, achieved: [], lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery
@@ -2782,7 +2956,7 @@ const REVEAL = {
 const DOCK_GATES = {
   pack: () => veteran() || state.lifetime > 0 || hasPearls() || Object.keys(state.keep).length > 0 || !state.autoSell, // the first pop
   tools: () => veteran() || state.lifetime >= toolsAt() || state.owned.some((o, i) => o && i > 0) || Object.keys(state.toolUp).length > 0,
-  book: () => veteran() || foundCount() >= 2 || anyShiny(), // a second pearl type, or a shiny
+  book: () => veteran() || foundCount() >= 2 || anyShiny() || state.achieved.length > 0, // a second pearl type, a shiny, or the first achievement (its toast points here)
   pool: () => veteran() || foundCount() >= 3 || anyShiny() || !state.shinyOn || ECON.PEARLS.some((t) => state.col[t.id].found && !state.pool.includes(t.id)), // a third type, a shiny, or a pool already changed
   arts: () => REVEAL.collapse() || artsUsed(), // with the Fresh Batch box (500K lifetime juice), or once used
   forge: () => REVEAL.collapse() || artsUsed(),
@@ -2813,7 +2987,7 @@ const DOTS = {
       for (const kind of ['p', 's', 'u']) { const c = toolUpgrade(i, kind, u[kind] | 0); if (c && (u[kind] | 0) < c.max && state.sparks >= c.cost) k.push(kind + i + ':' + (u[kind] | 0)); } });
     return k;
   },
-  book: () => ECON.PEARLS.flatMap((t) => [state.col[t.id].found ? t.id : null, state.col[t.id].sFound ? t.id + ':s' : null]).filter(Boolean), // discoveries
+  book: () => ECON.PEARLS.flatMap((t) => [state.col[t.id].found ? t.id : null, state.col[t.id].sFound ? t.id + ':s' : null]).filter(Boolean).concat(state.achieved.map((id) => 'a:' + id)), // discoveries and achievements
   arts: () => ARTS.ARTIFACTS.filter((a) => ARTS.canCraft(a.id, state.inv, state.artifacts, state.forge.stock)).map((a) => a.id + ':' + ARTS.count(state.artifacts, a.id)), // crafts within reach
 };
 const dotSeen = {}; // per panel: every key the player has had on show while that panel was open
@@ -3148,10 +3322,11 @@ function craftArtifact(id, rng) {
   const prev = ARTS.activeCopy(state.artifacts, id);
   const c = collapse ? null : ARTS.craft(id, state.inv, state.artifacts, state.invV, state.forge.stock, rng);
   if (!c) return null;
+  state.stats.crafts++;
   ARTS.equip(state.artEquip, state.artifacts, id); // a relic takes a free slot by itself; with all slots full it waits unequipped
   recalc(); Snd.chime(rarityRank(c.rarity)); addShake(1 + rarityRank(c.rarity) * 0.6);
   openReveal(id, c, prev);
-  artSig = ''; forgeSig = ''; updateArts(); updateForge(); updatePack(); updateHud(0.016); save(); return c;
+  artSig = ''; forgeSig = ''; updateArts(); updateForge(); updatePack(); checkAch(); updateHud(0.016); save(); return c;
 }
 // equip slots (relics): each changes state.artEquip through ARTS and returns whether it did; the gallery's equip row will call them
 function equipChanged(ok) { if (ok) { recalc(); artSig = ''; forgeSig = ''; updateArts(); updateForge(); updateHud(0.016); save(); } return ok; }
@@ -3373,8 +3548,11 @@ const multTxt = (m) => 'x' + +m.toFixed(2);
 const typeDuckCount = () => ARTS.ARTIFACTS.filter((a) => a.bonus.scope && ARTS.applies(a, state.artifacts, state.artEquip)).length;
 // the payout multiplier line under the juice counter: Flavors and global artifacts, then "+ 3 type ducks" (they pay on one type each,
 // so pop values differ by type). It is a button that opens the Hall of Ducks.
+// Achievements add one more global part ("achievements x1.12").
+const achTxt = (m) => 'x' + +m.toFixed(3); // +0.5% steps: x1.005, x1.065
 function payoutLine() {
-  const e = state.echoes, a = S.artMult, n = typeDuckCount(), more = n ? ' + ' + n + ' type duck' + (n === 1 ? '' : 's') : '';
+  const e = state.echoes, a = S.artMult, c = S.achMult || 1, n = typeDuckCount(), more = n ? ' + ' + n + ' type duck' + (n === 1 ? '' : 's') : '';
+  if (c > 1) return 'Payouts ' + achTxt(S.echoMult * a * c) + ' (' + (e > 0 ? ['Flavors ' + e + ' ' + multTxt(S.echoMult)] : []).concat(a > 1 ? ['artifacts ' + multTxt(a)] : [], ['achievements ' + achTxt(c)]).join(', ') + ')' + more;
   if (a <= 1) return e > 0 ? 'Flavors ' + e + ' (payouts ' + multTxt(S.echoMult) + ')' + more : n ? 'Payouts ' + multTxt(1) + more : '';
   return 'Payouts ' + multTxt(S.echoMult * a) + ' (' + (e > 0 ? 'Flavors ' + e + ' ' + multTxt(S.echoMult) + ', ' : '') + 'artifacts ' + multTxt(a) + ')' + more;
 }
@@ -3442,6 +3620,7 @@ function bookEntryHTML(e) {
 }
 function updateBook() {
   if ($('book').hidden) return;
+  if (bookTab === 'ach') { updateAch(); return; }
   const v = bookView(bookPage), cnt = bookCount(), sig = JSON.stringify(v) + cnt.found + spr.ps;
   setLbl('bkCount', cnt.found + ' / ' + cnt.total + ' found'); setLbl('bkPage', (v.index + 1) + ' / ' + v.pages);
   $('bkPrev').disabled = v.index <= 0; $('bkNext').disabled = v.index >= v.pages - 1;
@@ -3454,12 +3633,80 @@ function turnBook(d) {
   Snd.click(); bookPage = n; const b = $('bk'); b.classList.remove('turn'); void b.offsetWidth; b.classList.add('turn'); updateBook();
 }
 function openBook() { // the cover swings open a moment after the panel appears
-  const b = $('bk'); b.classList.remove('open'); bookSig = ''; updateBook();
+  const b = $('bk'); b.classList.remove('open'); bookSig = ''; paintBookTab();
   setTimeout(() => b.classList.add('open'), 60); // the cover swings open
 }
 $('bkPrev').addEventListener('click', () => turnBook(-1));
 $('bkNext').addEventListener('click', () => turnBook(1));
-document.addEventListener('keydown', (e) => { if (!$('book').hidden) { if (e.key === 'ArrowLeft') turnBook(-1); else if (e.key === 'ArrowRight') turnBook(1); } });
+document.addEventListener('keydown', (e) => { if (!$('book').hidden && bookTab === 'pearls') { if (e.key === 'ArrowLeft') turnBook(-1); else if (e.key === 'ArrowRight') turnBook(1); } });
+
+/* ----- achievements (src/achievements.js): granted once a second and after a Fresh Batch, a craft or a forge job, announced in the
+   toast with a short chime; on load, what the save already earns is granted silently with one toast. The earned list only grows. ----- */
+const ACH_CHECK_SECS = 1;
+const achPct = () => '+' + +(ACH.bonus(state.achieved) * 100).toFixed(1) + '%';
+// grants every achievement the state earns that is not granted yet; returns the new ids. silent: no toast and no chime
+function checkAch(silent) {
+  const have = new Set(state.achieved), fresh = ACH.earned(state).filter((id) => !have.has(id));
+  if (!fresh.length) return fresh;
+  const first = !state.achieved.length;
+  state.achieved = state.achieved.concat(fresh); recalc(); syncDock(); // the book shows before the toast that points at it
+  if (silent) return fresh;
+  Snd.achieve(fxOff());
+  if (fresh.length <= 2) fresh.forEach((id) => toast('Achievement: ' + ACH.byId(id).name + '! Payouts ' + achPct() + ' from achievements'));
+  else toast(fresh.length + ' achievements: ' + fresh.slice(0, 2).map((id) => ACH.byId(id).name).join(', ') + ' and more. Payouts ' + achPct() + ' from achievements');
+  if (first) toast('Your achievements are in the Collection book');
+  return fresh;
+}
+// after a load: what the player's history already earns, granted at once, with one toast
+function grantHistory() {
+  const n = checkAch(true).length;
+  if (n) toast((n === 1 ? '1 achievement' : n + ' achievements') + ' from your history: payouts ' + achPct() + '. See the Collection book.');
+  return n;
+}
+let bookTab = 'pearls', achCat = ACH.CATEGORIES[0].id; // the book's tab and the achievement category on show, for the page session
+function setBookTab(t) { if (t !== 'pearls' && t !== 'ach') return false; bookTab = t; paintBookTab(); return true; }
+function setAchCat(id) { if (!ACH.CATEGORIES.some((c) => c.id === id)) return false; achCat = id; updateAch(); return true; }
+function paintBookTab() {
+  const ach = bookTab === 'ach';
+  $('bkWrap').hidden = ach; $('achView').hidden = !ach; $('book').classList.toggle('ach', ach);
+  for (const [id, on] of [['bkTabPearls', !ach], ['bkTabAch', ach]]) { $(id).classList.toggle('on', on); $(id).setAttribute('aria-selected', String(on)); }
+  if (ach) updateAch(); else { bookSig = ''; updateBook(); }
+}
+// the Achievements tab: the summary, the categories with their counts, and each ladder of the category on show: every granted tier,
+// then only the next one (with its progress), then "???" for the rest
+function achBookView() {
+  const got = new Set(state.achieved), v = ACH.view(state), list = ACH.ACHIEVEMENTS;
+  const cats = ACH.CATEGORIES.map((c) => { const xs = list.filter((a) => a.category === c.id); return { id: c.id, name: c.name, have: xs.filter((a) => got.has(a.id)).length, total: xs.length }; });
+  const ladders = ACH.LADDERS.filter((L) => L.cat === achCat).map((L) => {
+    let next = false; const xs = list.filter((a) => a.ladder === L.id);
+    const tiers = xs.map((a) => {
+      if (got.has(a.id)) return { id: a.id, state: 'done', name: a.name, desc: a.description, reward: a.reward };
+      if (next) return { id: a.id, state: 'hidden' };
+      next = true; const p = a.progress(v);
+      return { id: a.id, state: 'next', name: a.name, desc: a.description, reward: a.reward, have: p.have, need: p.need, frac: p.need > 0 ? Math.min(1, p.have / p.need) : 0, lower: a.lower, best: p.best };
+    });
+    return { id: L.id, name: L.name, have: xs.filter((a) => got.has(a.id)).length, total: xs.length, tiers };
+  });
+  const have = list.filter((a) => got.has(a.id)).length, bonus = ACH.bonus(state.achieved);
+  return { have, total: list.length, bonus, capped: bonus >= ACH.ACH_CAP, cat: achCat, cats, ladders };
+}
+const rewardTxt = (r) => '+' + +(r * 100).toFixed(1) + '%';
+function achTierHTML(t) {
+  if (t.state === 'hidden') return '<div class="achT hid"><span class="ic" aria-hidden="true">?</span><b>???</b></div>';
+  const head = '<span class="ic" aria-hidden="true">' + (t.state === 'done' ? '✓' : '○') + '</span><b>' + t.name + (t.state === 'done' ? '<span class="vh"> (achieved)</span>' : '') + '</b><span class="rw">' + rewardTxt(t.reward) + '</span><span class="ds">' + t.desc + '</span>';
+  if (t.state === 'done') return '<div class="achT done">' + head + '</div>';
+  const pct = Math.floor(t.frac * 100 + 1e-9), txt = t.lower ? (t.best ? 'Best run ' + durTxt(Math.floor(t.best)) : 'No timed run yet') : fmt(t.have) + ' / ' + fmt(t.need);
+  return '<div class="achT next">' + head + '<div class="achBar" role="progressbar" aria-label="' + t.name + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="transform:scaleX(' + t.frac.toFixed(3) + ')"></i></div><small class="pg2">' + txt + '</small></div>';
+}
+function updateAch() {
+  if ($('book').hidden || bookTab !== 'ach') return;
+  const v = achBookView();
+  setLbl('achSum', v.have + ' of ' + v.total + ' · payouts ' + rewardTxt(v.bonus) + (v.capped ? ' (the most achievements give)' : ''));
+  setHTML('achCats', v.cats.map((c) => '<button type="button" class="chip atab' + (c.id === v.cat ? ' on' : '') + '" aria-pressed="' + (c.id === v.cat) + '" data-acat="' + c.id + '">' + c.name + ' <small>' + c.have + '/' + c.total + '</small></button>').join(''));
+  setHTML('achList', v.ladders.map((L) => '<div class="achLad"><h4>' + L.name + '<small>' + L.have + ' of ' + L.total + '</small></h4>' + L.tiers.map(achTierHTML).join('') + '</div>').join(''));
+}
+$('achCats').addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-acat]'); if (b) { Snd.click(); setAchCat(b.dataset.acat); } });
+document.querySelectorAll('[data-btab]').forEach((b) => b.addEventListener('click', () => { Snd.click(); setBookTab(b.dataset.btab); }));
 
 /* ----- tools: a carousel to browse, buy, equip and upgrade each tool ----- */
 let toolView = 0, spinA = 0, spinKick = 0, lastPedT = 0;
@@ -3627,7 +3874,7 @@ function finishCollapse() {
   sx.runSecs = 0; // the next run is timed from the start
   state.echoes += gain; state.collapses += 1; state.sparks = 0; state.runEarned = 0; state.lv = ECON.zeroLevels(); clearUnkept(); resetTools(); // kept stacks and artifacts survive
   resetRun();
-  toast('Yum! Flavors +' + gain + '. Everything pays ' + multTxt(S.echoMult * S.artMult) + ' now'); updateShelf(); forgeSig = ''; updateForge(); save();
+  toast('Yum! Flavors +' + gain + '. Everything pays ' + multTxt(S.echoMult * S.artMult * S.achMult) + ' now'); updateShelf(); forgeSig = ''; updateForge(); checkAch(); save();
 }
 
 /* ----- input ----- */
@@ -3678,7 +3925,7 @@ const KEY = 'poppit.v1'; // never rename: every existing save lives under this k
 const BACKUP_KEY = 'poppit.backup'; // the save that the last import replaced, or a stored save that could not be read, for Restore previous save
 const UNREADABLE_KEY = 'poppit.unreadable'; // an unreadable stored save, when BACKUP_KEY already holds a good one
 let saveBlocked = false; // the stored save is from a newer Poppit: it was not loaded, so it must not be overwritten
-function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, flavorJuice: state.flavorJuice, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
+function serialize() { return { sparks: state.sparks, runEarned: state.runEarned, lifetime: state.lifetime, flavorJuice: state.flavorJuice, achieved: state.achieved, lv: state.lv, echoes: state.echoes, collapses: state.collapses, muted: state.muted, musicOn: state.musicOn, musicVol: state.musicVol, autoSell: state.autoSell, owned: state.owned, equip: state.equip, toolUp: state.toolUp, inv: state.inv, invV: state.invV, seen: state.seen, version: SAVE_VERSION, pool: state.pool, shinyOn: state.shinyOn, col: state.col, artifacts: state.artifacts, artEquip: state.artEquip, keep: state.keep, stats: state.stats, reduceFx: state.reduceFx, forge: FORGE.toSave(state.forge, Date.now()), t: Date.now() }; }
 function save() { if (saveBlocked) return; try { localStorage.setItem(KEY, JSON.stringify(serialize())); } catch (e) { /* storage may be unavailable */ } }
 function readSaveRaw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
 function readSave() { const s = readSaveRaw(); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
@@ -3703,7 +3950,7 @@ const BIG = Number.MAX_SAFE_INTEGER;
 // the stats object from a save: whole counts and finite seconds, never below 0; runSecs may be -1 (not timed)
 function statsFromSave(o) {
   o = objOf(o); const b = blankStats();
-  return { taps: whole(o.taps, BIG), secs: Math.min(fin(o.secs), 1e10), runSecs: o.runSecs === -1 ? -1 : Math.min(fin(o.runSecs), 1e10), bestPop: fin(o.bestPop), bestCombo: whole(o.bestCombo, BIG), bestGain: whole(o.bestGain, BIG), fastest: Math.min(fin(o.fastest), 1e10) || b.fastest };
+  return { taps: whole(o.taps, BIG), secs: Math.min(fin(o.secs), 1e10), runSecs: o.runSecs === -1 ? -1 : Math.min(fin(o.runSecs), 1e10), bestPop: fin(o.bestPop), bestCombo: whole(o.bestCombo, BIG), bestGain: whole(o.bestGain, BIG), fastest: Math.min(fin(o.fastest), 1e10) || b.fastest, crafts: whole(o.crafts, BIG), forged: whole(o.forged, BIG), alloys: whole(o.alloys, BIG) };
 }
 // Returns 'ok', or 'invalid' / 'newer' and leaves the state exactly as it was. Unknown keys are ignored.
 function loadState(raw) {
@@ -3713,6 +3960,7 @@ function loadState(raw) {
   state.echoes = whole(d.echoes, BIG); state.collapses = whole(d.collapses, BIG);
   state.reduceFx = typeof d.reduceFx === 'boolean' ? d.reduceFx : calm; // no saved choice: the browser's reduced-motion setting
   state.stats = statsFromSave(d.stats);
+  state.achieved = ACH.fromSave(d.achieved); // known ids, each once; what the state already earns is granted after the load (grantHistory)
   state.muted = d.muted === true; state.musicOn = d.musicOn !== false; state.musicVol = Number.isFinite(d.musicVol) ? clamp(d.musicVol, 0, 1) : 0.5;
   state.autoSell = typeof d.autoSell === 'boolean' ? d.autoSell : true; // on unless the save says off
   for (const k in ECON.UPG) state.lv[k] = whole(lv[k], ECON.UPG[k].max);
@@ -3752,14 +4000,16 @@ function awayBonus(secs) {
 }
 /* ----- forge engine hooks (the forge panel comes later): timers run on wall-clock time ----- */
 // finish every job whose end time has passed; returns how many
-function forgeCatchUp() { const n = FORGE.collect(state.forge, Date.now()); if (n) { forgeDone(); } return n; }
+function forgeCatchUp() { const n = collectForge(Date.now()); if (n) { forgeDone(); } return n; }
+// FORGE.collect, counting each finished job (and the alloys) in the stats for the achievements
+function collectForge(now) { let n = 0; for (let i = 0; i < state.forge.slots.length; i++) { const m = FORGE.finish(state.forge, i, now); if (m) { n++; state.stats.forged++; if (FORGE.isAlloy(m)) state.stats.alloys++; } } return n; }
 // frenzy speeds the forge only while the page is open and visible
-function forgeTick() { const now = Date.now(); FORGE.setFrenzy(state.forge, frenzyT > 0 && !document.hidden, now); if (FORGE.collect(state.forge, now)) forgeDone(); }
+function forgeTick() { const now = Date.now(); FORGE.setFrenzy(state.forge, frenzyT > 0 && !document.hidden, now); if (collectForge(now)) forgeDone(); }
 function forgeStart(slot, mat) { if (!FORGE.start(state.forge, slot, mat, state.inv, Date.now(), state.invV)) return false; updatePack(); updateForge(); save(); return true; }
 function forgeStrike(slot) { return FORGE.strike(state.forge, Date.now(), slot); }
 function forgeBuy(id) { const c = FORGE.buy(state.forge, id, state.sparks, Date.now()); if (!c) return false; state.sparks -= c; updateForge(); save(); return true; }
 // a job finished: save the stock, and mark the dock button if the panel is not open to show it
-function forgeDone() { if ($('forge').hidden) setForgeDot(true); forgeSig = ''; updateForge(); updateArts(); save(); }
+function forgeDone() { if ($('forge').hidden) setForgeDot(true); forgeSig = ''; updateForge(); updateArts(); checkAch(); save(); }
 let forgeDot = false;
 function setForgeDot(on) { forgeDot = !!on; $('forgeDot').hidden = !forgeDot; }
 
@@ -3938,8 +4188,8 @@ $('resetBtn').addEventListener('click', () => {
   wipeArmed = false; b.textContent = 'Reset save';
   try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   saveBlocked = false;
-  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
-  collapse = null; resetRun(); resetGoals(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
+  Object.assign(state, { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, achieved: [], lv: ECON.zeroLevels(), echoes: 0, collapses: 0, autoSell: true, seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, forge: FORGE.blank(), stats: blankStats() }); zeroInv(); resetTools(); $('autoSell').checked = true;
+  collapse = null; resetRun(); resetGoals(); recalc(); updateShelf(); seeShop(); seeDots(); syncDock(); toast('Save erased');
 });
 
 /* ----- save codes: copy or download one, paste or open one, then Load and Confirm. The replaced save goes to BACKUP_KEY. ----- */
@@ -4015,7 +4265,7 @@ function restoreBackup() {
 // everything outside state that has to follow a newly loaded save
 function afterLoad() {
   collapse = null; armed = false; clearTimeout(armTimer); toolView = state.equip >= 0 ? state.equip : state.lv.tool;
-  resetRun(); syncDiscoveries(); $('autoSell').checked = state.autoSell;
+  resetRun(); syncDiscoveries(); grantHistory(); $('autoSell').checked = state.autoSell;
   paintMute(); paintFx(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); paintMusic();
   updateShelf(); updatePack(); updatePool(); paintRestore(); artSig = ''; updateArts(); forgeSig = ''; setForgeDot(false); updateForge(); // no stale numbers from the old save
 }
@@ -4031,7 +4281,7 @@ $('restoreBtn').addEventListener('click', () => {
 });
 
 /* ----- main loop ----- */
-let last = 0, acc = 0, hudT = 0, saveT = 0, started = false;
+let last = 0, acc = 0, hudT = 0, saveT = 0, achT = 0, started = false;
 const DT = 1 / 60;
 // adaptive quality: if the main thread keeps spending too long per frame, thin the particles first, then drop canvas resolution once
 let workAvg = 4, slowT = 0, fastT = 0;
@@ -4054,7 +4304,8 @@ function frame(ts) {
   const w0 = performance.now();
   if (hitStop > 0) hitStop -= dt;
   else { acc += dt; while (acc >= DT) { step(DT); acc -= DT; } }
-  hudT += dt; saveT += dt;
+  hudT += dt; saveT += dt; achT += dt;
+  if (achT >= ACH_CHECK_SECS) { achT = 0; checkAch(); }
   revealTick(dt);
   forgeTick(); // before the HUD, so the speed line and slots show this frame's frenzy and finished jobs
   if (hudT > 0.08) { updateHud(hudT); updateShelf(); updatePool(); updateBook(); updateArts(); updateForge(); updateStats(); hudT = 0; }
@@ -4068,7 +4319,7 @@ function start(data) {
   const loaded = data && data.lv ? loadState(data) : loadStored();
   if (loaded === 'newer') { saveBlocked = true; toast('Your save is from a newer version of Poppit, so it was not loaded or changed. Reload to update.'); }
   const away = loaded !== 'ok' || (data && data.t) ? 0 : +(readSave() || {}).t;
-  recalc(); syncDiscoveries(); buildShelf(); buildPack(); buildToolPanel(); buildForgeUpg(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
+  recalc(); syncDiscoveries(); grantHistory(); buildShelf(); buildPack(); buildToolPanel(); buildForgeUpg(); $('autoSell').checked = state.autoSell; layout(); dispSparks = state.sparks;
   awayBonus(Number.isFinite(away) && away > 0 ? (Date.now() - away) / 1000 : 0); // also finishes forge jobs that ended while the game was closed
   paintMute(); paintFx(); Snd.setMuted(state.muted); Music.setMuted(state.muted); Music.setVolume(state.musicVol); Music.setOn(state.musicOn); Music.load(); paintMusic(); updateShelf(); paintRestore();
   seeShop(); seeDots(); syncDock();

@@ -17,11 +17,11 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     for (const [e, life, want] of cases) {
       const m = G.migrateSave(v9(e, life)).save;
       const loaded = load(v9(e, life)) === 'ok';
-      ok('a v9 save with ' + e + ' Flavors and ' + life + ' lifetime juice migrates to flavor juice ' + want, m.version === 10 && m.flavorJuice === want && loaded && st.flavorJuice === want && st.echoes === e && st.lifetime === life && E.flavorsOwed(st.flavorJuice) >= e, st.flavorJuice);
+      ok('a v9 save with ' + e + ' Flavors and ' + life + ' lifetime juice migrates to flavor juice ' + want, m.version === G.SAVE_VERSION && m.flavorJuice === want && loaded && st.flavorJuice === want && st.echoes === e && st.lifetime === life && E.flavorsOwed(st.flavorJuice) >= e, st.flavorJuice);
     }
     ok('the migration does not change the stored v9 object, and bad numbers count as 0', (() => { const o = v9(15, 1e8); G.migrateSave(o); return o.version === 9 && !('flavorJuice' in o); })() &&
       G.migrateSave({ version: 9, echoes: 'x', lifetime: -4 }).save.flavorJuice === 0 && G.migrateSave({ version: 9, echoes: 2.9, lifetime: NaN }).save.flavorJuice === 1.25e6 * 4);
-    ok('a v1 save reaches v10 too: its 3 Flavors stay owed', (() => { const m = G.migrateSave({ sparks: 1, lifetime: 9000, echoes: 3 }).save; return m.version === 10 && m.flavorJuice === 1.25e6 * 9 && E.flavorsOwed(m.flavorJuice) === 3; })());
+    ok('a v1 save reaches the current version too: its 3 Flavors stay owed', (() => { const m = G.migrateSave({ sparks: 1, lifetime: 9000, echoes: 3 }).save; return m.version === G.SAVE_VERSION && m.flavorJuice === 1.25e6 * 9 && E.flavorsOwed(m.flavorJuice) === 3; })());
     // 0 Flavors after migration: exactly the old first Fresh Batch, 2 Flavors at 5M
     load(v9(0, 3e6)); fresh(); st.runEarned = 3e6; refresh();
     ok('0 Flavors, 3M juice: not ready, +1 now, ready at +2, the run floor named', !G.batchView().ready && els.collapseNow.textContent === 'Now: +1 Flavor. Ready at +2.' && /^Earn 5\.00M juice in this run to unlock it \(3\.00M so far\)\.$/.test(els.collapseText.textContent) && bar() === '60', els.collapseNow.textContent + ' | ' + els.collapseText.textContent + ' | ' + bar());

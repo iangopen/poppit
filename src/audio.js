@@ -151,6 +151,12 @@ const Snd = (() => {
       steps.forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.4 + 0.1 * k, gain: 0.1, at: i * 0.07, echo: 0.6 + 0.1 * k }));
       if (k >= 2) tone({ f: hz(15), dur: 0.9, gain: 0.06, at: steps.length * 0.07, echo: 0.9 });
     },
+    // an achievement: two bright notes and a high one; soft (Reduce effects) plays one quiet note instead. Silent when Sound is off
+    achieve(soft) {
+      if (!allow(1)) return;
+      if (soft) { tone({ f: hz(12), type: 'triangle', dur: 0.3, gain: 0.06, echo: 0.4 }); return; }
+      [9, 12, 16].forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.35, gain: 0.09, at: i * 0.08, echo: 0.6 }));
+    },
     tick() { tone({ f: hz(9), type: 'triangle', dur: 0.12, gain: 0.05, echo: 0.3 }); },
     frenzy() { [3, 5, 7, 9, 12, 14].forEach((s, i) => tone({ f: hz(s), type: 'triangle', dur: 0.4, gain: 0.12, at: i * 0.05, echo: 0.7 })); },
     batch() {

@@ -371,7 +371,31 @@ button.eslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .prow .why { min-height: 14px; }
 .prow .tgl { min-width: 96px; }
 .prow.lk .tgl { background: rgba(240, 40, 108, 0.12); color: var(--accent); }
-#book { left: 0; right: 0; top: 0; bottom: 0; margin: auto; width: min(640px, calc(100% - 16px)); height: fit-content; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; transform-origin: center; }
+/* the book is a sheet over the whole board: its two tabs (Pearls, Achievements) and the close button on top, then the book spread
+   (centred) or the Achievements card, which fills the rest and scrolls inside */
+#book { left: 0; right: 0; top: 0; bottom: 0; width: auto; height: auto; margin: 0; padding: 8px; gap: 8px; background: #f4ecd8; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; transform-origin: center; }
+.bkTabs { display: flex; gap: 8px; align-items: center; }
+.bkTabs .bkClose { margin-left: auto; min-width: 44px; min-height: 44px; }
+#book .bkWrap { width: min(640px, 100%); margin: auto; }
+.achView { flex: 1; min-height: 0; width: min(640px, 100%); align-self: center; display: flex; flex-direction: column; gap: 8px; background: #fbf6e8; border: 3px solid #6b3a20; border-radius: 12px; padding: 10px 12px 12px; box-shadow: 0 12px 26px -12px rgba(30, 15, 5, 0.8); }
+.achSum { margin: 0; font: 800 13.5px var(--font-ui); color: var(--fg); }
+.achCats { display: flex; flex-wrap: wrap; gap: 6px; }
+.achCats .atab { padding: 6px 10px; font-size: 12px; }
+.achCats .atab small { font-weight: 600; opacity: 0.75; }
+.achList { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; }
+.achLad h4 { margin: 0 0 4px; display: flex; justify-content: space-between; gap: 8px; font: 400 20px/1.1 var(--font-brand); color: var(--fg); }
+.achLad h4 small { font: 700 11.5px var(--font-ui); color: var(--muted); align-self: center; }
+.achT { display: grid; grid-template-columns: 22px 1fr auto; column-gap: 6px; align-items: baseline; padding: 6px 8px; margin-top: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.55); border: 1px solid #e3d8bd; font: 600 12px/1.3 var(--font-ui); color: var(--muted); }
+.achT b { color: var(--fg); font-weight: 800; font-size: 13px; }
+.achT .ic { font-weight: 800; color: #8a6f4a; text-align: center; }
+.achT .rw { font-weight: 800; color: #8a6f4a; white-space: nowrap; }
+.achT .ds { grid-column: 2 / 4; overflow-wrap: anywhere; }
+.achT.done { background: #fff3c4; border-color: #e7c35a; }
+.achT.done .ic { color: #b07a00; }
+.achT.hid { opacity: 0.6; }
+.achBar { grid-column: 2 / 4; height: 8px; margin-top: 5px; border-radius: 999px; background: #e8dfc6; overflow: hidden; }
+.achBar i { display: block; height: 100%; background: var(--accent); transform-origin: left center; }
+.achT .pg2 { grid-column: 2 / 4; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .bkFoot { position: absolute; bottom: 12px; z-index: 4; font: 400 17px var(--font-brand); color: #8a6f4a; opacity: 0; transition: opacity 300ms ease 700ms; pointer-events: none; }
 .bkFoot.l { left: 50%; transform: translateX(-120%); } .bkFoot.r { left: 50%; transform: translateX(20%); }
 .bk.open .bkFoot, .bk.open .bkArr, .bk.open .bkX { opacity: 1; }
@@ -586,8 +610,18 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <label class="auto"><input type="checkbox" id="autoSell"><span>Auto-sell</span></label>
       </div>
     </section>
-    <section class="panel" id="book" hidden aria-label="Pearl collection book">
-      <div class="bkWrap"><div class="bk" id="bk"><div class="bkPages">
+    <section class="panel" id="book" hidden aria-label="Collection book">
+      <div class="bkTabs" role="tablist" aria-label="Collection book">
+        <button type="button" class="chip atab on" id="bkTabPearls" role="tab" aria-selected="true" aria-controls="bkWrap" data-btab="pearls">Pearls</button>
+        <button type="button" class="chip atab" id="bkTabAch" role="tab" aria-selected="false" aria-controls="achView" data-btab="ach">Achievements</button>
+        <button class="x bkClose" type="button" data-close="book" aria-label="Close collection">&#10005;</button>
+      </div>
+      <div class="achView" id="achView" role="tabpanel" aria-label="Achievements" hidden>
+        <p class="achSum" id="achSum"></p>
+        <div class="achCats" id="achCats" role="group" aria-label="Category"></div>
+        <div class="achList" id="achList"></div>
+      </div>
+      <div class="bkWrap" id="bkWrap"><div class="bk" id="bk"><div class="bkPages">
         <div class="bkBackR"></div><div class="pg pgR" id="pgR"></div>
         <div class="cov"><div class="covF"><span>Pearl<br>Collection</span><i></i></div><div class="covB"><div class="pg pgL" id="pgL"></div></div></div>
         <span class="bkFoot l" id="bkCount">0 / 20 found</span><span class="bkFoot r" id="bkPage">1 / 10</span>

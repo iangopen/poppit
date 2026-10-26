@@ -59,7 +59,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   st.lifetime = life0; st.keep = keep0; st.echoes = ech0; st.collapses = col0;
 
   // save v4 (artifacts and Keep); v6 turned owned artifacts into copies
-  ok('SAVE_VERSION is 10 (the flavor juice came after the stats object)', G.SAVE_VERSION === 10);
+  ok('SAVE_VERSION is 11 (the achievements came after the flavor juice)', G.SAVE_VERSION === 11);
   const m = G.migrateSave({ version: 3, sparks: 5, inv: { pearl: 50 } }).save;
   ok('a v3 save migrates with no artifacts and nothing kept', m.version === G.SAVE_VERSION && JSON.stringify(m.artifacts) === '{}' && JSON.stringify(m.keep) === '{}' && m.inv.pearl === 50);
   ok('and loads that way', G.loadState({ version: 3, inv: { pearl: 50 } }) === 'ok' && JSON.stringify(st.artifacts) === '{}' && JSON.stringify(st.keep) === '{}' && st.inv.pearl === 50);

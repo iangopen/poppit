@@ -6,11 +6,11 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
   let now = 1.95e12; Date.now = () => now;
   const near = (a, b) => Math.abs(a - b) < 1e-9 * Math.max(1, Math.abs(b));
   const fresh = () => { G.resetRun(); G.clearBoard(); G.setMeter(0); };
-  // one auto-sold pop of a type at combo 0, no frenzy: what it pays
+  // one auto-sold pop of a type at combo 0, no frenzy: what it pays, without the achievements' part (a craft can earn some)
   const pay = (kind, src, shiny) => {
     st.autoSell = true; const k = st.keep[kind]; delete st.keep[kind];
     const c = G.cells.find((x) => !x.p), p = G.spawnAt(c, kind, !!shiny); p.born = 1; p.hp = 1; G.setCombo(0);
-    const s0 = st.sparks; G.popPearl(p, src || 'tap'); if (k) st.keep[kind] = true; return st.sparks - s0;
+    const s0 = st.sparks; G.popPearl(p, src || 'tap'); if (k) st.keep[kind] = true; return (st.sparks - s0) / G.getS().achMult;
   };
   const fx = [1, 2, 3].map((i) => ({ id: 'fx_relic' + i, hall: 'relics', name: 'Test Relic ' + i, description: 'test only', cost: [{ kind: 'material', id: 'rosegold', qty: 1 }], repeatFactor: 1, costGrowth: 1, bonus: { type: 'spawn', value: 1.01 } }));
   try {

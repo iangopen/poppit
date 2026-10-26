@@ -48,7 +48,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     load({ version: 8, lv: {}, reduceFx: 'yes' });
     ok('and loads with them; a missing Reduce effects takes the browser default (off here)', st.stats.taps === 0 && st.stats.runSecs === -1 && st.reduceFx === false);
     load({ version: 9, lv: {}, stats: { taps: -3, secs: 'x', runSecs: 1e99, bestPop: 7.5, bestCombo: 2.7, bestGain: NaN, fastest: -1 }, reduceFx: true });
-    ok('loaded stats are clamped: whole counts, finite seconds, nothing below 0', JSON.stringify(st.stats) === '{"taps":0,"secs":0,"runSecs":10000000000,"bestPop":7.5,"bestCombo":2,"bestGain":0,"fastest":0}' && st.reduceFx === true, JSON.stringify(st.stats));
+    ok('loaded stats are clamped: whole counts, finite seconds, nothing below 0', JSON.stringify(st.stats) === '{"taps":0,"secs":0,"runSecs":10000000000,"bestPop":7.5,"bestCombo":2,"bestGain":0,"fastest":0,"crafts":0,"forged":0,"alloys":0}' && st.reduceFx === true, JSON.stringify(st.stats));
 
     // ---- Fresh Batch keeps them and records the run ----
     const S9 = { taps: 40, secs: 900, runSecs: 600, bestPop: 1234, bestCombo: 33, bestGain: 0, fastest: 0 };
@@ -70,7 +70,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     ok('an import replaces them and backs up the old ones', G.checkImport(G.encodeSave({ version: 9, sparks: 1 })) === 'ok' && G.applyImport() === true && st.stats.taps === 0 && store['poppit.backup'] === raw);
     ok('Restore brings them back', G.restoreBackup() === 'ok' && JSON.stringify(st.stats) === sj);
     els.resetBtn.fire('click', {}); els.resetBtn.fire('click', {});
-    ok('Reset save zeroes the stats and keeps the Reduce effects choice', JSON.stringify(st.stats) === '{"taps":0,"secs":0,"runSecs":0,"bestPop":0,"bestCombo":0,"bestGain":0,"fastest":0}' && st.reduceFx === true);
+    ok('Reset save zeroes the stats and keeps the Reduce effects choice', JSON.stringify(st.stats) === '{"taps":0,"secs":0,"runSecs":0,"bestPop":0,"bestCombo":0,"bestGain":0,"fastest":0,"crafts":0,"forged":0,"alloys":0}' && st.reduceFx === true);
 
     // ---- Reduce effects ----
     st.reduceFx = false; G.paintFx(); fresh();

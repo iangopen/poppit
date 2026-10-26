@@ -11,11 +11,13 @@ const zeroMap = () => { const o = {}; INV_IDS.forEach((k) => { o[k] = 0; }); ret
 const blankCol = () => { const o = {}; ECON.PEARLS.forEach((t) => { o[t.id] = { found: t.id === 'pearl', popped: 0, sFound: false, sPopped: 0 }; }); return o; };
 // lifetime stats beyond the collection counters: taps on the board, seconds played (the page open and running), the current run's
 // seconds (-1 = not timed: a save from before stats started mid-run), the best single pop, the highest combo, the biggest Fresh Batch
-// (Flavors) and the fastest Fresh Batch run (seconds, 0 = none yet). Kept through Fresh Batch; Reset save starts them again.
-const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0 });
+// (Flavors), the fastest Fresh Batch run (seconds, 0 = none yet), artifact copies crafted, forge jobs finished and the alloys among
+// them (the achievements read these three). Kept through Fresh Batch; Reset save starts them again.
+const blankStats = () => ({ taps: 0, secs: 0, runSecs: 0, bestPop: 0, bestCombo: 0, bestGain: 0, fastest: 0, crafts: 0, forged: 0, alloys: 0 });
 // flavorJuice grows with every juice gain (pops, sales, the away bonus), like lifetime; the Flavors owed come from it
 // (ECON.flavorsOwed). Kept through Fresh Batch; Reset save starts it at 0. A v9 save gets it from its migration.
-const state = { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
+// achieved: the achievement ids granted so far (ACH), in the order they came; kept through Fresh Batch, cleared by Reset save.
+const state = { sparks: 0, runEarned: 0, lifetime: 0, flavorJuice: 0, achieved: [], lv: ECON.zeroLevels(), echoes: 0, collapses: 0, muted: false, musicOn: true, musicVol: 0.5, owned: [true, false, false, false, false, false], equip: -1, toolUp: {}, autoSell: true, inv: zeroMap(), invV: zeroMap(), seen: { pearl: true }, pool: ['pearl'], shinyOn: true, col: blankCol(), artifacts: {}, artEquip: [], keep: {}, stats: blankStats(), reduceFx: calm, forge: FORGE.blank() };
 // Keep is per pearl type and covers its shiny stack too: 'pearl:s' is kept when 'pearl' is
 const isKept = (kind) => state.keep[String(kind).split(':')[0]] === true;
 // a type is discovered the moment its shop unlock is bought (or loaded); Fresh Batch never undoes a discovery

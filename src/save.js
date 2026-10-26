@@ -30,7 +30,7 @@ function decodeSave(text) {
 // Save versions. serialize() writes SAVE_VERSION; MIGRATIONS[n] turns a version n save into version n + 1, and they run
 // in order, so an old save passes through every step. A save without a version is version 1. Never edit a shipped
 // migration: add a new SAVE_VERSION and a new step instead.
-const SAVE_VERSION = 10;
+const SAVE_VERSION = 11;
 const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const MIGRATIONS = {
   // v1 had no pool, collection or shiny toggle, and always had blue pearls (blue is now the first unlock)
@@ -109,6 +109,9 @@ const MIGRATIONS = {
     const e = Math.floor(num(d.echoes));
     return Object.assign({}, d, { version: 10, flavorJuice: Math.max(num(d.lifetime), 1250000 * e * e) });
   },
+  // v10 had no achievements: the earned set starts empty. The game grants, on load, every achievement the saved state already
+  // satisfies (ACH.earned), silently, with one toast that says how many came from the player's history.
+  10: (d) => Object.assign({}, d, { version: 11, achieved: [] }),
 };
 // { save } ready for loadState, or { error: 'invalid' | 'newer', version }
 function migrateSave(d) {
