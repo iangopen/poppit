@@ -52,7 +52,7 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     G.ARTS.addCopy(st.artifacts, 'pink_duck', 'common', []); G.recalc();
     ok('... including the Pink Duck', G.payoutLine() === 'Payouts x1.722 (Flavors 2 x1.2, artifacts x1.4, achievements x1.025)', G.payoutLine());
     st.achieved = ACH.ACHIEVEMENTS.map((a) => a.id); G.recalc();
-    ok('every achievement at once stops at the cap: x' + (1 + ACH.ACH_CAP), G.getS().achMult === 1 + ACH.ACH_CAP && near(pay('pearl') / base.tap, 1.2 * 1.4 * 1.25), G.getS().achMult);
+    ok('every achievement at once stops at the cap: x' + (1 + ACH.ACH_CAP), G.getS().achMult === 1 + ACH.ACH_CAP && near(pay('pearl') / base.tap, 1.2 * 1.4 * (1 + ACH.ACH_CAP)), G.getS().achMult);
 
     // ---- the retroactive grant on load: silent, one toast, nothing lost or counted twice ----
     const VET = { version: 10, sparks: 10, lifetime: 2e9, flavorJuice: 2e9, runEarned: 0, echoes: 120, collapses: 10, lv: {},
@@ -130,7 +130,14 @@ module.exports = ({ G, ok, frames, E, store, els }) => {
     ok('the category switcher changes the list; a best time with no run says so', G.achBookView().cat === 'batch' && /No timed run yet/.test(els.achList.innerHTML) && fb.tiers[0].state === 'next' && fb.tiers[0].frac === 0 && G.setAchCat('nope') === false);
     st.stats.fastest = 720; G.updateAch();
     ok('a run of 12 minutes shows as the best and fills the bar to 83%', /Best run 12m/.test(els.achList.innerHTML) && /aria-valuenow="83"/.test(els.achList.innerHTML), '');
-    G.setAchCat('popping'); G.openPanel('book');
+    // one close control for the sheet on both tabs; Escape closes the book from either tab
+    G.setAchCat('popping'); G.docFire('keydown', { key: 'Escape' });
+    ok('Escape closes the book from the Achievements tab', els.book.hidden && els.bookBtn['attr:aria-expanded'] === 'false');
+    G.setBookTab('pearls'); G.openPanel('book'); const pearlsOpen = !els.book.hidden; G.docFire('keydown', { key: 'Escape' });
+    ok('and from the Pearls tab', pearlsOpen && els.book.hidden);
+    st.achieved = ACH.ACHIEVEMENTS.map((a) => a.id); G.recalc(); G.setBookTab('ach'); G.openPanel('book');
+    ok('with every achievement the summary is the whole table, with no cap note', els.achSum.textContent === '57 of 57 · payouts +37.5%' && G.getS().achMult === 1.375, els.achSum.textContent);
+    G.openPanel('book');
     run.push('ach run: ' + els.achSum.textContent);
   } finally { Date.now = realNow; G.Snd.achieve = ach0; G.setBookTab('pearls'); reset(); st.reduceFx = false; G.paintFx && G.paintFx(); }
   run.forEach((l) => console.log(l));

@@ -374,8 +374,8 @@ button.eslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 /* the book is a sheet over the whole board: its two tabs (Pearls, Achievements) and the close button on top, then the book spread
    (centred) or the Achievements card, which fills the rest and scrolls inside */
 #book { left: 0; right: 0; top: 0; bottom: 0; width: auto; height: auto; margin: 0; padding: 8px; gap: 8px; background: #f4ecd8; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; transform-origin: center; }
-.bkTabs { display: flex; gap: 8px; align-items: center; }
-.bkTabs .bkClose { margin-left: auto; min-width: 44px; min-height: 44px; }
+.bkTabs { display: flex; gap: 8px; align-items: center; width: min(640px, 100%); align-self: center; } /* as wide as the card and the spread, so the tabs and the close sit over them on a wide screen */
+.bkTabs .bkClose { margin-left: auto; min-width: 44px; min-height: 44px; } /* the sheet's one close control, on both tabs (Escape closes it too) */
 #book .bkWrap { width: min(640px, 100%); margin: auto; }
 .achView { flex: 1; min-height: 0; width: min(640px, 100%); align-self: center; display: flex; flex-direction: column; gap: 8px; background: #fbf6e8; border: 3px solid #6b3a20; border-radius: 12px; padding: 10px 12px 12px; box-shadow: 0 12px 26px -12px rgba(30, 15, 5, 0.8); }
 .achSum { margin: 0; font: 800 13.5px var(--font-ui); color: var(--fg); }
@@ -398,14 +398,13 @@ button.eslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .achT .pg2 { grid-column: 2 / 4; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .bkFoot { position: absolute; bottom: 12px; z-index: 4; font: 400 17px var(--font-brand); color: #8a6f4a; opacity: 0; transition: opacity 300ms ease 700ms; pointer-events: none; }
 .bkFoot.l { left: 50%; transform: translateX(-120%); } .bkFoot.r { left: 50%; transform: translateX(20%); }
-.bk.open .bkFoot, .bk.open .bkArr, .bk.open .bkX { opacity: 1; }
-.bkArr, .bkX { position: absolute; z-index: 4; padding: 0; border: 0; background: none; cursor: pointer; opacity: 0; transition: opacity 300ms ease 700ms, transform 120ms ease; }
+.bk.open .bkFoot, .bk.open .bkArr { opacity: 1; }
+.bkArr { position: absolute; z-index: 4; padding: 0; border: 0; background: none; cursor: pointer; opacity: 0; transition: opacity 300ms ease 700ms, transform 120ms ease; }
 .bkArr { bottom: 8px; } .bkArr.l { left: 18px; } .bkArr.r { right: 18px; }
 .bkArr:hover { transform: scale(1.15); } .bkArr:active { transform: scale(1.1, 0.9); }
 .bkArr:disabled { opacity: 0 !important; cursor: default; }
-.bkX { top: 10px; right: 12px; transform: rotate(4deg); } .bkX:hover { transform: rotate(4deg) scale(1.2); }
-.bkArr svg, .bkX svg { display: block; } /* no baseline gap under the icon in standards mode */
-.bkArr:focus-visible, .bkX:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.bkArr svg { display: block; } /* no baseline gap under the icon in standards mode */
+.bkArr:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 .hint2 { margin: 0; font: 600 12.5px/1.35 var(--font-ui); color: var(--muted); }
 .prow small, .setRow small { display: block; font: 600 11px var(--font-ui); color: var(--muted); }
 .prow.off { opacity: 0.6; }
@@ -627,7 +626,6 @@ label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px;
         <span class="bkFoot l" id="bkCount">0 / 20 found</span><span class="bkFoot r" id="bkPage">1 / 10</span>
         <button class="bkArr l" id="bkPrev" type="button" aria-label="Previous page"><svg viewBox="0 0 28 24" width="28" height="24" fill="none" stroke="#5e3a1e" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 12.5 C19 11 12 12 4.5 12 M11 4.5 C8.5 7.5 6.5 10 4 12.2 C6.8 14.5 8.6 17 11.5 20"/></svg></button>
         <button class="bkArr r" id="bkNext" type="button" aria-label="Next page"><svg viewBox="0 0 28 24" width="28" height="24" fill="none" stroke="#5e3a1e" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5 C9 13 16 12 23.5 12 M17 4 C19.5 7.5 21.5 10 24 11.8 C21.2 14.5 19.4 17 16.5 20"/></svg></button>
-        <button class="bkX" type="button" data-close="book" aria-label="Close collection"><svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="#d6283c" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M4.5 5 C8 8.5 12.5 12 17.5 17.5"/><path d="M17.2 4.2 C13.5 8 9.5 12.5 4.8 17.8"/></svg></button>
       </div></div></div>
     </section>
     <section class="panel" id="pool" hidden aria-label="Pearl pool">
@@ -1406,13 +1404,14 @@ function fmtV(n) { return n < 10 ? String(Math.round(n * 10) / 10) : fmt(n); }
 // The earned set is a pure function of the state (view(st) reads the counters the game already keeps), so a save can always be
 // re-derived: the game grants every id that earned() returns and keeps the granted list (state.achieved) for good.
 // Every achievement adds its reward to one global payout multiplier, 1 + the sum, never above 1 + ACH_CAP (ECON.stats: achMult).
+// ACH_CAP equals the table's total reward, so every achievement keeps paying; tests/achievements.test.js fails if the total ever passes it.
 const ACH = (() => {
   const EC = typeof ECON !== 'undefined' ? ECON : require('./econ.js'); // the page concatenates econ.js and artifacts.js first
   const AR = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js');
   const FG = typeof FORGE !== 'undefined' ? FORGE : require('./forge.js');
   const ACH_REWARD = 0.005; // what an achievement adds to every payout (+0.5%)
   const ACH_REWARD_TOP = 0.01; // the hardest tier of each ladder adds this instead (+1%)
-  const ACH_CAP = 0.25; // the achievements' payout bonus never goes above +25%, however many are earned
+  const ACH_CAP = 0.375; // the achievements' payout bonus never goes above +37.5%: the whole table. Raise it with any reward that is added
   const CATEGORIES = [
     { id: 'popping', name: 'Popping' },
     { id: 'collecting', name: 'Collecting' },
@@ -1522,7 +1521,8 @@ const ACH = (() => {
     return Math.min(ACH_CAP, Math.round(s * 1e6) / 1e6);
   }
   const mult = (ids) => 1 + bonus(ids);
-  const total = () => ACHIEVEMENTS.reduce((s, a) => s + a.reward, 0);
+  // the sum of a list's rewards (the whole table by default), rounded like bonus(); the cap test compares it with ACH_CAP
+  const total = (list) => Math.round((list || ACHIEVEMENTS).reduce((s, a) => s + a.reward, 0) * 1e6) / 1e6;
   // untrusted input (a save) -> known ids, each once, in saved order
   function fromSave(d) { const out = []; for (const id of Array.isArray(d) ? d : []) if (typeof id === 'string' && BY_ID[id] && !out.includes(id)) out.push(id); return out; }
   return { ACH_REWARD, ACH_REWARD_TOP, ACH_CAP, CATEGORIES, LADDERS, TYPE_POPS, ACHIEVEMENTS, byId, ladderOf, view, earned, bonus, mult, total, fromSave };
@@ -3688,7 +3688,7 @@ function achBookView() {
     return { id: L.id, name: L.name, have: xs.filter((a) => got.has(a.id)).length, total: xs.length, tiers };
   });
   const have = list.filter((a) => got.has(a.id)).length, bonus = ACH.bonus(state.achieved);
-  return { have, total: list.length, bonus, capped: bonus >= ACH.ACH_CAP, cat: achCat, cats, ladders };
+  return { have, total: list.length, bonus, cat: achCat, cats, ladders };
 }
 const rewardTxt = (r) => '+' + +(r * 100).toFixed(1) + '%';
 function achTierHTML(t) {
@@ -3701,7 +3701,7 @@ function achTierHTML(t) {
 function updateAch() {
   if ($('book').hidden || bookTab !== 'ach') return;
   const v = achBookView();
-  setLbl('achSum', v.have + ' of ' + v.total + ' · payouts ' + rewardTxt(v.bonus) + (v.capped ? ' (the most achievements give)' : ''));
+  setLbl('achSum', v.have + ' of ' + v.total + ' · payouts ' + rewardTxt(v.bonus));
   setHTML('achCats', v.cats.map((c) => '<button type="button" class="chip atab' + (c.id === v.cat ? ' on' : '') + '" aria-pressed="' + (c.id === v.cat) + '" data-acat="' + c.id + '">' + c.name + ' <small>' + c.have + '/' + c.total + '</small></button>').join(''));
   setHTML('achList', v.ladders.map((L) => '<div class="achLad"><h4>' + L.name + '<small>' + L.have + ' of ' + L.total + '</small></h4>' + L.tiers.map(achTierHTML).join('') + '</div>').join(''));
 }

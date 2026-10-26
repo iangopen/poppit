@@ -2,13 +2,14 @@
 // The earned set is a pure function of the state (view(st) reads the counters the game already keeps), so a save can always be
 // re-derived: the game grants every id that earned() returns and keeps the granted list (state.achieved) for good.
 // Every achievement adds its reward to one global payout multiplier, 1 + the sum, never above 1 + ACH_CAP (ECON.stats: achMult).
+// ACH_CAP equals the table's total reward, so every achievement keeps paying; tests/achievements.test.js fails if the total ever passes it.
 const ACH = (() => {
   const EC = typeof ECON !== 'undefined' ? ECON : require('./econ.js'); // the page concatenates econ.js and artifacts.js first
   const AR = typeof ARTS !== 'undefined' ? ARTS : require('./artifacts.js');
   const FG = typeof FORGE !== 'undefined' ? FORGE : require('./forge.js');
   const ACH_REWARD = 0.005; // what an achievement adds to every payout (+0.5%)
   const ACH_REWARD_TOP = 0.01; // the hardest tier of each ladder adds this instead (+1%)
-  const ACH_CAP = 0.25; // the achievements' payout bonus never goes above +25%, however many are earned
+  const ACH_CAP = 0.375; // the achievements' payout bonus never goes above +37.5%: the whole table. Raise it with any reward that is added
   const CATEGORIES = [
     { id: 'popping', name: 'Popping' },
     { id: 'collecting', name: 'Collecting' },
@@ -118,7 +119,8 @@ const ACH = (() => {
     return Math.min(ACH_CAP, Math.round(s * 1e6) / 1e6);
   }
   const mult = (ids) => 1 + bonus(ids);
-  const total = () => ACHIEVEMENTS.reduce((s, a) => s + a.reward, 0);
+  // the sum of a list's rewards (the whole table by default), rounded like bonus(); the cap test compares it with ACH_CAP
+  const total = (list) => Math.round((list || ACHIEVEMENTS).reduce((s, a) => s + a.reward, 0) * 1e6) / 1e6;
   // untrusted input (a save) -> known ids, each once, in saved order
   function fromSave(d) { const out = []; for (const id of Array.isArray(d) ? d : []) if (typeof id === 'string' && BY_ID[id] && !out.includes(id)) out.push(id); return out; }
   return { ACH_REWARD, ACH_REWARD_TOP, ACH_CAP, CATEGORIES, LADDERS, TYPE_POPS, ACHIEVEMENTS, byId, ladderOf, view, earned, bonus, mult, total, fromSave };

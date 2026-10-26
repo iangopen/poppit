@@ -91,10 +91,22 @@ test('the bonus: each known id once, unknown ids ignored, never above the cap', 
   assert.strictEqual(ACH.bonus(['pops1', 'pops6']), 0.015);
   assert.strictEqual(ACH.bonus(['pops1', 'pops1', 'nope', 7]), 0.005, 'no double count');
   const all = ACH.ACHIEVEMENTS.map((a) => a.id);
-  assert.ok(ACH.total() > ACH.ACH_CAP, 'the table adds up past the cap (' + ACH.total().toFixed(3) + ')');
-  assert.strictEqual(ACH.bonus(all), ACH.ACH_CAP); assert.strictEqual(ACH.mult(all), 1.25); assert.strictEqual(ACH.ACH_CAP, 0.25);
+  assert.strictEqual(ACH.bonus(all), ACH.ACH_CAP); assert.strictEqual(ACH.mult(all), 1.375); assert.strictEqual(ACH.ACH_CAP, 0.375);
   // twenty +0.5% steps are exactly +10%
   assert.strictEqual(ACH.bonus(ACH.ACHIEVEMENTS.filter((a) => a.reward === 0.005).slice(0, 20).map((a) => a.id)), 0.1);
+});
+// the guard for future additions: every achievement must keep paying, so the table's total may never pass the cap
+const capHolds = (list) => ACH.total(list) <= ACH.ACH_CAP;
+test('the cap equals the table total, so every achievement pays; a table past the cap fails the check', () => {
+  assert.strictEqual(ACH.total(), ACH.ACH_CAP, 'total ' + ACH.total() + ' vs cap ' + ACH.ACH_CAP);
+  assert.ok(capHolds(ACH.ACHIEVEMENTS), 'the table fits under the cap');
+  // each achievement adds its full reward, the last one too
+  const all = ACH.ACHIEVEMENTS.map((a) => a.id);
+  for (const id of all) assert.strictEqual(ACH.bonus(all), Math.round((ACH.bonus(all.filter((x) => x !== id)) + ACH.byId(id).reward) * 1e6) / 1e6, id + ' pays');
+  // an over-cap fixture: one more +0.5% achievement makes the same check fail
+  const over = ACH.ACHIEVEMENTS.concat([{ id: 'fixture_extra', reward: ACH.ACH_REWARD }]);
+  assert.strictEqual(capHolds(over), false, 'a table past the cap is caught');
+  assert.throws(() => assert.ok(capHolds(over)), /AssertionError|false/);
 });
 test('fromSave keeps known string ids once, in saved order', () => {
   assert.deepStrictEqual(ACH.fromSave(['taps1', 'pops1', 'taps1', 'zzz', 3, null, { id: 'pops2' }]), ['taps1', 'pops1']);

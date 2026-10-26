@@ -28,6 +28,13 @@ test('the script is every src module in build order, artifacts.js and forge.js f
   assert.ok(html.includes('const ARTS = (() => {') && html.indexOf('const ARTS') < html.indexOf('const ECON'));
   assert.ok(html.indexOf('const ECON') < html.indexOf('const ACH = (() => {') && html.indexOf('const ACH = (() => {') < html.indexOf('const SAVE_VERSION'), 'achievements after the economy and artifact modules');
 });
+test('the book sheet has one close control, in the tab row that both tabs share', () => {
+  const closes = html.match(/<button[^>]*data-close="book"[^>]*>/g) || [];
+  assert.strictEqual(closes.length, 1, closes.join(' | '));
+  assert.ok(/class="x bkClose"/.test(closes[0]), 'the 44 px sheet close');
+  const row = html.slice(html.indexOf('<div class="bkTabs"'), html.indexOf('<div class="achView"'));
+  assert.ok(row.includes('data-close="book"') && html.indexOf('data-close="book"') < html.indexOf('id="bkWrap"'), 'outside both tab panels');
+});
 test('the Forge dock button, its dot and the Forge panel are in the page, hidden until opened', () => {
   assert.ok(/<button id="forgeBtn" class="dock"[^>]*aria-controls="forge"[^>]*hidden>/.test(html), 'dock button, hidden until the gate');
   assert.ok(/<span class="fdot" id="forgeDot" hidden><\/span>/.test(html), 'finished-job dot, hidden');

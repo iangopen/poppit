@@ -5,6 +5,7 @@ const dir = __dirname;
 const src = ['artifacts.js', 'forge.js', 'econ.js', 'achievements.js', 'save.js', 'samples.js', 'audio.js', 'music.js', 'world.js', 'render.js', 'ui.js'].map((f) => fs.readFileSync(path.join(dir, '..', 'src', f), 'utf8')).join('\n');
 
 const els = {};
+const docL = {}; // document listeners (keydown), so tests can press keys through the page's own handlers
 function mkEl(id) {
   const listeners = {};
   return {
@@ -24,7 +25,7 @@ function mkEl(id) {
 const document = {
   getElementById(id) { return els[id] || (els[id] = mkEl(id)); },
   createElement(t) { return mkEl(t); }, querySelectorAll() { return []; },
-  addEventListener() {}, hidden: false, fonts: null, documentElement: mkEl("html"),
+  addEventListener(t, f) { (docL[t] = docL[t] || []).push(f); }, hidden: false, fonts: null, documentElement: mkEl("html"),
 };
 let rafCb = null;
 const store = {};
@@ -39,6 +40,7 @@ const names = Object.keys(globals);
 const hook = 'globalThis.__g={Music,hitPearl,tool,pointerS:pointer,state,pearls,cells,queue,ghosts,fx,stains,buy,popPearl,spawnAt,step,render,updateShelf,batchView,updateHud,pointer,getS:()=>S,getCombo:()=>combo,setCombo:(v)=>{combo=v;comboT=0},getFrenzy:()=>frenzyT,getMeter:()=>meter,setMeter:(v)=>{meter=v},getCollapse:()=>collapse,serialize,dims:()=>[COLS,ROWS],buildCells,resetRun,pearlAt,sellAll,sellSome,loadState,discover,trySpawn,getKINDS:()=>KINDS,setLv:(l)=>{state.lv=l;recalc()},recalc,getPool:()=>state.pool,setSelling:(v)=>{selling=v},bookView,bookCount,bookEntryHTML,ACH,checkAch,grantHistory,setBookTab,setAchCat,achBookView,updateAch,updateBook,getBookTab:()=>bookTab,awayBonus,lastToast:()=>$("toast").textContent.split(String.fromCharCode(10)).pop(),toast,currentGoal,updateGoal,dismissGoal,GOALS,DOCK_GATES,REVEAL,syncDock,syncDots,seeDots,seeShop,seeRow,syncShopDots,rows,Snd,getShake:()=>shake,setShake:(v)=>{shake=v},getFlash:()=>flashT,paintFx,updateStats,fxClass:()=>document.documentElement.classList.contains("fxoff"),craftArtifact,setActiveCopy,equipArt,unequipArt,swapArt,gallery,galleryKey,hallHTML,getChooser:()=>ch,closeChooser,equipFromHall,slotTap,typeDuckCount,openDucksFromPayout,shelfAction,bulkScrap,scrapCopies,closeConfirm,getCf:()=>cf,getShelfSort:()=>shelfSort,setArtTab,getArtTab:()=>artTab,revealView,skipReveal,closeReveal,placeFromReveal,getRv:()=>rv,revealTick,oddsText,craftReason,pedestalLine,stashWarn,updateArts,startReason,setKeep,isKept,artView,payoutLine,syncArtBtn,forgeStart,forgeStrike,forgeBuy,forgeCatchUp,forgeTick,startFrenzy,forgeView,forgeStartUI,forgeBuyUI,strikeUI,setForgeDot,getForgeDot:()=>forgeDot,updateForge,openPanel,syncDock,PANEL_BTN,ARTS,materialLine,poolView,togglePool,setShiny,META,slotEls,updatePack,spr:()=>spr,syncDiscoveries,save,upTool,viewTool:(i)=>{toolView=i;updateToolPanel()},loadStored,paintRestore,UNREADABLE_KEY,encodeSave,decodeSave,migrateSave,SAVE_VERSION,KEY,BACKUP_KEY,exportCode,checkImport,applyImport,cancelImport,restoreBackup,getPending:()=>pendingImport,getSaveBlocked:()=>saveBlocked,setSaveBlocked:(v)=>{saveBlocked=v},clearBoard:()=>{pearls.forEach((p)=>{if(p.cell.p===p)p.cell.p=null});pearls.length=0}};';
 new Function(...names, src + '\n' + hook)(...names.map((n) => globals[n]));
 const G = globalThis.__g;
+G.docFire = (t, e) => (docL[t] || []).forEach((f) => f(Object.assign({ preventDefault() {}, target: {} }, e)));
 const W = () => G.state.sparks + Object.values(G.state.invV).reduce((a, b) => a + b, 0);
 const E = require('../src/econ.js');
 

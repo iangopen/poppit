@@ -1072,7 +1072,7 @@ function achBookView() {
     return { id: L.id, name: L.name, have: xs.filter((a) => got.has(a.id)).length, total: xs.length, tiers };
   });
   const have = list.filter((a) => got.has(a.id)).length, bonus = ACH.bonus(state.achieved);
-  return { have, total: list.length, bonus, capped: bonus >= ACH.ACH_CAP, cat: achCat, cats, ladders };
+  return { have, total: list.length, bonus, cat: achCat, cats, ladders };
 }
 const rewardTxt = (r) => '+' + +(r * 100).toFixed(1) + '%';
 function achTierHTML(t) {
@@ -1085,7 +1085,7 @@ function achTierHTML(t) {
 function updateAch() {
   if ($('book').hidden || bookTab !== 'ach') return;
   const v = achBookView();
-  setLbl('achSum', v.have + ' of ' + v.total + ' · payouts ' + rewardTxt(v.bonus) + (v.capped ? ' (the most achievements give)' : ''));
+  setLbl('achSum', v.have + ' of ' + v.total + ' · payouts ' + rewardTxt(v.bonus));
   setHTML('achCats', v.cats.map((c) => '<button type="button" class="chip atab' + (c.id === v.cat ? ' on' : '') + '" aria-pressed="' + (c.id === v.cat) + '" data-acat="' + c.id + '">' + c.name + ' <small>' + c.have + '/' + c.total + '</small></button>').join(''));
   setHTML('achList', v.ladders.map((L) => '<div class="achLad"><h4>' + L.name + '<small>' + L.have + ' of ' + L.total + '</small></h4>' + L.tiers.map(achTierHTML).join('') + '</div>').join(''));
 }
