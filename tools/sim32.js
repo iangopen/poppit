@@ -11,6 +11,7 @@
 //   node tools/sim32.js --flavors-ducks=C   one Flavor rule with the plain Pink Duck and with all ten ducks
 //   node tools/sim32.js --ducks         the Hall of Ducks report: per-type pop rates, suggested duck costs, cycle times with ducks
 //   node tools/sim32.js --achievements  achievements a casual and an engaged player would have at the first Fresh Batch and after 3 hours
+//   node tools/sim32.js --no-ach        any of the above without the achievement bonus (the behaviour before 2026-10-26), for comparison
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
 const E = require('../src/econ.js'), A = require('../src/artifacts.js'), ACH = require('../src/achievements.js');
 const CELLS = [120, 252, 440];
@@ -18,6 +19,30 @@ const CAP = {}; E.PEARLS.forEach((p) => { CAP[p.id] = p.cap; });
 const CYCLES = 6, MAX_CYCLE_MIN = 120;
 const TYPE_WIN = 300; // seconds of normal pops behind each per-type rate in the --ducks report (60 s is too noisy for rare types)
 const PROFILES = [['casual', 1.5, 0.3, 1], ['engaged', 2.5, 0.7, 2]]; // label, taps/s, skill, seed
+
+// Achievements (2026-10-26): every run keeps its own counters (st.ach) and, once a second of play like the game's check, grants what
+// they satisfy through the module's own tests (SIM_ACH). The granted list (st.achieved) goes into ECON.stats, so achMult multiplies
+// every payout. Skipped: the Crafting ladders (the sim never crafts, forges or keeps pearls) and combo tiers above the first (the sim's
+// combo never breaks). --no-ach (APPLY_ACH false) or a variant's noAch lever plays without them, as before.
+let APPLY_ACH = true;
+const SIM_ACH = ACH.ACHIEVEMENTS.filter((a) => a.category !== 'crafting' && !(a.ladder === 'combo' && a.tier > 1));
+const newAch = () => ({ pops: Object.fromEntries(E.PEARLS.map((t) => [t.id, 0])), shiny: {}, found: {}, taps: 0, combo: 0, bestPop: 0, maxed: 0, batches: 0, fastest: 0 });
+// a fresh player's state for a run of cycles: no achievements counted or granted when they are off
+const startState = (v, extra) => Object.assign({ lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [] }, extra || {}, APPLY_ACH && !v.noAch ? { ach: newAch(), achieved: [] } : {});
+// the module's view from the sim's counters; life = the lifetime juice now (this run included)
+function achView(st, life) {
+  const ac = st.ach, v = { pops: 0, found: 0, shinies: 0, taps: ac.taps, combo: ac.combo, bestPop: ac.bestPop, fastest: ac.fastest, lifetime: life == null ? st.lifetime : life, maxed: ac.maxed, batches: ac.batches, flavors: st.echoes,
+    crafts: 0, rarity: 0, ducks: 0, relics: 0, forged: 0, dust: 0, alloy: 0 };
+  for (const t of E.PEARLS) { v['pop_' + t.id] = ac.pops[t.id]; v.pops += ac.pops[t.id]; if (ac.found[t.id] || t.id === 'pearl') v.found++; if (ac.shiny[t.id]) v.shinies++; }
+  return v;
+}
+// grants every SIM_ACH achievement the counters satisfy that is not granted yet; st.achieved only grows, like the game's list
+function grantSim(st, life) {
+  if (!st.achieved) return 0;
+  const v = achView(st, life), have = new Set(st.achieved); let n = 0;
+  for (const a of SIM_ACH) if (!have.has(a.id) && a.test(v)) { st.achieved.push(a.id); n++; }
+  return n;
+}
 
 // small seeded generator (mulberry32) so runs can be compared
 function mulberry32(a) {
@@ -142,8 +167,8 @@ const helperHours = (X, st, board, cells, seed) => [0, 1, 2, 3].reduce((a, k) =>
 // lifetime juice for the lifetime Flavor rules.
 function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf) {
   freshRun(st);
-  const ac = st.ach; // the achievements report's counters (achReport); absent in every other run
-  let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0, idleHelper = null, idleReady = null;
+  const ac = st.ach; // the achievement counters (startState); absent with --no-ach
+  let achTick = 0, sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0, idleHelper = null, idleReady = null;
   // Rose collection for the Pink Duck: normal Rose pops and their juice over the last 60 s (the sim cannot keep pearls)
   const roseWin = [], roseSnap = () => { const w = roseWin.filter((r) => r[0] > t - 60), juice = win.reduce((a, x) => a + x[1], 0), n = w.length, rj = w.reduce((a, r) => a + r[1], 0);
     return { perMin: n * 60 / Math.min(60, t), juiceEach: n ? rj / n : 0, share: juice > 0 ? rj / juice : 0 }; };
@@ -236,7 +261,8 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf)
     if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); roseHelper = roseSnap(); typeHelper = typeSnap(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
     if (black.at == null && st.lv.black > 0) { black.at = t / 60; black.hitsAtUnlock = X.hitsNeeded('black', X.stats(st).power); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
-    if (ac) { ac.maxed = Math.max(ac.maxed, Object.keys(X.UPG).filter((id) => st.lv[id] >= X.UPG[id].max).length); for (const q of X.PEARLS) if (X.isUnlocked(q.id, st.lv)) ac.found[q.id] = true; }
+    if (ac) { ac.maxed = Math.max(ac.maxed, Object.keys(X.UPG).filter((id) => st.lv[id] >= X.UPG[id].max).length); for (const q of X.PEARLS) if (X.isUnlocked(q.id, st.lv)) ac.found[q.id] = true;
+      if (++achTick % 10 === 0) grantSim(st, life0 + runEarned); } // once a second (dt 0.1), like the game's check
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
@@ -246,9 +272,10 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf)
   const gainF = ready == null ? 0 : X.collapseGain(runEarned, st.echoes, life0 + runEarned);
   st.echoes += gainF; st.lifetime = life0 + runEarned;
   if (ac && ready != null) { ac.batches++; if (!ac.fastest || t < ac.fastest) ac.fastest = t; }
+  if (ac) grantSim(st); // right after the Fresh Batch, like finishCollapse
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
-  return { early, furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
+  return { early, furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult * X.stats(st).achMult, achieved: st.achieved ? st.achieved.length : null, achMult: X.stats(st).achMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
 }
 
 function play(v, profile, verbose, measure) {
@@ -257,7 +284,7 @@ function play(v, profile, verbose, measure) {
 }
 function playRun(v, profile, verbose, measure) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
-  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [] };
+  const st = startState(v);
   for (const id of v.artifacts || []) { A.addCopy(st.artifacts, id, 'common', []); A.equip(st.artEquip, st.artifacts, id); } // one Common copy on its pedestal (a relic also takes a free slot); artifacts are never wiped by Fresh Batch
   if (v.duck) A.addCopy(st.artifacts, 'pink_duck', DUCKS[v.duck].rarity, DUCKS[v.duck].perks);
   const out = [];
@@ -268,12 +295,13 @@ function playRun(v, profile, verbose, measure) {
 const f1 = (x) => (x == null ? '-' : x.toFixed(1));
 const big = (x) => (x >= 1e6 ? (x / 1e6).toFixed(x >= 1e8 ? 0 : 1) + 'M' : x >= 1e4 ? (x / 1e3).toFixed(0) + 'K' : Math.round(x).toString());
 function report(name, v, verbose) {
-  console.log('# variant: ' + name + (v.artifacts && v.artifacts.length ? ', owns ' + v.artifacts.join(', ') : '') + (v.duck ? ', owns a ' + v.duck + ' Pink Duck (x' + +A.payoutMult({ pink_duck: { copies: [Object.assign({ id: 1 }, DUCKS[v.duck])], active: 1 } }).toFixed(3) + ')' : '') + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready'));
+  console.log('# variant: ' + name + (v.artifacts && v.artifacts.length ? ', owns ' + v.artifacts.join(', ') : '') + (v.duck ? ', owns a ' + v.duck + ' Pink Duck (x' + +A.payoutMult({ pink_duck: { copies: [Object.assign({ id: 1 }, DUCKS[v.duck])], active: 1 } }).toFixed(3) + ')' : '') + (v.waitMin ? ', player keeps going until minute ' + v.waitMin : ', Fresh Batch taken as soon as it is ready') + (APPLY_ACH && !v.noAch ? ', achievements applied (' + SIM_ACH.length + ' the sim can count; payout x after includes them)' : ''));
   for (const p of PROFILES) {
     const rs = play(v, p, verbose, !v.waitMin), cols = rs.map((_, i) => 'C' + (i + 1));
     console.log('\n## ' + p[0] + ' (' + p[1] + ' taps/s, skill ' + p[2] + ', seed ' + p[3] + ')\n');
     console.log('| cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |');
     console.log('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+    if (rs[0].achieved != null) console.log('Achievements granted by the end of each cycle: ' + rs.map((r) => r.achieved + ' (x' + +r.achMult.toFixed(3) + ')').join(' / ') + '\n');
     rs.forEach((r, i) => console.log('| ' + (i + 1) + ' | ' + (r.ready == null ? 'not by ' + MAX_CYCLE_MIN : f1(r.ready / 60)) + ' | ' + f1(r.helperAt) + ' | ' + f1(r.minutes) + ' | ' + big(r.runEarned) + ' | +' + r.gain + ' | ' + r.echoes + ' | ' + r.mult.toFixed(1) + ' | ' + f1(r.satiated) + ' | ' + f1(r.satiatedX) + ' | ' + big(r.rate) + ' | ' + r.furthest + ' | ' + big(r.awayHelper) + ' | ' + big(r.awayReady) + ' |'));
     console.log('\nMinute each upgrade reaches max level (- = not maxed before Fresh Batch):\n');
     console.log('| upgrade (max) | ' + cols.join(' | ') + ' |'); console.log('|---|' + cols.map(() => '---|').join(''));
@@ -368,7 +396,7 @@ const STRATEGIES = [['at once', null, 0], ['+100%', (g, e) => g >= e, 0], ['minu
 // A run that reaches MAX_CYCLE_MIN without a Fresh Batch ends the play (it would earn no more Flavors before the horizon).
 function playFor(v, profile, takeIf, waitMin, hours) {
   const [, taps, skill, seed] = profile, X = econ(v), rng = mulberry32(seed);
-  const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [], lifetime: 0 };
+  const st = startState(v, { lifetime: 0 });
   for (const id of v.artifacts || []) { A.addCopy(st.artifacts, id, 'common', []); A.equip(st.artEquip, st.artifacts, id); }
   if (v.duck) A.addCopy(st.artifacts, 'pink_duck', DUCKS[v.duck].rarity, DUCKS[v.duck].perks);
   const marks = [], ends = []; let clock = 0, stalled = false;
@@ -433,22 +461,15 @@ function flavorDucks(k) {
 // play exactly like the default ones. The sim cannot craft, forge or keep pearls, so the Crafting ladders always read 0.
 // It also prints the per-type pop counts by the duck-cost method (ACH_TYPE_MIN minutes of each type's normal pops).
 const ACH_TYPE_MIN = 60, ACH_HOURS = 3;
-function achView(st) {
-  const ac = st.ach, v = { pops: 0, found: 0, shinies: 0, taps: ac.taps, combo: ac.combo, bestPop: ac.bestPop, fastest: ac.fastest, lifetime: st.lifetime, maxed: ac.maxed, batches: ac.batches, flavors: st.echoes,
-    crafts: 0, rarity: 0, ducks: 0, relics: 0, forged: 0, dust: 0, alloy: 0 };
-  for (const t of E.PEARLS) { v['pop_' + t.id] = ac.pops[t.id]; v.pops += ac.pops[t.id]; if (ac.found[t.id] || t.id === 'pearl') v.found++; if (ac.shiny[t.id]) v.shinies++; }
-  return v;
-}
 function achReport() {
-  const blank = () => ({ pops: Object.fromEntries(E.PEARLS.map((t) => [t.id, 0])), shiny: {}, found: {}, taps: 0, combo: 0, bestPop: 0, maxed: 0, batches: 0, fastest: 0 });
   const snap = (st) => ({ lifetime: st.lifetime, echoes: st.echoes, ach: JSON.parse(JSON.stringify(st.ach)) });
-  const sim = ACH.ACHIEVEMENTS.filter((a) => ACH.ladderOf(a.ladder).cat !== 'crafting');
-  console.log('# Achievements a player would have (seeded; Fresh Batch taken at once; the sim does not apply the bonus)\n');
-  console.log(ACH.ACHIEVEMENTS.length + ' achievements; the sim can count ' + sim.length + ' of them. It cannot count the ' + (ACH.ACHIEVEMENTS.length - sim.length) + ' Crafting ones (copies crafted, rarest copy, ducks owned, relics equipped, forge jobs, dusts and alloys): it never crafts, forges or keeps pearls.');
+  const sim = SIM_ACH, crafting = ACH.ACHIEVEMENTS.filter((a) => a.category === 'crafting').length;
+  console.log('# Achievements a player would have (seeded; Fresh Batch taken at once; ' + (APPLY_ACH ? 'the bonus applied as they come' : 'the bonus not applied (--no-ach)') + ')\n');
+  console.log(ACH.ACHIEVEMENTS.length + ' achievements; the sim counts ' + sim.length + ' of them. It skips combo tiers above the first (its combo never breaks while it taps) and cannot count the ' + crafting + ' Crafting ones (copies crafted, rarest copy, ducks owned, relics equipped, forge jobs, dusts and alloys): it never crafts, forges or keeps pearls.');
   console.log('Taps are the sim\'s hits (a Wide Swing drag counts each pearl it hits); "types found" counts a type once it is unlocked, as syncDiscoveries does; shinies are rolled as the game rolls them.\n');
   for (const p of PROFILES) {
     const [, taps, skill, seed] = p, X = econ({}), rng = mulberry32(seed);
-    const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [], lifetime: 0, ach: blank() };
+    const st = Object.assign(startState({}, { lifetime: 0 }), { ach: newAch() }); // counted even with --no-ach; granted only without it
     let clock = 0, first = null, at3 = null, at3clock = 0, n = 0;
     while (clock < ACH_HOURS * 3600) {
       const r = cycle(X, st, rng, taps, skill, false, 0, 0); if (r.ready == null) break;
@@ -458,7 +479,7 @@ function achReport() {
     }
     console.log('## ' + p[0] + ' (' + taps + ' taps/s, skill ' + skill + ', seed ' + seed + ')\n');
     for (const [name, sn, c] of [['first Fresh Batch (' + f1(first.clock / 60) + ' min)', first], ['3 hours (last Fresh Batch at ' + f1(at3clock / 60) + ' min, ' + at3.ach.batches + ' taken)', at3]]) {
-      const v = achView(sn), got = ACH.ACHIEVEMENTS.filter((a) => a.test(v)), b = ACH.bonus(got.map((a) => a.id));
+      const v = achView(sn), got = sim.filter((a) => a.test(v)), b = ACH.bonus(got.map((a) => a.id));
       console.log('- At the ' + name + ': ' + got.length + ' of ' + ACH.ACHIEVEMENTS.length + ', payouts +' + +(b * 100).toFixed(1) + '%' + (b >= ACH.ACH_CAP ? ' (the cap)' : ''));
       console.log('  by category: ' + ACH.CATEGORIES.map((k) => k.name + ' ' + got.filter((a) => a.category === k.id).length + '/' + ACH.ACHIEVEMENTS.filter((a) => a.category === k.id).length).join(', '));
       console.log('  earned: ' + got.map((a) => a.id).join(', '));
@@ -497,6 +518,7 @@ checkCopies();
 module.exports = { play, PROFILES, VARIANTS, DUCKS, econ, helperHour }; // tests/away.test.js
 if (require.main === module) {
   const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
+  if (arg('no-ach')) APPLY_ACH = false;
   if (arg('compare')) compare();
   else if (arg('ducks')) duckReport();
   else if (arg('achievements')) achReport();
