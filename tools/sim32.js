@@ -10,8 +10,9 @@
 //   node tools/sim32.js --flavors       the Flavor study: rules A-E, six cycles, three strategies over 3 hours, early timings (docs/flavor-study.md)
 //   node tools/sim32.js --flavors-ducks=C   one Flavor rule with the plain Pink Duck and with all ten ducks
 //   node tools/sim32.js --ducks         the Hall of Ducks report: per-type pop rates, suggested duck costs, cycle times with ducks
+//   node tools/sim32.js --achievements  achievements a casual and an engaged player would have at the first Fresh Batch and after 3 hours
 //   node tools/sim32.js --log           also print the old per-mark pacing log for every cycle
-const E = require('../src/econ.js'), A = require('../src/artifacts.js');
+const E = require('../src/econ.js'), A = require('../src/artifacts.js'), ACH = require('../src/achievements.js');
 const CELLS = [120, 252, 440];
 const CAP = {}; E.PEARLS.forEach((p) => { CAP[p.id] = p.cap; });
 const CYCLES = 6, MAX_CYCLE_MIN = 120;
@@ -141,6 +142,7 @@ const helperHours = (X, st, board, cells, seed) => [0, 1, 2, 3].reduce((a, k) =>
 // lifetime juice for the lifetime Flavor rules.
 function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf) {
   freshRun(st);
+  const ac = st.ach; // the achievements report's counters (achReport); absent in every other run
   let sparks = 0, runEarned = 0, t = 0, spawnT = 0, combo = 0, comboT = 99, meter = 0, frenzy = 0, tapAcc = 0, autoAcc = 0, lastMark = 0, earnedWin = 0, ready = null, satiated = 0, satiatedX = 0, helperAt = null, awayHelper = 0, awayReady = 0, idleHelper = null, idleReady = null;
   // Rose collection for the Pink Duck: normal Rose pops and their juice over the last 60 s (the sim cannot keep pearls)
   const roseWin = [], roseSnap = () => { const w = roseWin.filter((r) => r[0] > t - 60), juice = win.reduce((a, x) => a + x[1], 0), n = w.length, rj = w.reduce((a, r) => a + r[1], 0);
@@ -195,6 +197,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf)
       pearls.splice(i, 1);
       const val = X.popValue(S, manual ? combo : 0, frenzy > 0, p.kind) * (p.sh ? X.SHINY_MULT : 1);
       gain += val; income[p.kind] += val; if (val > top.pop) top.pop = val;
+      if (ac) { ac.pops[p.kind]++; if (p.sh) ac.shiny[p.kind] = true; if (val > ac.bestPop) ac.bestPop = val; }
       if (p.kind === 'black') black[manual ? 'byTap' : 'byHelper']++;
       if (p.kind === 'pearl' && !p.sh) roseWin.push([t, val]);
       if (!p.sh) typeWin.push([t, p.kind]);
@@ -206,6 +209,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf)
       if (rng() < skill) { pick = pearls[0]; let bs = -1; for (const p of pearls) { const s = X.KIND[p.kind].mult / Math.ceil((p.hp - p.dmg) / S.power); if (s > bs) { bs = s; pick = p; } } }
       else pick = pearls[Math.floor(rng() * pearls.length)];
       combo = comboT < S.comboWindow ? combo + 1 : 1; comboT = 0;
+      if (ac) { ac.taps++; if (combo > ac.combo) ac.combo = combo; }
       hit(pick, S.power, true);
     }
     autoAcc += dt * S.autoRate;
@@ -232,6 +236,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf)
     if (helperAt == null && st.lv.auto > 0) { helperAt = t / 60; awayHelper = away1h(); roseHelper = roseSnap(); typeHelper = typeSnap(); if (measure) idleHelper = helperHours(X, st, pearls, fill(), measure); }
     if (black.at == null && st.lv.black > 0) { black.at = t / 60; black.hitsAtUnlock = X.hitsNeeded('black', X.stats(st).power); }
     for (const id in X.UPG) if (maxAt[id] == null && st.lv[id] >= X.UPG[id].max) maxAt[id] = t / 60;
+    if (ac) { ac.maxed = Math.max(ac.maxed, Object.keys(X.UPG).filter((id) => st.lv[id] >= X.UPG[id].max).length); for (const q of X.PEARLS) if (X.isUnlocked(q.id, st.lv)) ac.found[q.id] = true; }
     if (sparks > top.sparks) top.sparks = sparks;
     if (t >= 60) { const rate = win.reduce((a, w) => a + w[1], 0) / 60; if (rate > top.rate) top.rate = rate; }
     while (verbose && marks.length && t >= marks[0]) { const m = marks.shift(); log.push('t=' + m + 's earned=' + Math.round(runEarned) + ' avg/s=' + Math.round(earnedWin / (m - lastMark)) + ' tool=' + X.TOOLS[bestOwned()].name + ' power=' + S.power + ' ups=' + JSON.stringify(st.toolUp[bestOwned()] || {}) + ' swing=' + ((st.toolUp[0] || {}).u | 0) + ' helpers=' + st.lv.auto); earnedWin = 0; lastMark = m; }
@@ -240,6 +245,7 @@ function cycle(X, st, rng, tapsPerSec, skill, verbose, waitMin, measure, takeIf)
   const rate = win.reduce((a, w) => a + w[1], 0) / Math.min(60, t);
   const gainF = ready == null ? 0 : X.collapseGain(runEarned, st.echoes, life0 + runEarned);
   st.echoes += gainF; st.lifetime = life0 + runEarned;
+  if (ac && ready != null) { ac.batches++; if (!ac.fastest || t < ac.fastest) ac.fastest = t; }
   const furthest = X.PEARLS.filter((p) => X.isUnlocked(p.id, st.lv)).pop().id;
   black.powerAtEnd = X.stats(st).power; black.hitsAtEnd = X.hitsNeeded('black', black.powerAtEnd);
   return { early, furthest, helperAt, roseHelper, roseReady, typeHelper, typeReady, awayHelper, awayReady, idleHelper, idleReady, black, ready, minutes: ready == null ? null : t / 60, runEarned, gain: gainF, echoes: st.echoes, mult: (1 + X.FLAVOR_BONUS * st.echoes) * X.stats(st).artMult, satiated: satiated / 60, satiatedX: satiatedX / 60, maxAt, income, rate, bought, log, top };
@@ -422,6 +428,61 @@ function flavorDucks(k) {
     console.log('| ' + dn + ' | ' + p[0] + ' | ' + res.map((r) => r.marks.join(' / ') + (r.stalled ? ' (stalled)' : '')).join(' | ') + ' | ' + (Math.max(...fin) / Math.min(...fin)).toFixed(2) + ' |');
   }
 }
+// --achievements: the achievements a player would have, counted from the sim's own counters (st.ach, filled by cycle()), at the first
+// Fresh Batch and at the last Fresh Batch inside 3 hours, Fresh Batch taken at once. The sim never applies the bonus, so these runs
+// play exactly like the default ones. The sim cannot craft, forge or keep pearls, so the Crafting ladders always read 0.
+// It also prints the per-type pop counts by the duck-cost method (ACH_TYPE_MIN minutes of each type's normal pops).
+const ACH_TYPE_MIN = 60, ACH_HOURS = 3;
+function achView(st) {
+  const ac = st.ach, v = { pops: 0, found: 0, shinies: 0, taps: ac.taps, combo: ac.combo, bestPop: ac.bestPop, fastest: ac.fastest, lifetime: st.lifetime, maxed: ac.maxed, batches: ac.batches, flavors: st.echoes,
+    crafts: 0, rarity: 0, ducks: 0, relics: 0, forged: 0, dust: 0, alloy: 0 };
+  for (const t of E.PEARLS) { v['pop_' + t.id] = ac.pops[t.id]; v.pops += ac.pops[t.id]; if (ac.found[t.id] || t.id === 'pearl') v.found++; if (ac.shiny[t.id]) v.shinies++; }
+  return v;
+}
+function achReport() {
+  const blank = () => ({ pops: Object.fromEntries(E.PEARLS.map((t) => [t.id, 0])), shiny: {}, found: {}, taps: 0, combo: 0, bestPop: 0, maxed: 0, batches: 0, fastest: 0 });
+  const snap = (st) => ({ lifetime: st.lifetime, echoes: st.echoes, ach: JSON.parse(JSON.stringify(st.ach)) });
+  const sim = ACH.ACHIEVEMENTS.filter((a) => ACH.ladderOf(a.ladder).cat !== 'crafting');
+  console.log('# Achievements a player would have (seeded; Fresh Batch taken at once; the sim does not apply the bonus)\n');
+  console.log(ACH.ACHIEVEMENTS.length + ' achievements; the sim can count ' + sim.length + ' of them. It cannot count the ' + (ACH.ACHIEVEMENTS.length - sim.length) + ' Crafting ones (copies crafted, rarest copy, ducks owned, relics equipped, forge jobs, dusts and alloys): it never crafts, forges or keeps pearls.');
+  console.log('Taps are the sim\'s hits (a Wide Swing drag counts each pearl it hits); "types found" counts a type once it is unlocked, as syncDiscoveries does; shinies are rolled as the game rolls them.\n');
+  for (const p of PROFILES) {
+    const [, taps, skill, seed] = p, X = econ({}), rng = mulberry32(seed);
+    const st = { lv: E.zeroLevels(), echoes: 0, owned: [], equip: -1, toolUp: {}, artifacts: {}, artEquip: [], lifetime: 0, ach: blank() };
+    let clock = 0, first = null, at3 = null, at3clock = 0, n = 0;
+    while (clock < ACH_HOURS * 3600) {
+      const r = cycle(X, st, rng, taps, skill, false, 0, 0); if (r.ready == null) break;
+      clock += r.minutes * 60; n++;
+      if (!first) first = Object.assign(snap(st), { clock });
+      if (clock <= ACH_HOURS * 3600) { at3 = snap(st); at3clock = clock; }
+    }
+    console.log('## ' + p[0] + ' (' + taps + ' taps/s, skill ' + skill + ', seed ' + seed + ')\n');
+    for (const [name, sn, c] of [['first Fresh Batch (' + f1(first.clock / 60) + ' min)', first], ['3 hours (last Fresh Batch at ' + f1(at3clock / 60) + ' min, ' + at3.ach.batches + ' taken)', at3]]) {
+      const v = achView(sn), got = ACH.ACHIEVEMENTS.filter((a) => a.test(v)), b = ACH.bonus(got.map((a) => a.id));
+      console.log('- At the ' + name + ': ' + got.length + ' of ' + ACH.ACHIEVEMENTS.length + ', payouts +' + +(b * 100).toFixed(1) + '%' + (b >= ACH.ACH_CAP ? ' (the cap)' : ''));
+      console.log('  by category: ' + ACH.CATEGORIES.map((k) => k.name + ' ' + got.filter((a) => a.category === k.id).length + '/' + ACH.ACHIEVEMENTS.filter((a) => a.category === k.id).length).join(', '));
+      console.log('  earned: ' + got.map((a) => a.id).join(', '));
+      console.log('  counters: pops ' + v.pops + ', taps ' + v.taps + ', best combo ' + v.combo + ', best pop ' + big(v.bestPop) + ', types found ' + v.found + ', shiny types ' + v.shinies + ', juice ' + big(v.lifetime) + ', upgrades at max (most at once) ' + v.maxed + ', Fresh Batches ' + v.batches + ', Flavors ' + v.flavors + ', fastest run ' + f1(v.fastest / 60) + ' min');
+      console.log('  pops by type: ' + E.PEARLS.map((t) => t.id + ' ' + v['pop_' + t.id] + '/' + ACH.TYPE_POPS[t.id]).join(', '));
+    }
+    console.log('');
+  }
+  // the per-type thresholds: the duck-cost method (duckReport) with ACH_TYPE_MIN minutes instead of DUCK_TARGET_MIN, Rose included
+  const runs = PROFILES.map((p) => play({}, p, false, false));
+  const avg = (xs) => { const o = {}; for (const t of E.PEARLS) o[t.id] = xs.reduce((a, x) => a + (x ? x[t.id] : 0), 0) / xs.length; return o; };
+  const seeded = PROFILES.map((p, i) => [runs[i]].concat([1, 2, 3].slice(0, DUCK_SEEDS - 1).map((k) => play({}, [p[0], p[1], p[2], p[3] + 100 * k], false, false))));
+  const last = (rs) => (rs.length === CYCLES ? rs[CYCLES - 1].typeReady : null);
+  const marks = seeded.map((ss) => [avg(ss.map((rs) => rs[0].typeHelper)), avg(ss.map((rs) => rs[0].typeReady)), avg(ss.map(last))]);
+  console.log('## Pops per pearl type: ' + ACH_TYPE_MIN + ' minutes of that type\'s normal pops (geometric mean of the six duck-report rates, two significant figures, at least 5, falling)\n');
+  let prev = Infinity; const out = [];
+  for (const t of E.PEARLS) {
+    const rates = [].concat(...marks.map((ms) => ms.map((m) => (m ? m[t.id] : 0)))), nz = rates.filter((r) => r > 0);
+    const gm = nz.length ? Math.exp(nz.reduce((a, r) => a + Math.log(r), 0) / nz.length) : 0;
+    let n = Math.max(5, E.sig2(Math.max(1, gm * ACH_TYPE_MIN))); if (n >= prev) n = Math.max(5, E.sig2(prev * 0.9)); prev = n;
+    out.push(t.id + ' ' + n + (n === ACH.TYPE_POPS[t.id] ? '' : ' (data ' + ACH.TYPE_POPS[t.id] + ')'));
+  }
+  console.log(out.join(', '));
+}
 function compare() {
   console.log('| variant | profile | taken min C1..C6 | Flavors total | payout x | upgrades maxed in C1 | nothing-to-want ignoring Sharp, min C1..C6 | furthest pearl C1..C6 |');
   console.log('|---|---|---|---|---|---|---|---|');
@@ -438,6 +499,7 @@ if (require.main === module) {
   const args = process.argv.slice(2), arg = (k) => { const a = args.find((x) => x.startsWith('--' + k)); return a ? (a.split('=')[1] || true) : null; };
   if (arg('compare')) compare();
   else if (arg('ducks')) duckReport();
+  else if (arg('achievements')) achReport();
   else if (arg('early')) earlyReport();
   else if (arg('flavors-ducks')) flavorDucks(arg('flavors-ducks'));
   else if (arg('flavors')) flavorStudy();
