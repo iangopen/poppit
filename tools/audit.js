@@ -2,7 +2,7 @@
 // first pop, after the first purchase, about 3 minutes of play) it saves a screenshot and lists every visible interactive control.
 //   node tools/audit.js <label> [width] [height]     writes docs/audit/<label>-<moment>.png and docs/audit/<label>.json
 //   node tools/audit.js batch                         the Fresh Batch box at 390x844: new player, 300 Flavors not ready, ready
-//   node tools/audit.js ach                           the book's Achievements tab at 390x844: achieved, next and hidden tiers, two categories
+//   node tools/audit.js ach [1280 800]                the book sheet at 390x844 (or a desktop size): both tabs, achieved, next and hidden tiers
 // Play is a small in-page bot: about 2.5 hits a second on the best live pearl (as tools/sim32.js picks), and the cheapest affordable
 // shop row bought by a real tap. The first pop is a real touch on a pearl. Needs Chrome; no npm dependencies (Node 22+ WebSocket).
 const { spawn } = require('child_process'), http = require('http'), fs = require('fs'), path = require('path'), os = require('os');
@@ -18,6 +18,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let ws, seq = 0; const pend = {}, errors = [];
 const send = (method, params) => new Promise((res, rej) => { const id = ++seq; pend[id] = { res, rej }; ws.send(JSON.stringify({ id, method, params: params || {} })); });
 const ev = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(expr.slice(0, 60) + ': ' + JSON.stringify(r.exceptionDetails.exception && r.exceptionDetails.exception.description)); return r.result.value; };
+const DESKTOP = +W > 820; // wider than the phone layout: a desktop window, mouse instead of touch (node tools/audit.js ach 1280 800)
+const click = async (x, y) => { for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); };
 const touch = async (x, y) => { await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await sleep(40); await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
 // every visible interactive control: rendered (not display none, not in a hidden panel), with a box, not aria-hidden
 const CONTROLS = `(() => {
@@ -131,7 +133,7 @@ async function achChecks() {
   await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/package.json' }); await sleep(500);
   await ev('localStorage.clear(); localStorage.setItem("poppit.v1", ' + JSON.stringify(JSON.stringify(Object.assign({ t: Date.now() }, save))) + '); true');
   await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(1800);
-  const tap = async (sel) => { const r = await ev('(() => { const e = document.querySelector(' + JSON.stringify(sel) + '); if (!e) return null; const q = e.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; })()'); if (!r) throw new Error('no ' + sel); await touch(r[0], r[1]); await sleep(500); };
+  const tap = async (sel) => { const r = await ev('(() => { const e = document.querySelector(' + JSON.stringify(sel) + '); if (!e) return null; const q = e.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; })()'); if (!r) throw new Error('no ' + sel); await (DESKTOP ? click : touch)(r[0], r[1]); await sleep(500); };
   const toast = await ev('document.getElementById("toast").textContent');
   await tap('#bookBtn'); await sleep(900); await tap('#bkTabAch');
   for (const cat of ['popping', 'collecting']) {
@@ -145,7 +147,7 @@ async function achChecks() {
       return { page: w(d), book: w(document.getElementById('book')), card: w(v), list: w(document.getElementById('achList')), cats: w(document.getElementById('achCats')), overflowing: wide, past,
         card_px: Math.round(r.width) + 'x' + Math.round(r.height), tiers: { done: st('done'), next: st('next'), hidden: st('hid') }, sum: document.getElementById('achSum').textContent,
         tabs: [...document.querySelectorAll('#achCats .atab')].map((b) => Math.round(b.getBoundingClientRect().height)).join(',') }; })()`);
-    const file = 'ach-390-' + cat + '.png';
+    const file = 'ach-' + W + '-' + cat + '.png';
     fs.writeFileSync(path.join(OUT, file), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
     out.push(Object.assign({ category: cat, file }, m));
     console.log(cat + ': page ' + m.page + ', book ' + m.book + ', card ' + m.card + ' (' + m.card_px + '), list ' + m.list + ', categories ' + m.cats + ' (tab heights ' + m.tabs + '), rows wider than themselves ' + m.overflowing + ', past the card: ' + (m.past.join(' ') || 'none') + ', tiers ' + JSON.stringify(m.tiers) + ' -> ' + file + '\n  ' + m.sum);
@@ -153,9 +155,9 @@ async function achChecks() {
   await tap('#bkTabPearls'); await sleep(1200);
   const pm = await ev(`(() => { const d = document.documentElement, b = document.getElementById('book'), k = document.getElementById('bkWrap').getBoundingClientRect(), t = document.querySelector('.bkTabs').getBoundingClientRect();
     return { page: d.scrollWidth + '/' + d.clientWidth, book: b.scrollWidth + '/' + b.clientWidth, spread: Math.round(k.width) + 'x' + Math.round(k.height) + ' at y ' + Math.round(k.top), tabs_bottom: Math.round(t.bottom) }; })()`);
-  fs.writeFileSync(path.join(OUT, 'ach-390-pearls.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
-  out.push(Object.assign({ category: 'pearls tab', file: 'ach-390-pearls.png' }, pm));
-  console.log('pearls tab: page ' + pm.page + ', book ' + pm.book + ', spread ' + pm.spread + ', tabs end at y ' + pm.tabs_bottom + ' -> ach-390-pearls.png');
+  fs.writeFileSync(path.join(OUT, 'ach-' + W + '-pearls.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  out.push(Object.assign({ category: 'pearls tab', file: 'ach-' + W + '-pearls.png' }, pm));
+  console.log('pearls tab: page ' + pm.page + ', book ' + pm.book + ', spread ' + pm.spread + ', tabs end at y ' + pm.tabs_bottom + ' -> ach-' + W + '-pearls.png');
   console.log('load toast: ' + JSON.stringify(toast));
   return out;
 }
@@ -166,8 +168,8 @@ async function achChecks() {
     ws = new WebSocket(tgt.webSocketDebuggerUrl); await new Promise((r) => ws.addEventListener('open', r));
     ws.addEventListener('message', (m) => { const d = JSON.parse(m.data); if (d.id && pend[d.id]) { (d.error ? pend[d.id].rej(new Error(JSON.stringify(d.error))) : pend[d.id].res(d.result)); delete pend[d.id]; } if (d.method === 'Runtime.exceptionThrown') errors.push(d.params.exceptionDetails.exception.description); });
     await send('Page.enable'); await send('Runtime.enable');
-    await send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: 2, mobile: true });
-    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    await send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: DESKTOP ? 1 : 2, mobile: !DESKTOP });
+    if (!DESKTOP) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     await send('Page.navigate', { url: 'http://127.0.0.1:' + PORT + '/index.html' }); await sleep(2000);
     if (label === 'layout') { result.layout = await layoutChecks(); return; }
     if (label === 'settings') { result.settings = await settingsChecks(); return; }
@@ -197,7 +199,7 @@ async function achChecks() {
     result.errors = errors;
   } catch (e) { console.log('ERROR ' + e.stack); result.error = String(e); }
   finally {
-    fs.writeFileSync(path.join(OUT, label + '.json'), JSON.stringify(result, null, 1));
+    fs.writeFileSync(path.join(OUT, (label === 'ach' ? 'ach-' + W : label) + '.json'), JSON.stringify(result, null, 1));
     console.log('levels at the end: ' + result.levels + '; console errors: ' + (errors.length ? errors.join(' | ') : 'none'));
     try { ws.close(); } catch (e) {} ch.kill(); srv.close(); setTimeout(() => { try { fs.rmSync(prof, { recursive: true, force: true }); } catch (e) {} process.exit(0); }, 500);
   }

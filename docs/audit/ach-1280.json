@@ -1,0 +1,54 @@
+{
+ "label": "ach",
+ "width": 1280,
+ "height": 800,
+ "moments": [],
+ "ach": [
+  {
+   "category": "popping",
+   "file": "ach-1280-popping.png",
+   "page": "1280/1280",
+   "book": "894/894",
+   "card": "634/634",
+   "list": "610/610",
+   "cats": "610/610",
+   "overflowing": 0,
+   "past": [],
+   "card_px": "640x708",
+   "tiers": {
+    "done": 8,
+    "next": 4,
+    "hidden": 3
+   },
+   "sum": "18 of 57 · payouts +9%",
+   "tabs": "44,44,44,44,44"
+  },
+  {
+   "category": "collecting",
+   "file": "ach-1280-collecting.png",
+   "page": "1280/1280",
+   "book": "894/894",
+   "card": "634/634",
+   "list": "610/610",
+   "cats": "610/610",
+   "overflowing": 0,
+   "past": [],
+   "card_px": "640x708",
+   "tiers": {
+    "done": 6,
+    "next": 3,
+    "hidden": 8
+   },
+   "sum": "18 of 57 · payouts +9%",
+   "tabs": "44,44,44,44,44"
+  },
+  {
+   "category": "pearls tab",
+   "file": "ach-1280-pearls.png",
+   "page": "1280/1280",
+   "book": "894/894",
+   "spread": "640x441 at y 205",
+   "tabs_bottom": 64
+  }
+ ]
+}
