@@ -63,6 +63,8 @@ Verification
 - The --no-ach flag reproduces the outputs before this session byte for byte: default, --duck,
   --wait=25, --ducks, --early, --flavors and --variant=ruleA (all compared with cmp).
 - tests/away.test.js still passes with achievements applied (2 of 2).
+- Pushed to main in four commits (game, sim, audit tool, docs). CI on main (run 40270734538):
+  build, index.html up to date, tests and the sim twice all green.
 - Book screenshots at 390x844 and 1280x800, both tabs (docs/audit/ach-390-*, ach-1280-*):
   - 390: page 390/390, book 358/358, card 336/336, list 312/312, chips 312/312 (44 px tall),
     Pearls spread 342x236;
