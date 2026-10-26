@@ -169,3 +169,18 @@
 - The away bonus's frenzy share now counts the meter a frenzy fills itself (tests/away.test.js failed at engaged C6, 0.83). A
   first attempt (greedy helper hits in both phases) made first-helper checkpoints 6-7x too high and was reverted.
 - tests/flavor_tests.js, new econ tests; audit mode `node tools/audit.js batch` (screenshots in docs/audit/batch-390-*.png).
+
+## 2026-10-25: achievements
+
+- src/achievements.js (ACH): 57 achievements in five categories, from 18 ladders of data. +0.5% payouts each, +1% for the
+  hardest tier of a ladder, summed into one global multiplier (ECON.stats achMult, in popValue and helperIdle), capped at +25%.
+  The earned set is a pure function of the state (ACH.earned), so it can be re-derived.
+- The game grants once a second and after a Fresh Batch, a craft or a forge job, with a toast and a short chime (soft with
+  Reduce effects). After a load it grants what the save already earns, silently, with one "from your history" toast.
+- Save v11: state.achieved (the v10 -> v11 step adds an empty list); stats gained crafts, forged and alloys.
+- The Collection book is a sheet over the board with Pearls and Achievements tabs. The book also shows with the first
+  achievement. Checked at 390x844 (node tools/audit.js ach): page 390/390, card 336/336, nothing past the card.
+- node tools/sim32.js --achievements: 16 of 57 at the first Fresh Batch (both profiles); after 3 hours 36 (+21%) casual and
+  42 (+25%, the cap) engaged. The sim does not apply the bonus; its default output is byte-identical.
+- Tests: tests/achievements.test.js (module) and tests/achievement_tests.js (in the game). Payout probes in duck_tests.js and
+  relic_tests.js now divide out the achievement part, because a craft can earn achievements.

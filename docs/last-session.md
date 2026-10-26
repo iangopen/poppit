@@ -1,77 +1,106 @@
-Session: rule C is in the game (Flavors from all juice so far), save v10, the Fresh Batch box.
+Session: achievements (57 in five categories, a capped payout bonus, a tab in the book).
 
 What changed
-- src/econ.js: Flavors owed = floor(sqrt(flavorJuice / 1.25M)). A Fresh Batch pays owed minus
-  held. It is ready at 5M run juice once the gain is at least max(2, ceil(0.5 x held)).
-  - Named constants: COLLAPSE_GAIN_DIV 1.25M, FLAVOR_NEED 0.5, FLAVOR_MIN_GAIN 2.
-  - New helpers: flavorsOwed, flavorJuiceFor, flavorNeed, collapseProgress.
-- Save v10: state.flavorJuice grows wherever lifetime grows (auto-sold pops, sold pearls, away
-  bonus). The v9 -> v10 step sets it to max(lifetime, 1.25M x Flavors^2). It is clamped on
-  load, carried by save codes, import, backup and Restore, kept by Fresh Batch, and zeroed by
-  Reset save. The lifetime stat is unchanged.
-- Fresh Batch box: "Now: +67 Flavors. Ready at +150 (half your 300).", a progress bar, then
-  whichever gate is further away ("Earn 84.4B more juice to reach +150." or "Earn 5.00M juice
-  in this run to unlock it (3.00M so far)."). The goal line now names the +2 Flavors.
-- Sim: the default plays the game's rule from src/econ.js (checkCopies compares the two on a
-  grid). --variant=ruleA is the old rule and reproduces the 2026-10-22 baseline byte for byte.
-  docs/balance-report.md is regenerated (rule C and A, with and without the Pink Duck).
-- Away bonus fix (needed for npm test): tests/away.test.js failed at the engaged C6 checkpoint
-  (0.83, limit 0.85), because rule C ends runs later. Cause: helperIdle counted the frenzy meter
-  as filled only at the normal pop rate. The game keeps filling it during a frenzy at 4x.
-  The frenzy share now counts that. When helpers are the limit it equals the old formula, and
-  every rule A checkpoint is unchanged.
-- Tests: new rule C tests in tests/econ32.test.js and a new tests/flavor_tests.js. Every test
-  that forces a Fresh Batch now also sets flavorJuice.
-- tools/audit.js batch: screenshots of the box at 390x844 (docs/audit/batch-390-*.png).
+- src/achievements.js (ACH), new, pure, after econ.js in the build order:
+  - 57 achievements in Popping, Collecting, Economy, Fresh Batch and Crafting, from 18 ladders of
+    data.
+  - Ladders: pops 100 to 10M; taps 500 to 500K; combo 10/30/60; best pop 1M/1B; types found
+    3/5/7/10; shiny types 1/5/10; one pop count per pearl type; juice 1M/1B/1T; upgrades at max
+    1/10; Fresh Batches 1/10/50; Flavors 10/100/1,000; fastest run under 10/5/3 min; copies 1/25;
+    first Rare/Epic/Mythic; ducks 1/10; 3 relics equipped; 25 forge jobs; first dust; first alloy.
+  - Per-type counts (about an hour of pops, by the duck-cost method, from the sim): Rose 8,800,
+    Blue 1,200, Mint 520, Golden 290, Violet 230, Coral 84, Marble 39, Opal 28, Ruby 17, Black 15.
+  - Each has an id, name, one sentence, category, ladder, tier, test, progress { have, need } and
+    reward.
+  - earned(state) is a pure function of the state and stats, so achievements can be re-derived.
+- Reward: +0.5% each, +1% for the hardest tier of each ladder, summed once per id. ACH_CAP = 0.25,
+  so the multiplier never goes above x1.25 (the full table adds up to +37.5%).
+  - ECON.stats gives achMult; popValue and helperIdle multiply by it next to the artifacts. That
+    covers taps, helpers, shinies, frenzy and the away bonus.
+- The game (src/ui.js): checkAch once a second and right after a Fresh Batch, a craft and a forge
+  job. New ones toast through the existing batching ("Achievement: Popper! Payouts +0.5% from
+  achievements"). The chime (Snd.achieve) is three notes, or one soft note with Reduce effects,
+  and silent with Sound off.
+  - The first achievement also says "Your achievements are in the Collection book".
+- Retroactive grant: after boot, import and Restore, what the save already earns is granted
+  silently with one toast ("20 achievements from your history: payouts +10.5%. See the Collection
+  book."). Saved ids are kept even if the state no longer shows them; repeats and unknown ids are
+  dropped.
+- Save v11: state.achieved. The v10 -> v11 step adds an empty list. The poppit.v1 key is
+  unchanged.
+  - Loaded ids are clamped to known ones. Save codes, files, the backup and Restore carry the
+    list.
+  - Fresh Batch keeps it; Reset save forgets it.
+  - stats gained crafts, forged and alloys (a save without them loads 0).
+- The Collection book is now a sheet over the board, with Pearls and Achievements tabs and a close
+  button. The Achievements tab has:
+  - the summary "18 of 57 · payouts +9%" and category chips with counts;
+  - per ladder: achieved tiers, then only the next one with a progress bar, then "???".
+  - The book button now also shows with the first achievement (derived from state.achieved).
+- Payout line: "Payouts x1.722 (Flavors 2 x1.2, artifacts x1.4, achievements x1.025)". With no
+  achievements it reads exactly as before.
+- Sim: node tools/sim32.js --achievements (report only). The sim does not apply the bonus, so the
+  default output is byte-identical to before. Written to docs/achievement-report.md.
+- tools/audit.js ach: screenshots of the tab at 390x844 (docs/audit/ach-390-*.png) with widths.
 
 Verification
-- npm run build: "built index.html". npm test: exit 0; node test files 36, 19, 9, 21, 8 and 2
-  pass, 0 fail; the harness prints ALL PASSED (430 PASS lines).
-- npm run sim twice: identical output.
-- Six cycles, rule C, no duck (minutes; Flavors held after each cycle):
-  - casual 12.8 / 12.9 / 11.7 / 9.2 / 7.7 / 6.4; Flavors 2 / 4 / 6 / 12 / 18 / 27 (x3.7)
-  - engaged 6.0 / 3.7 / 4.0 / 4.5 / 3.9 / 3.0; Flavors 3 / 5 / 9 / 14 / 21 / 37 (x4.7)
-  - rule A was casual 19 Flavors (x2.9), engaged 19 (x2.9)
-- With the Pink Duck: casual 11.0 / 8.6 / 6.5 / 5.5 / 5.5 / 5.1 (27 Flavors); engaged
-  3.6 / 3.3 / 2.7 / 2.9 / 3.1 / 3.0 (23 Flavors).
-- First Fresh Batch: casual ready at 12.8 min with +2 Flavors (6.0M run juice). Engaged ready
-  at 6.0 min (5.97) with +3, not +2: its first run ends on a Black pop at 14.0M run juice. Rule A
-  gave the same +3, so nothing changed there.
-- Harness, a v9 save with 300 Flavors and 3.0e10 lifetime juice:
-  - after migration: flavorJuice 1.125e11, owed 300, gain +0, gain needed +150, 1.406e11
-    more juice to go (gate at 2.531e11), progress 0%, not ready, button disabled
-  - 25%: gain +43, bar 25%, not ready; 50%: +82, 50%, not ready; 99.9%: +149, 99%, not ready
-  - a click before the gate does nothing
-  - at the gate: +150, 100%, ready, "Fresh Batch for +150 Flavors"; taking it gives 450 Flavors,
-    flavorJuice kept, next need +225, progress 0%
-- Kept pearls sold in run 3, one stack per run, or all in run 4 all end at the same flavor juice
-  and 6 Flavors.
-- Migration checks: 0 Flavors (3M lifetime) -> 3M; 15 Flavors (1.2e8) -> 2.81e8; 15 Flavors
-  (5e8) -> 5e8; 300 Flavors -> 1.125e11.
-- 390x844, headless Chrome: the page is 390/390 and the box 356/356 in all three states (new
-  player, not ready, ready). Every part of the box has scrollWidth = clientWidth, nothing sticks
-  out, and there are no console errors. I looked at the screenshots: both states read cleanly.
-- Pushed to main (3 commits). The CI run on main (40144996835) finished green.
+- npm run build: "built index.html".
+- npm test: exit 0. Node test files 36, 10 (new), 19, 9, 21 and 8 pass with 0 fail, then 2 pass.
+  The harness prints ALL PASSED (478 PASS lines).
+- New tests:
+  - tests/achievements.test.js: each ladder's test and progress at its boundaries, the earned set
+    from fixture states, the bonus and the cap, and achMult scaling pop values and the idle rate
+    exactly.
+  - tests/achievement_tests.js (in the game):
+    - grant and toast; the soft chime; the multiplier on tap, helper, shiny and frenzy pops and on
+      the away bonus (all x1.025); the cap at x1.25;
+    - the retroactive grant with one toast and none on a second load; the v10 -> v11 step;
+    - save, code, import, backup and Restore; Fresh Batch keeping them; Reset forgetting them;
+    - the book reveal; a mid-game save's dock unchanged; an early save gaining only the book; the
+      tab.
+- npm run sim twice: identical, and identical to the output at the start of the session.
+- Sim, Fresh Batch taken at once (bonus not applied):
+  - casual: 16 of 57 at the first Fresh Batch (12.8 min), +9.5%; 36 of 57 after 3 hours, +21%
+  - engaged: 16 of 57 at the first Fresh Batch (6.0 min), +9%; 42 of 57 after 3 hours, +25% (the
+    cap)
+  - It cannot count the 11 Crafting achievements: it never crafts, forges or keeps pearls.
+  - Its combo never breaks, so all three combo tiers land in run 1. That is overstated.
+- 390x844, headless Chrome, a mid-game save, opened with real taps:
+  - page 390/390, book 358/358, card 336/336, list 312/312, chips 312/312 (all 44 px tall);
+  - no row wider than itself, nothing past the card, no console errors;
+  - the Collecting shot shows achieved, next (bar at 6/7) and ??? together; the Pearls tab still
+    shows the spread centred.
+  - Layout audit at 360, 390 and 430 px: no overlaps. The longer payout line wraps to two lines at
+    360.
 
 Choices I made
-- The study's call shape collapseGain(run, echoes, life) is kept; the gain ignores run.
-- The bar shows the slower of the two gates, counted from the juice the Flavors held stand for,
-  so it starts at 0 after a Fresh Batch or the migration.
-- "(half your N)" shows only when the need is above 2. With 0 Flavors and 3M juice the box says
-  "+1 Flavor" now, which is honest under rule C.
-- The not-ready line names only the gate that is further away, because run juice feeds both.
-- A loaded flavorJuice is not raised to lifetime; only the migration does that.
-- The away frenzy-share fix is a model fix, not a balance dial. CLAUDE.md says to fix the
-  formula, not the target. A first attempt (greedy helper hits) made first-helper checkpoints
-  6-7x too high and was reverted before this one.
-- Commits: game, tests and sim are one commit, because each needs the others to pass npm test.
-  The audit tool and the docs are separate commits.
+- 57 entries, not exactly 50, to cover every ladder in the brief. Single-tier ladders (relics,
+  forge jobs) give +1%, because their only tier is the hardest.
+- The cap is +25%, below the table's +37.5% total. That is the smaller economy change; the summary
+  line says "(the most achievements give)" at the cap.
+- The bonus is its own factor (achMult) next to artMult, so the payout line can name it and the
+  artifacts part stays as it was.
+- Crafts, forge jobs and alloys are new stats counters. Copies on hand and forge stock are floors,
+  so older saves get credit for what they hold.
+- "Upgrades at max" counts levels now, so a past run's maxed upgrades are not re-derived on an old
+  save. Once granted, they stay.
+- The grant on load runs after syncDiscoveries (boot, import, Restore); loadState only clamps. The
+  history toast comes before "Save loaded" in the batched toast.
+- The book became a full-board sheet: the tabs collided with the juice counter and the Pool button
+  when the book floated over the HUD.
+- Payout probes in duck_tests.js and relic_tests.js now divide out achMult, because crafting a
+  duck now also earns achievements. They still test the duck alone.
+
+Commits (pushed to main)
+- Achievements: module, save v11, grant and toasts, payout multiplier, book tab, tests.
+- Sim: --achievements report.
+- Audit tool: ach mode and screenshots (and the refreshed layout shots).
+- Docs: achievement report, CLAUDE.md, history, last-session.
 
 Still open
-- Engaged cycles near 4 min: C2 3.7, C3 3.997, C5 3.9, C6 3.0 (4 of 5 under, against 5 of 5
-  under rule A). This needs a run-length lever.
-- Ducks stack hard: with the Pink Duck every engaged cycle is 2.7-3.6 min.
-- With --wait=25, rule C runs from C5 take 29 and 44 min: the gate is not met by minute 25.
-- Away calibration at four mid-run checkpoints the test does not check: 0.60-0.80 (frenzy
-  limited by helper hits, so helpers cherry-pick; not modelled).
-- Real-phone check of the box, and whether players understand "Ready at +M".
+- Tuning: the thresholds, the rewards and the cap are first values. Combo, types found and 10
+  upgrades at max all come in run 1, and engaged players hit the cap within 3 hours.
+- The pacing sim does not include the bonus (up to +25% payouts), so its cycle times are too long.
+- Real-phone check of the book sheet, the tabs, the chips and the list scrolling.
+- The Pearls tab now shows two close buttons (the sheet's and the book's own red X).
+
