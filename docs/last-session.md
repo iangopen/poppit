@@ -96,6 +96,7 @@ Commits (pushed to main)
 - Sim: --achievements report.
 - Audit tool: ach mode and screenshots (and the refreshed layout shots).
 - Docs: achievement report, CLAUDE.md, history, last-session.
+- CI on main (run 40266249944): build, index.html up to date, tests and the sim twice all green.
 
 Still open
 - Tuning: the thresholds, the rewards and the cap are first values. Combo, types found and 10
