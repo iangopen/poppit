@@ -1,6 +1,45 @@
-# Poppit balance report: rule C, Flavors from all the juice so far
+# Poppit balance report: the sim applies achievements
 
-Date: 2026-10-24. Numbers come from `tools/sim32.js` on the economy in `src/econ.js` at this commit (`npm run sim`, seeded, identical run to run). The sim now plays the game's own Fresh Batch rule from `src/econ.js`. The rule before this session is the sim variant `ruleA` (`node tools/sim32.js --variant=ruleA`), which reproduces the 2026-10-22 baseline byte for byte. The 2026-10-22 report follows below, unchanged, as the rule A reference.
+Date: 2026-10-26. Numbers come from `tools/sim32.js` on the economy in `src/econ.js` at this commit (`npm run sim`, seeded, identical run to run). Since this session the sim applies the achievement bonus: every run counts what it can (pops in all and per type, taps, best combo, best pop, pearl types and shiny types found, juice, upgrades at max, Fresh Batches, Flavors, fastest run), grants once a second of play what those counters satisfy through `src/achievements.js`'s own tests, and multiplies payouts by the resulting `achMult` (`ECON.stats`). It skips the 11 Crafting achievements (the sim never crafts, forges or keeps pearls) and the combo tiers above the first (its combo never breaks while it taps), so it counts 44 of the 57. `--no-ach` plays without them and reproduces the output before this session byte for byte (default, `--duck`, `--wait=25`, `--ducks`, `--early` and `--flavors` checked). The achievement cap is now the table's total (+37.5%), so every achievement keeps paying.
+
+No other number changed. The rule C report (2026-10-24) follows below; its tables are the numbers without achievements (`--no-ach`).
+
+## Six cycles, before and after (reference seeds, Fresh Batch taken as soon as it is ready)
+
+"Before" is `--no-ach` (the output until this session); "after" is the default now. Payout x after each cycle counts Flavors, the global duck and, after, the achievements.
+
+| run | profile | minutes C1..C6, before | minutes C1..C6, after | Flavors after each, before | Flavors after each, after | payout x after each, before | payout x after each, after |
+|---|---|---|---|---|---|---|---|
+| no duck | casual | 12.8 / 12.9 / 11.7 / 9.2 / 7.7 / 6.4 | 11.4 / 11.3 / 6.9 / 7.7 / 7.1 / 6.9 | 2 / 4 / 6 / 12 / 18 / 27 | 2 / 5 / 8 / 12 / 19 / 29 | 1.2 / 1.4 / 1.6 / 2.2 / 2.8 / 3.7 | 1.3 / 1.6 / 2.0 / 2.4 / 3.2 / 4.3 |
+| no duck | engaged | 6.0 / 3.7 / 4.0 / 4.5 / 3.9 / 3.0 | 4.5 / 4.4 / 3.5 / 3.3 / 3.0 / 3.1 | 3 / 5 / 9 / 14 / 21 / 37 | 2 / 4 / 6 / 10 / 15 / 24 | 1.3 / 1.5 / 1.9 / 2.4 / 3.1 / 4.7 | 1.3 / 1.5 / 1.7 / 2.2 / 2.8 / 3.8 |
+| Pink Duck | casual | 11.0 / 8.6 / 6.5 / 5.5 / 5.5 / 5.1 | 9.5 / 8.5 / 5.6 / 5.8 / 6.7 / 5.9 | 3 / 5 / 8 / 12 / 18 / 27 | 2 / 4 / 6 / 9 / 14 / 21 | 1.8 / 2.1 / 2.5 / 3.1 / 3.9 / 5.2 | 1.8 / 2.1 / 2.4 / 2.9 / 3.7 / 4.8 |
+| Pink Duck | engaged | 3.6 / 3.3 / 2.7 / 2.9 / 3.1 / 3.0 | 3.5 / 3.5 / 3.0 / 3.3 / 2.2 / 2.5 | 2 / 4 / 6 / 10 / 15 / 23 | 2 / 4 / 6 / 10 / 16 / 24 | 1.7 / 2.0 / 2.2 / 2.8 / 3.5 / 4.6 | 1.8 / 2.1 / 2.5 / 3.1 / 4.0 / 5.3 |
+
+Achievements granted by the end of each cycle (achievement multiplier):
+
+- no duck, casual: 14 (x1.08) / 14 (x1.08) / 16 (x1.09) / 17 (x1.095) / 18 (x1.1) / 20 (x1.115)
+- no duck, engaged: 15 (x1.085) / 16 (x1.09) / 16 (x1.09) / 17 (x1.095) / 19 (x1.11) / 19 (x1.11)
+- Pink Duck, casual: 15 (x1.085) / 15 (x1.085) / 16 (x1.09) / 16 (x1.09) / 17 (x1.095) / 18 (x1.1)
+- Pink Duck, engaged: 13 (x1.065) / 15 (x1.08) / 17 (x1.1) / 19 (x1.11) / 19 (x1.11) / 19 (x1.11)
+
+- **The first Fresh Batch comes sooner:** casual 12.8 -> 11.4 min (still inside the 10-15 band); engaged 6.0 -> 4.5 min. By the first Fresh Batch the sim has about 13-15 achievements (x1.065-1.085), most of them from Popping and Collecting tiers that the first run passes quickly. Engaged's first run no longer ends on a Black pop at 14M run juice, so it gains +2 Flavors, not +3.
+- **Cycles are shorter, and engaged dips further under 4 minutes.** Engaged C2-C6 under 4 min: 4 of 5 before (3.7, 3.997 printed as 4.0, 3.9, 3.0), 4 of 5 after, and deeper (4.4 / 3.5 / 3.3 / 3.0 / 3.1). Reported only; no dial was changed for it.
+- **Fewer Flavors for engaged, about the same for casual.** Six cycles end at 29 Flavors casual (27 before) and 24 engaged (37 before): under rule C the Flavors come from all juice so far, and shorter runs earn less juice before each Fresh Batch is ready. The payout multiplier after C6 is x4.3 casual (x3.7) and x3.8 engaged (x4.7).
+- **With the Pink Duck** engaged C2-C6 under 4 min: 5 of 5 before and 5 of 5 after; the shortest is 2.2 min (2.7 before). Casual's shortest is 5.6 min (5.1 before).
+- **Not monotone:** some later cycles are longer than before (casual C6 6.4 -> 6.9, Pink Duck casual C4-C6). A faster run reaches the 5M floor and the Flavor gate with less juice behind it, so the next gate (half the Flavors held) can take longer; the seeded runs also take different random paths once anything changes.
+
+## Waiting to minute 25, before and after (`--wait=25`)
+
+| profile | minutes C1..C6, before | after | Flavors after each, before | after | payout x after C6, before / after |
+|---|---|---|---|---|---|
+| casual | 25.0 / 25.0 / 25.0 / 25.0 / 29.4 / 44.0 | 25.0 / 25.0 / 25.0 / 25.0 / 27.1 / 43.2 | 40 / 133 / 263 / 423 / 635 / 953 | 41 / 149 / 299 / 478 / 718 / 1080 | x96.3 / x131.3 |
+| engaged | 25.0 / 25.0 / 25.0 / 25.0 / 28.7 / 44.1 | 25.0 / 25.0 / 25.0 / 25.0 / 26.7 / 40.3 | 74 / 275 / 571 / 937 / 1406 / 2109 | 81 / 309 / 663 / 1093 / 1640 / 2460 | x211.9 / x300.1 |
+
+- Waiting earns more with achievements (1080 and 2460 Flavors after six runs, against 953 and 2109): the bonus raises the juice, and rule C pays for all of it. From C5 the gate is still not met by minute 25.
+
+# The rule C report (2026-10-24), without achievements
+
+The sections below are from 2026-10-24, before the sim applied achievements (`--no-ach` reproduces them), except the three sim-output sections at the end, which are regenerated with achievements applied.
 
 ## What changed
 
@@ -75,315 +114,329 @@ Before the fix, C6 ready was 0.83 engaged. The bold rows are open: there the fre
 
 ## Default sim output (`npm run sim`)
 
-The full baseline report, rule C, no duck, Fresh Batch taken as soon as it is ready.
-
+The full baseline report, rule C, no duck, Fresh Batch taken as soon as it is ready, achievements applied (2026-10-26).
 
 ### casual (1.5 taps/s, skill 0.3, seed 1)
 
 | cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 12.8 | 11.4 | 12.8 | 6.0M | +2 | 2 | 1.2 | 0.0 | 0.0 | 70K | black | 217K | 7.2M |
-| 2 | 12.9 | 9.7 | 12.9 | 14.9M | +2 | 4 | 1.4 | 0.0 | 0.0 | 212K | black | 268K | 2.2M |
-| 3 | 11.7 | 8.9 | 11.7 | 32.6M | +2 | 6 | 1.6 | 0.1 | 0.1 | 502K | black | 327K | 17.9M |
-| 4 | 9.2 | 6.4 | 9.2 | 142M | +6 | 12 | 2.2 | 0.1 | 0.1 | 2.3M | black | 347K | 24.8M |
-| 5 | 7.7 | 4.9 | 7.7 | 223M | +6 | 18 | 2.8 | 0.1 | 0.1 | 3.3M | black | 477K | 106M |
-| 6 | 6.4 | 3.2 | 6.4 | 547M | +9 | 27 | 3.7 | 0.1 | 0.9 | 7.6M | black | 608K | 151M |
+Achievements granted by the end of each cycle: 14 (x1.08) / 14 (x1.08) / 16 (x1.09) / 17 (x1.095) / 18 (x1.1) / 20 (x1.115)
+
+| 1 | 11.4 | 10.4 | 11.4 | 5.2M | +2 | 2 | 1.3 | 0.0 | 0.0 | 79K | black | 227K | 5.8M |
+| 2 | 11.3 | 9.3 | 11.3 | 29.5M | +3 | 5 | 1.6 | 0.0 | 0.0 | 452K | black | 290K | 2.4M |
+| 3 | 6.9 | 4.9 | 6.9 | 46.7M | +3 | 8 | 2.0 | 0.1 | 0.1 | 683K | black | 352K | 26.6M |
+| 4 | 7.7 | 4.9 | 7.7 | 129M | +4 | 12 | 2.4 | 0.1 | 0.1 | 2.0M | black | 426K | 88.8M |
+| 5 | 7.1 | 5.1 | 7.1 | 261M | +7 | 19 | 3.2 | 0.1 | 0.1 | 4.2M | black | 525K | 116M |
+| 6 | 6.9 | 3.8 | 6.9 | 586M | +10 | 29 | 4.3 | 0.1 | 0.8 | 8.9M | black | 692K | 178M |
 
 Minute each upgrade reaches max level (- = not maxed before Fresh Batch):
 
 | upgrade (max) | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
-| tool (5) | 12.7 | - | 11.0 | 7.6 | 6.7 | 4.4 |
-| lucky (8) | 6.4 | 5.3 | 4.5 | 4.0 | 3.3 | 2.0 |
-| auto (20) | - | - | - | - | 7.6 | 5.6 |
+| tool (5) | 11.2 | 11.3 | 5.4 | 6.5 | 5.7 | 4.5 |
+| lucky (8) | 6.2 | 4.6 | 3.3 | 2.9 | 2.7 | 2.1 |
+| auto (20) | - | - | - | - | 7.0 | 6.3 |
 | sharp (99) | - | - | - | - | - | - |
-| mint (5) | 8.7 | 7.7 | 6.2 | 5.2 | 3.9 | 2.5 |
-| golden (6) | 11.4 | 9.4 | 8.0 | 6.6 | 5.0 | 3.3 |
-| violet (5) | 11.5 | 11.4 | 9.8 | 6.9 | 5.1 | 3.6 |
-| coral (5) | 12.7 | - | 11.0 | 7.9 | 6.7 | 4.5 |
-| marble (5) | - | - | 11.3 | 8.8 | 6.7 | 4.5 |
-| opal (5) | - | - | 11.3 | 8.8 | 6.7 | 5.1 |
-| ruby (5) | - | - | - | 9.0 | 6.9 | 5.2 |
-| black (5) | - | - | - | - | 7.4 | 5.2 |
-| shiny (10) | - | - | 11.3 | 8.8 | 6.7 | 5.1 |
-| spawn (12) | 8.4 | 7.7 | 6.0 | 5.2 | 3.9 | 2.5 |
-| combo (10) | 5.5 | 4.3 | 3.9 | 3.2 | 2.8 | 1.7 |
-| fuel (5) | 6.2 | 4.8 | 4.2 | 3.6 | 3.3 | 1.9 |
-| tempo (10) | - | - | - | - | 7.1 | 5.2 |
-| board (2) | 10.7 | 8.5 | 7.3 | 5.9 | 4.2 | 3.0 |
+| mint (5) | 7.6 | 6.5 | 4.2 | 3.7 | 3.3 | 2.8 |
+| golden (6) | 10.4 | 9.2 | 4.9 | 4.9 | 5.3 | 3.8 |
+| violet (5) | 10.7 | 9.9 | 4.9 | 5.8 | 5.4 | 3.8 |
+| coral (5) | 11.3 | - | 5.5 | 6.5 | 6.0 | 4.5 |
+| marble (5) | - | - | 6.4 | 7.1 | 6.3 | 5.7 |
+| opal (5) | - | - | 6.4 | 7.1 | 6.3 | 5.7 |
+| ruby (5) | - | - | 6.7 | 7.3 | 6.6 | 5.7 |
+| black (5) | - | - | - | 7.4 | 6.6 | 6.0 |
+| shiny (10) | - | - | 6.4 | 7.1 | 6.3 | 5.7 |
+| spawn (12) | 7.5 | 6.5 | 3.9 | 3.6 | 3.3 | 2.8 |
+| combo (10) | 5.0 | 3.8 | 2.9 | 2.9 | 2.3 | 1.8 |
+| fuel (5) | 5.5 | 4.1 | 3.0 | 2.9 | 2.5 | 2.0 |
+| tempo (10) | - | - | - | 7.4 | 6.6 | 5.8 |
+| board (2) | 9.6 | 8.4 | 4.6 | 4.4 | 4.4 | 3.3 |
 
 Share of cycle income by pearl type (%):
 
 | pearl | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
-| pearl | 0.7 | 0.4 | 0.3 | 0.1 | 0.1 | 0.0 |
-| blue | 0.5 | 0.3 | 0.1 | 0.0 | 0.1 | 0.0 |
-| mint | 0.9 | 0.6 | 0.3 | 0.1 | 0.1 | 0.1 |
-| golden | 1.1 | 0.9 | 0.5 | 0.2 | 0.1 | 0.1 |
-| violet | 3.3 | 2.9 | 1.6 | 0.5 | 0.6 | 0.6 |
-| coral | 8.6 | 5.8 | 2.1 | 0.7 | 1.2 | 0.8 |
-| marble | 31.3 | 3.0 | 3.9 | 1.4 | 4.2 | 2.1 |
-| opal | 10.3 | 5.4 | 6.2 | 1.5 | 3.9 | 3.6 |
-| ruby | 43.3 | 0.0 | 38.1 | 0.0 | 12.9 | 13.7 |
-| black | 0.0 | 80.7 | 46.7 | 95.5 | 77.0 | 79.0 |
+| pearl | 0.7 | 0.2 | 0.2 | 0.1 | 0.1 | 0.0 |
+| blue | 0.6 | 0.1 | 0.1 | 0.0 | 0.0 | 0.1 |
+| mint | 1.0 | 0.3 | 0.1 | 0.1 | 0.1 | 0.1 |
+| golden | 1.1 | 0.3 | 0.2 | 0.1 | 0.1 | 0.2 |
+| violet | 2.4 | 1.4 | 0.8 | 0.6 | 0.4 | 0.3 |
+| coral | 5.5 | 2.1 | 2.7 | 0.7 | 0.4 | 1.5 |
+| marble | 11.7 | 1.5 | 4.8 | 1.8 | 2.1 | 2.4 |
+| opal | 27.5 | 6.1 | 14.0 | 2.2 | 2.6 | 3.5 |
+| ruby | 49.5 | 0.0 | 0.0 | 19.3 | 10.0 | 8.7 |
+| black | 0.0 | 88.0 | 77.2 | 75.1 | 84.2 | 83.3 |
 
-Tools bought: C1 Awl@0.9, Brass Mallet@2.6, Steel Hammer@6.6, Sledgehammer@10.8, Diamond Hammer@12.7 / C2 Awl@0.9, Brass Mallet@2.1, Steel Hammer@5.7, Sledgehammer@9.0 / C3 Awl@0.7, Brass Mallet@1.9, Steel Hammer@4.8, Sledgehammer@7.7, Diamond Hammer@11.0 / C4 Awl@0.6, Brass Mallet@1.7, Steel Hammer@4.5, Sledgehammer@6.3, Diamond Hammer@7.6 / C5 Awl@0.5, Brass Mallet@1.6, Steel Hammer@3.3, Sledgehammer@4.6, Diamond Hammer@6.7 / C6 Awl@0.4, Brass Mallet@1.1, Steel Hammer@2.3, Sledgehammer@3.0, Diamond Hammer@4.4
-Largest values (whole cycles, all 6): juice held 127232291, run juice 546632638, single pop 100320000, income/s 7600326, cost on offer 142223424
+Tools bought: C1 Awl@0.9, Brass Mallet@3.0, Steel Hammer@6.6, Sledgehammer@10.0, Diamond Hammer@11.2 / C2 Awl@0.8, Brass Mallet@2.2, Steel Hammer@5.2, Sledgehammer@8.9, Diamond Hammer@11.3 / C3 Awl@0.6, Brass Mallet@1.6, Steel Hammer@3.3, Sledgehammer@4.6, Diamond Hammer@5.4 / C4 Awl@0.6, Brass Mallet@1.7, Steel Hammer@3.0, Sledgehammer@4.7, Diamond Hammer@6.5 / C5 Awl@0.5, Brass Mallet@1.4, Steel Hammer@2.7, Sledgehammer@5.0, Diamond Hammer@5.7 / C6 Awl@0.4, Brass Mallet@1.1, Steel Hammer@2.4, Sledgehammer@3.4, Diamond Hammer@4.5
+Largest values (whole cycles, all 6): juice held 209639022, run juice 586060918, single pop 213347200, income/s 8971382, cost on offer 220446308
 
 Away bonus calibration: helpers alone for 1 h from that moment's board (helperHour, mean of 4 seeds), against awayBonus(3600):
 
 | checkpoint | helper-only juice, 1 h | half of it | away bonus, 1 h | away / half |
 |---|---|---|---|---|
-| C1 first helper (11.4 min) | 464K | 232K | 217K | 0.94 |
-| C1 Fresh Batch ready (12.8 min) | 14.1M | 7.1M | 7.2M | 1.02 |
-| C2 first helper (9.7 min) | 527K | 264K | 268K | 1.02 |
-| C2 Fresh Batch ready (12.9 min) | 4.5M | 2.2M | 2.2M | 0.99 |
-| C3 first helper (8.9 min) | 651K | 326K | 327K | 1.01 |
-| C3 Fresh Batch ready (11.7 min) | 52.3M | 26.1M | 17.9M | 0.69 |
-| C4 first helper (6.4 min) | 799K | 399K | 347K | 0.87 |
-| C4 Fresh Batch ready (9.2 min) | 62.2M | 31.1M | 24.8M | 0.80 |
-| C5 first helper (4.9 min) | 951K | 475K | 477K | 1.00 |
-| C5 Fresh Batch ready (7.7 min) | 209M | 104M | 106M | 1.01 |
-| C6 first helper (3.2 min) | 1.3M | 633K | 608K | 0.96 |
-| C6 Fresh Batch ready (6.4 min) | 291M | 146M | 151M | 1.03 |
+| C1 first helper (10.4 min) | 463K | 231K | 227K | 0.98 |
+| C1 Fresh Batch ready (11.4 min) | 11.3M | 5.7M | 5.8M | 1.02 |
+| C2 first helper (9.3 min) | 668K | 334K | 290K | 0.87 |
+| C2 Fresh Batch ready (11.3 min) | 4.8M | 2.4M | 2.4M | 1.01 |
+| C3 first helper (4.9 min) | 679K | 340K | 352K | 1.04 |
+| C3 Fresh Batch ready (6.9 min) | 64.7M | 32.3M | 26.6M | 0.82 |
+| C4 first helper (4.9 min) | 952K | 476K | 426K | 0.89 |
+| C4 Fresh Batch ready (7.7 min) | 175M | 87.7M | 88.8M | 1.01 |
+| C5 first helper (5.1 min) | 1.2M | 587K | 525K | 0.90 |
+| C5 Fresh Batch ready (7.1 min) | 231M | 115M | 116M | 1.01 |
+| C6 first helper (3.8 min) | 1.4M | 687K | 692K | 1.01 |
+| C6 Fresh Batch ready (6.9 min) | 337M | 169M | 178M | 1.06 |
 
 Rose collection for the Pink Duck (normal Rose pops over the 60 s before each checkpoint; keeping is not simulated):
 
 | checkpoint | Rose pops / min | minutes for 10,000 | juice 10,000 would sell for | Rose share of income |
 |---|---|---|---|---|
-| C1 first helper (11.4 min) | 98 | 102 | 464K | 0.5% |
-| C1 first Fresh Batch (12.8 min) | 170 | 59 | 441K | 0.2% |
-| C6 Fresh Batch (6.4 min) | 331 | 30 | 1.8M | 0.0% |
+| C1 first helper (10.4 min) | 100 | 100 | 485K | 0.6% |
+| C1 first Fresh Batch (11.4 min) | 169 | 59 | 438K | 0.2% |
+| C6 Fresh Batch (6.9 min) | 489 | 20 | 2.0M | 0.0% |
 
 Black Pearls per cycle:
 
 | cycle | unlocked (min) | run length (min) | spawns after unlock | Blacks expected | spawned | spawns turned Rose by the cap | popped by taps | popped by helpers | hits at unlock | hits at end (power) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 12.7 | 12.8 | 43 | 0.23 | 0 | 0 | 0 | 0 | 27 | 18 (18) |
-| 2 | 11.8 | 12.9 | 250 | 1.42 | 1 | 0 | 1 | 0 | 27 | 27 (12) |
-| 3 | 10.4 | 11.7 | 369 | 3.20 | 1 | 1 | 1 | 0 | 27 | 15 (22) |
-| 4 | 7.1 | 9.2 | 717 | 6.71 | 3 | 3 | 3 | 0 | 27 | 13 (26) |
-| 5 | 5.6 | 7.7 | 731 | 8.74 | 5 | 4 | 5 | 0 | 27 | 9 (38) |
-| 6 | 4.3 | 6.4 | 917 | 13.68 | 7 | 6 | 7 | 0 | 27 | 9 (38) |
+| 1 | 11.2 | 11.4 | 49 | 0.26 | 0 | 0 | 0 | 0 | 27 | 18 (18) |
+| 2 | 10.0 | 11.3 | 315 | 1.85 | 1 | 0 | 1 | 0 | 27 | 27 (12) |
+| 3 | 5.1 | 6.9 | 661 | 6.20 | 2 | 3 | 2 | 0 | 27 | 13 (26) |
+| 4 | 5.8 | 7.7 | 650 | 7.08 | 3 | 3 | 3 | 0 | 27 | 11 (30) |
+| 5 | 5.7 | 7.1 | 547 | 7.47 | 5 | 1 | 5 | 0 | 27 | 9 (38) |
+| 6 | 3.9 | 6.9 | 1218 | 15.56 | 7 | 8 | 6 | 0 | 27 | 9 (38) |
 
 ### engaged (2.5 taps/s, skill 0.7, seed 2)
 
 | cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 6.0 | 4.8 | 6.0 | 14.0M | +3 | 3 | 1.3 | 0.0 | 0.0 | 217K | black | 224K | 5.0M |
-| 2 | 3.7 | 2.8 | 3.7 | 17.3M | +2 | 5 | 1.5 | 0.1 | 0.1 | 282K | black | 282K | 14.1M |
-| 3 | 4.0 | 2.9 | 4.0 | 71.4M | +4 | 9 | 1.9 | 0.1 | 0.1 | 1.2M | black | 326K | 22.4M |
-| 4 | 4.5 | 2.8 | 4.5 | 145M | +5 | 14 | 2.4 | 0.1 | 0.1 | 2.3M | black | 412K | 88.7M |
-| 5 | 3.9 | 2.5 | 3.9 | 322M | +7 | 21 | 3.1 | 0.1 | 0.2 | 5.3M | black | 561K | 122M |
-| 6 | 3.0 | 1.5 | 3.0 | 1190M | +16 | 37 | 4.7 | 0.1 | 0.8 | 19.2M | black | 673K | 175M |
+Achievements granted by the end of each cycle: 15 (x1.085) / 16 (x1.09) / 16 (x1.09) / 17 (x1.095) / 19 (x1.11) / 19 (x1.11)
+
+| 1 | 4.5 | 3.7 | 4.5 | 5.8M | +2 | 2 | 1.3 | 0.0 | 0.0 | 91K | black | 225K | 7.8M |
+| 2 | 4.4 | 3.8 | 4.4 | 16.3M | +2 | 4 | 1.5 | 0.0 | 0.0 | 266K | black | 284K | 2.4M |
+| 3 | 3.5 | 2.9 | 3.5 | 38.3M | +2 | 6 | 1.7 | 0.0 | 0.0 | 633K | black | 341K | 12.7M |
+| 4 | 3.3 | 2.7 | 3.3 | 65.5M | +4 | 10 | 2.2 | 0.1 | 0.1 | 1.1M | black | 379K | 23.1M |
+| 5 | 3.0 | 2.1 | 3.0 | 156M | +5 | 15 | 2.8 | 0.1 | 0.1 | 2.6M | black | 475K | 99.6M |
+| 6 | 3.1 | 1.9 | 3.1 | 440M | +9 | 24 | 3.8 | 0.1 | 0.2 | 7.3M | black | 602K | 141M |
 
 Minute each upgrade reaches max level (- = not maxed before Fresh Batch):
 
 | upgrade (max) | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
-| tool (5) | 5.9 | 3.6 | 3.3 | 3.3 | 2.7 | 1.7 |
-| lucky (8) | 2.9 | 1.7 | 1.8 | 1.7 | 1.4 | 1.0 |
-| auto (20) | - | - | - | - | 3.8 | 2.3 |
+| tool (5) | 4.3 | - | 3.3 | 3.2 | 2.6 | 2.5 |
+| lucky (8) | 2.6 | 2.4 | 1.8 | 1.7 | 1.4 | 1.2 |
+| auto (20) | - | - | - | - | - | 3.0 |
 | sharp (99) | - | - | - | - | - | - |
-| mint (5) | 3.2 | 2.3 | 2.2 | 2.1 | 1.7 | 1.2 |
-| golden (6) | 4.7 | 2.9 | 2.9 | 2.8 | 2.1 | 1.5 |
-| violet (5) | 5.4 | 3.2 | 2.9 | 2.8 | 2.5 | 1.5 |
-| coral (5) | - | 3.6 | 3.4 | 3.5 | 2.9 | 2.0 |
-| marble (5) | - | 3.6 | 3.4 | 3.5 | 3.3 | 2.0 |
-| opal (5) | - | - | 3.4 | 3.6 | 3.3 | 2.0 |
-| ruby (5) | - | - | 4.0 | 3.9 | 3.3 | 2.0 |
-| black (5) | - | - | - | 4.2 | 3.5 | 2.2 |
-| shiny (10) | - | - | 3.4 | 3.6 | 3.3 | 2.0 |
-| spawn (12) | 3.2 | 2.3 | 2.2 | 2.1 | 1.7 | 1.2 |
-| combo (10) | 2.6 | 1.7 | 1.7 | 1.6 | 1.1 | 1.0 |
-| fuel (5) | 2.7 | 1.7 | 1.7 | 1.7 | 1.2 | 1.0 |
-| tempo (10) | - | - | - | 4.2 | 3.5 | 2.2 |
-| board (2) | 3.8 | 2.6 | 2.4 | 2.3 | 2.0 | 1.2 |
+| mint (5) | 3.0 | 2.9 | 2.4 | 2.2 | 1.6 | 1.5 |
+| golden (6) | 3.7 | 3.8 | 2.9 | 2.7 | 2.1 | 1.9 |
+| violet (5) | 3.8 | 3.9 | 3.1 | 2.8 | 2.1 | 2.1 |
+| coral (5) | 4.3 | - | 3.3 | 3.2 | 2.6 | 2.5 |
+| marble (5) | - | - | - | 3.2 | 2.6 | 2.6 |
+| opal (5) | - | - | - | 3.3 | 2.7 | 2.6 |
+| ruby (5) | - | - | - | - | 2.7 | 2.6 |
+| black (5) | - | - | - | - | 2.9 | 2.9 |
+| shiny (10) | - | - | - | 3.3 | 2.7 | 2.6 |
+| spawn (12) | 2.9 | 2.8 | 2.3 | 2.2 | 1.6 | 1.5 |
+| combo (10) | 2.2 | 1.9 | 1.7 | 1.7 | 1.1 | 1.1 |
+| fuel (5) | 2.5 | 2.3 | 1.8 | 1.7 | 1.2 | 1.2 |
+| tempo (10) | - | - | - | - | 2.9 | 2.9 |
+| board (2) | 3.4 | 3.4 | 2.6 | 2.3 | 1.8 | 1.7 |
 
 Share of cycle income by pearl type (%):
 
 | pearl | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
-| pearl | 0.2 | 0.1 | 0.1 | 0.1 | 0.0 | 0.0 |
-| blue | 0.6 | 0.3 | 0.1 | 0.1 | 0.1 | 0.0 |
-| mint | 0.9 | 0.4 | 0.2 | 0.2 | 0.1 | 0.0 |
-| golden | 1.8 | 1.4 | 0.5 | 0.4 | 0.3 | 0.1 |
-| violet | 2.7 | 1.7 | 1.2 | 1.1 | 0.7 | 0.4 |
-| coral | 0.7 | 3.0 | 1.0 | 2.5 | 0.9 | 0.4 |
-| marble | 6.7 | 7.4 | 6.9 | 4.8 | 1.7 | 0.7 |
-| opal | 14.9 | 10.2 | 11.4 | 4.9 | 5.3 | 1.2 |
-| ruby | 0.0 | 0.0 | 6.6 | 23.4 | 22.5 | 9.3 |
-| black | 71.6 | 75.5 | 72.0 | 62.5 | 68.5 | 87.8 |
+| pearl | 0.3 | 0.2 | 0.1 | 0.0 | 0.0 | 0.0 |
+| blue | 0.7 | 0.4 | 0.1 | 0.1 | 0.0 | 0.0 |
+| mint | 1.4 | 0.5 | 0.3 | 0.1 | 0.1 | 0.0 |
+| golden | 2.5 | 0.7 | 0.4 | 0.3 | 0.2 | 0.1 |
+| violet | 5.3 | 1.4 | 0.8 | 0.6 | 0.4 | 0.3 |
+| coral | 4.7 | 1.7 | 0.8 | 1.1 | 2.0 | 0.6 |
+| marble | 13.0 | 8.8 | 1.4 | 1.5 | 0.6 | 1.0 |
+| opal | 25.4 | 5.7 | 2.9 | 0.0 | 0.0 | 2.2 |
+| ruby | 46.6 | 0.0 | 9.8 | 8.4 | 7.3 | 9.3 |
+| black | 0.0 | 80.6 | 83.3 | 87.9 | 89.3 | 86.4 |
 
-Tools bought: C1 Awl@0.7, Brass Mallet@1.6, Steel Hammer@3.0, Sledgehammer@4.3, Diamond Hammer@5.9 / C2 Awl@0.6, Brass Mallet@1.3, Steel Hammer@1.8, Sledgehammer@2.8, Diamond Hammer@3.6 / C3 Awl@0.5, Brass Mallet@1.2, Steel Hammer@2.0, Sledgehammer@2.7, Diamond Hammer@3.3 / C4 Awl@0.3, Brass Mallet@1.1, Steel Hammer@1.8, Sledgehammer@2.5, Diamond Hammer@3.3 / C5 Awl@0.3, Brass Mallet@0.9, Steel Hammer@1.4, Sledgehammer@2.0, Diamond Hammer@2.7 / C6 Awl@0.2, Brass Mallet@0.9, Steel Hammer@1.1, Sledgehammer@1.3, Diamond Hammer@1.7
-Largest values (whole cycles, all 6): juice held 407259722, run juice 1189565430, single pop 505362000, income/s 19233560, cost on offer 341691777
+Tools bought: C1 Awl@0.7, Brass Mallet@1.6, Steel Hammer@2.6, Sledgehammer@3.7, Diamond Hammer@4.3 / C2 Awl@0.5, Brass Mallet@1.4, Steel Hammer@2.4, Sledgehammer@3.8 / C3 Awl@0.4, Brass Mallet@1.2, Steel Hammer@1.9, Sledgehammer@2.7, Diamond Hammer@3.3 / C4 Awl@0.4, Brass Mallet@1.1, Steel Hammer@1.8, Sledgehammer@2.3, Diamond Hammer@3.2 / C5 Awl@0.3, Brass Mallet@0.9, Steel Hammer@1.4, Sledgehammer@2.0, Diamond Hammer@2.6 / C6 Awl@0.3, Brass Mallet@1.0, Steel Hammer@1.3, Sledgehammer@1.9, Diamond Hammer@2.5
+Largest values (whole cycles, all 6): juice held 171851269, run juice 440296472, single pop 202991250, income/s 7302679, cost on offer 59198096
 
 Away bonus calibration: helpers alone for 1 h from that moment's board (helperHour, mean of 4 seeds), against awayBonus(3600):
 
 | checkpoint | helper-only juice, 1 h | half of it | away bonus, 1 h | away / half |
 |---|---|---|---|---|
-| C1 first helper (4.8 min) | 431K | 215K | 224K | 1.04 |
-| C1 Fresh Batch ready (6.0 min) | 9.9M | 4.9M | 5.0M | 1.01 |
-| C2 first helper (2.8 min) | 582K | 291K | 282K | 0.97 |
-| C2 Fresh Batch ready (3.7 min) | 46.8M | 23.4M | 14.1M | 0.60 |
-| C3 first helper (2.9 min) | 637K | 319K | 326K | 1.02 |
-| C3 Fresh Batch ready (4.0 min) | 57.3M | 28.6M | 22.4M | 0.78 |
-| C4 first helper (2.8 min) | 881K | 441K | 412K | 0.94 |
-| C4 Fresh Batch ready (4.5 min) | 181M | 90.5M | 88.7M | 0.98 |
-| C5 first helper (2.5 min) | 1.1M | 570K | 561K | 0.98 |
-| C5 Fresh Batch ready (3.9 min) | 240M | 120M | 122M | 1.02 |
-| C6 first helper (1.5 min) | 1.5M | 727K | 673K | 0.93 |
-| C6 Fresh Batch ready (3.0 min) | 350M | 175M | 175M | 1.00 |
+| C1 first helper (3.7 min) | 462K | 231K | 225K | 0.97 |
+| C1 Fresh Batch ready (4.5 min) | 15.2M | 7.6M | 7.8M | 1.02 |
+| C2 first helper (3.8 min) | 600K | 300K | 284K | 0.95 |
+| C2 Fresh Batch ready (4.4 min) | 5.0M | 2.5M | 2.4M | 0.98 |
+| C3 first helper (2.9 min) | 679K | 339K | 341K | 1.01 |
+| C3 Fresh Batch ready (3.5 min) | 32.2M | 16.1M | 12.7M | 0.79 |
+| C4 first helper (2.7 min) | 758K | 379K | 379K | 1.00 |
+| C4 Fresh Batch ready (3.3 min) | 65.4M | 32.7M | 23.1M | 0.71 |
+| C5 first helper (2.1 min) | 1.0M | 504K | 475K | 0.94 |
+| C5 Fresh Batch ready (3.0 min) | 194M | 96.8M | 99.6M | 1.03 |
+| C6 first helper (1.9 min) | 1.5M | 728K | 602K | 0.83 |
+| C6 Fresh Batch ready (3.1 min) | 286M | 143M | 141M | 0.99 |
 
 Rose collection for the Pink Duck (normal Rose pops over the 60 s before each checkpoint; keeping is not simulated):
 
 | checkpoint | Rose pops / min | minutes for 10,000 | juice 10,000 would sell for | Rose share of income |
 |---|---|---|---|---|
-| C1 first helper (4.8 min) | 79 | 127 | 512K | 0.6% |
-| C1 first Fresh Batch (6.0 min) | 172 | 58 | 489K | 0.1% |
-| C6 Fresh Batch (3.0 min) | 573 | 17 | 2.1M | 0.0% |
+| C1 first helper (3.7 min) | 71 | 141 | 483K | 0.3% |
+| C1 first Fresh Batch (4.5 min) | 139 | 72 | 452K | 0.1% |
+| C6 Fresh Batch (3.1 min) | 646 | 15 | 1.2M | 0.0% |
 
 Black Pearls per cycle:
 
 | cycle | unlocked (min) | run length (min) | spawns after unlock | Blacks expected | spawned | spawns turned Rose by the cap | popped by taps | popped by helpers | hits at unlock | hits at end (power) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 5.6 | 6.0 | 96 | 0.63 | 1 | 0 | 1 | 0 | 27 | 18 (18) |
-| 2 | 3.3 | 3.7 | 125 | 0.94 | 1 | 0 | 1 | 0 | 27 | 15 (22) |
-| 3 | 3.3 | 4.0 | 351 | 4.56 | 2 | 0 | 2 | 0 | 27 | 13 (26) |
-| 4 | 3.2 | 4.5 | 658 | 9.30 | 4 | 1 | 3 | 0 | 27 | 10 (34) |
-| 5 | 2.5 | 3.9 | 677 | 8.90 | 5 | 2 | 5 | 0 | 27 | 9 (38) |
-| 6 | 1.6 | 3.0 | 814 | 12.61 | 9 | 2 | 9 | 0 | 27 | 9 (38) |
+| 1 | 4.3 | 4.5 | 48 | 0.26 | 0 | 0 | 0 | 0 | 27 | 18 (18) |
+| 2 | 4.2 | 4.4 | 92 | 0.63 | 1 | 0 | 1 | 0 | 27 | 27 (12) |
+| 3 | 3.3 | 3.5 | 78 | 0.83 | 1 | 1 | 1 | 0 | 27 | 18 (18) |
+| 4 | 3.0 | 3.3 | 123 | 1.24 | 2 | 1 | 2 | 0 | 27 | 15 (22) |
+| 5 | 2.6 | 3.0 | 195 | 2.96 | 3 | 0 | 3 | 0 | 27 | 10 (34) |
+| 6 | 2.2 | 3.1 | 450 | 5.29 | 5 | 1 | 5 | 0 | 27 | 9 (38) |
 
 ## With the Pink Duck (`npm run sim -- --duck`), six-cycle tables
 
+Achievements applied (2026-10-26).
+
 ### casual (1.5 taps/s, skill 0.3, seed 1)
 
 | cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 11.0 | 8.0 | 11.0 | 17.8M | +3 | 3 | 1.8 | 0.0 | 0.0 | 260K | black | 304K | 5.1M |
-| 2 | 8.6 | 7.3 | 8.6 | 19.8M | +2 | 5 | 2.1 | 0.0 | 0.0 | 308K | black | 395K | 1.9M |
-| 3 | 6.5 | 5.4 | 6.5 | 58.1M | +3 | 8 | 2.5 | 0.1 | 0.1 | 939K | black | 456K | 29.7M |
-| 4 | 5.5 | 3.9 | 5.5 | 85.3M | +4 | 12 | 3.1 | 0.1 | 0.1 | 1.4M | black | 547K | 97.6M |
-| 5 | 5.5 | 3.3 | 5.5 | 240M | +6 | 18 | 3.9 | 0.1 | 0.1 | 4.0M | black | 668K | 152M |
-| 6 | 5.1 | 3.1 | 5.1 | 506M | +9 | 27 | 5.2 | 0.1 | 0.6 | 7.6M | black | 851K | 211M |
+Achievements granted by the end of each cycle: 15 (x1.085) / 15 (x1.085) / 16 (x1.09) / 16 (x1.09) / 17 (x1.095) / 18 (x1.1)
+
+| 1 | 9.5 | 8.2 | 9.5 | 5.1M | +2 | 2 | 1.8 | 0.0 | 0.0 | 52K | black | 316K | 8.5M |
+| 2 | 8.5 | 5.8 | 8.5 | 20.4M | +2 | 4 | 2.1 | 0.0 | 0.0 | 298K | black | 396K | 3.0M |
+| 3 | 5.6 | 4.2 | 5.6 | 25.5M | +2 | 6 | 2.4 | 0.0 | 0.0 | 392K | black | 477K | 11.4M |
+| 4 | 5.8 | 4.7 | 5.8 | 51.5M | +3 | 9 | 2.9 | 0.1 | 0.1 | 725K | black | 530K | 36.5M |
+| 5 | 6.7 | 4.8 | 6.7 | 148M | +5 | 14 | 3.7 | 0.1 | 0.1 | 2.3M | black | 647K | 135M |
+| 6 | 5.9 | 3.7 | 5.9 | 346M | +7 | 21 | 4.8 | 0.1 | 0.2 | 5.7M | black | 802K | 193M |
 
 ### engaged (2.5 taps/s, skill 0.7, seed 2)
 
 | cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 3.6 | 3.0 | 3.6 | 6.0M | +2 | 2 | 1.7 | 0.0 | 0.0 | 96K | black | 313K | 10.1M |
-| 2 | 3.3 | 2.7 | 3.3 | 18.8M | +2 | 4 | 2.0 | 0.0 | 0.0 | 308K | black | 365K | 2.7M |
-| 3 | 2.7 | 2.2 | 2.7 | 22.9M | +2 | 6 | 2.2 | 0.0 | 0.0 | 378K | black | 425K | 3.6M |
-| 4 | 2.9 | 2.3 | 2.9 | 79.0M | +4 | 10 | 2.8 | 0.1 | 0.1 | 1.3M | black | 486K | 86.8M |
-| 5 | 3.1 | 2.0 | 3.1 | 168M | +5 | 15 | 3.5 | 0.1 | 0.1 | 2.8M | black | 608K | 127M |
-| 6 | 3.0 | 1.4 | 3.0 | 367M | +8 | 23 | 4.6 | 0.1 | 0.5 | 6.1M | black | 760K | 183M |
+Achievements granted by the end of each cycle: 13 (x1.065) / 15 (x1.08) / 17 (x1.1) / 19 (x1.11) / 19 (x1.11) / 19 (x1.11)
+
+| 1 | 3.5 | 3.4 | 3.5 | 8.6M | +2 | 2 | 1.8 | 0.0 | 0.0 | 140K | ruby | 366K | 698K |
+| 2 | 3.5 | 2.2 | 3.5 | 12.0M | +2 | 4 | 2.1 | 0.0 | 0.0 | 180K | black | 388K | 2.9M |
+| 3 | 3.0 | 2.5 | 3.0 | 31.5M | +2 | 6 | 2.5 | 0.0 | 0.0 | 522K | black | 459K | 19.3M |
+| 4 | 3.3 | 2.0 | 3.3 | 95.5M | +4 | 10 | 3.1 | 0.1 | 0.1 | 1.6M | black | 535K | 37.0M |
+| 5 | 2.2 | 1.5 | 2.2 | 173M | +6 | 16 | 4.0 | 0.1 | 0.1 | 2.9M | black | 675K | 145M |
+| 6 | 2.5 | 1.4 | 2.5 | 415M | +8 | 24 | 5.3 | 0.1 | 0.4 | 6.9M | black | 877K | 211M |
 
 ## When the player keeps playing to minute 25 (`--wait=25`)
 
+Achievements applied (2026-10-26).
 
 ### casual (1.5 taps/s, skill 0.3, seed 1)
 
 | cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 12.8 | 11.4 | 25.0 | 2076M | +40 | 40 | 5.0 | 0.1 | 9.5 | 2.7M | black | 217K | 7.2M |
-| 2 | 6.1 | 2.3 | 25.0 | 20267M | +93 | 133 | 14.3 | 0.1 | 21.9 | 13.0M | black | 1.1M | 297M |
-| 3 | 11.9 | 1.3 | 25.0 | 64643M | +130 | 263 | 27.3 | 0.2 | 23.1 | 42.8M | black | 3.1M | 971M |
-| 4 | 20.8 | 0.8 | 25.0 | 137501M | +160 | 423 | 43.3 | 0.1 | 23.5 | 114M | black | 5.9M | 1969M |
-| 5 | 29.4 | 0.7 | 29.4 | 279665M | +212 | 635 | 64.5 | 0.1 | 28.3 | 289M | black | 10.1M | 3246M |
-| 6 | 44.0 | 0.6 | 44.0 | 631656M | +318 | 953 | 96.3 | 0.2 | 43.1 | 218M | black | 14.0M | 5018M |
+Achievements granted by the end of each cycle: 26 (x1.15) / 32 (x1.185) / 32 (x1.185) / 32 (x1.185) / 32 (x1.185) / 34 (x1.205)
+
+| 1 | 11.4 | 10.4 | 25.0 | 2162M | +41 | 41 | 5.9 | 0.1 | 10.7 | 2.1M | black | 227K | 5.8M |
+| 2 | 5.7 | 2.1 | 25.0 | 25920M | +108 | 149 | 18.8 | 0.1 | 21.4 | 17.3M | black | 1.3M | 361M |
+| 3 | 11.7 | 1.2 | 25.0 | 83711M | +150 | 299 | 36.6 | 0.2 | 23.2 | 105M | black | 4.1M | 1306M |
+| 4 | 20.9 | 0.8 | 25.0 | 174806M | +179 | 478 | 57.8 | 0.1 | 23.6 | 138M | black | 7.9M | 2693M |
+| 5 | 27.1 | 0.9 | 27.1 | 358348M | +240 | 718 | 86.3 | 0.1 | 26.0 | 176M | black | 12.6M | 4417M |
+| 6 | 43.2 | 0.5 | 43.2 | 813826M | +362 | 1080 | 131.3 | 0.2 | 42.3 | 541M | black | 18.7M | 6891M |
 
 Minute each upgrade reaches max level (- = not maxed before Fresh Batch):
 
 | upgrade (max) | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
-| tool (5) | 12.7 | 2.3 | 1.6 | 1.1 | 0.9 | 0.7 |
-| lucky (8) | 6.4 | 1.2 | 0.7 | 0.5 | 0.4 | 0.3 |
-| auto (20) | 15.5 | 3.2 | 2.0 | 1.6 | 1.2 | 1.1 |
+| tool (5) | 11.2 | 2.7 | 1.2 | 1.1 | 1.0 | 0.6 |
+| lucky (8) | 6.2 | 1.3 | 0.5 | 0.4 | 0.5 | 0.3 |
+| auto (20) | 14.2 | 3.7 | 1.9 | 1.5 | 1.3 | 1.0 |
 | sharp (99) | - | - | - | - | - | - |
-| mint (5) | 8.7 | 1.6 | 0.8 | 0.6 | 0.5 | 0.5 |
-| golden (6) | 11.4 | 2.3 | 1.4 | 0.8 | 0.6 | 0.6 |
-| violet (5) | 11.5 | 2.3 | 1.4 | 1.1 | 0.7 | 0.6 |
-| coral (5) | 12.7 | 2.7 | 1.6 | 1.2 | 0.9 | 0.7 |
-| marble (5) | 13.5 | 2.7 | 1.9 | 1.2 | 0.9 | 1.0 |
-| opal (5) | 13.8 | 2.7 | 1.9 | 1.2 | 0.9 | 1.0 |
-| ruby (5) | 14.1 | 2.7 | 1.9 | 1.4 | 1.0 | 1.0 |
-| black (5) | 14.6 | 2.9 | 1.9 | 1.6 | 1.0 | 1.0 |
-| shiny (10) | 13.8 | 2.7 | 1.9 | 1.2 | 0.9 | 1.0 |
-| spawn (12) | 8.4 | 1.5 | 0.8 | 0.6 | 0.5 | 0.5 |
-| combo (10) | 5.5 | 1.2 | 0.6 | 0.5 | 0.3 | 0.3 |
-| fuel (5) | 6.2 | 1.2 | 0.6 | 0.5 | 0.3 | 0.3 |
-| tempo (10) | 14.1 | 2.7 | 1.9 | 1.4 | 1.0 | 1.0 |
-| board (2) | 10.7 | 1.8 | 1.2 | 0.7 | 0.5 | 0.5 |
+| mint (5) | 7.6 | 1.5 | 0.8 | 0.6 | 0.5 | 0.3 |
+| golden (6) | 10.4 | 2.2 | 1.2 | 0.8 | 0.9 | 0.6 |
+| violet (5) | 10.7 | 2.2 | 1.2 | 0.8 | 0.9 | 0.6 |
+| coral (5) | 11.3 | 2.8 | 1.2 | 1.2 | 1.0 | 0.6 |
+| marble (5) | 11.9 | 3.1 | 1.3 | 1.2 | 1.0 | 0.9 |
+| opal (5) | 12.0 | 3.2 | 1.3 | 1.5 | 1.1 | 1.0 |
+| ruby (5) | 12.4 | 3.3 | 1.9 | 1.5 | 1.1 | 1.0 |
+| black (5) | 13.0 | 3.4 | 1.9 | 1.5 | 1.2 | 1.0 |
+| shiny (10) | 12.0 | 3.2 | 1.4 | 1.5 | 1.1 | 1.0 |
+| spawn (12) | 7.5 | 1.5 | 0.8 | 0.5 | 0.5 | 0.3 |
+| combo (10) | 5.0 | 1.2 | 0.5 | 0.3 | 0.4 | 0.2 |
+| fuel (5) | 5.5 | 1.2 | 0.5 | 0.3 | 0.5 | 0.2 |
+| tempo (10) | 13.0 | 3.3 | 1.9 | 1.5 | 1.2 | 1.0 |
+| board (2) | 9.6 | 1.9 | 0.8 | 0.6 | 0.5 | 0.5 |
 
 Share of cycle income by pearl type (%):
 
 | pearl | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
 | pearl | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
-| blue | 0.0 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| blue | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
 | mint | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
-| golden | 0.1 | 0.2 | 0.2 | 0.2 | 0.1 | 0.2 |
+| golden | 0.2 | 0.1 | 0.2 | 0.2 | 0.1 | 0.2 |
 | violet | 0.3 | 0.3 | 0.3 | 0.3 | 0.3 | 0.3 |
-| coral | 0.6 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 |
-| marble | 1.2 | 1.3 | 1.1 | 1.1 | 1.1 | 1.2 |
-| opal | 2.8 | 4.1 | 4.3 | 4.9 | 4.0 | 4.8 |
-| ruby | 15.8 | 11.8 | 10.0 | 9.1 | 10.7 | 9.8 |
-| black | 79.0 | 81.7 | 83.5 | 83.8 | 83.1 | 83.1 |
+| coral | 0.6 | 0.5 | 0.6 | 0.5 | 0.5 | 0.5 |
+| marble | 1.3 | 1.2 | 1.3 | 1.4 | 1.0 | 1.0 |
+| opal | 4.9 | 3.4 | 5.4 | 4.8 | 3.8 | 4.1 |
+| ruby | 11.9 | 12.0 | 9.6 | 9.5 | 9.9 | 10.6 |
+| black | 80.7 | 82.4 | 82.4 | 83.2 | 84.3 | 83.2 |
 
-Tools bought: C1 Awl@0.9, Brass Mallet@2.6, Steel Hammer@6.6, Sledgehammer@10.8, Diamond Hammer@12.7 / C2 Awl@0.3, Brass Mallet@0.8, Steel Hammer@1.3, Sledgehammer@1.8, Diamond Hammer@2.3 / C3 Awl@0.1, Brass Mallet@0.3, Steel Hammer@0.7, Sledgehammer@1.2, Diamond Hammer@1.6 / C4 Awl@0.1, Brass Mallet@0.3, Steel Hammer@0.5, Sledgehammer@0.8, Diamond Hammer@1.1 / C5 Awl@0.1, Brass Mallet@0.2, Steel Hammer@0.4, Sledgehammer@0.5, Diamond Hammer@0.9 / C6 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.4, Sledgehammer@0.6, Diamond Hammer@0.7
-Largest values (whole cycles, all 6): juice held 186610186788, run juice 631655534155, single pop 14828550000, income/s 558678442, cost on offer 244686494282
+Tools bought: C1 Awl@0.9, Brass Mallet@3.0, Steel Hammer@6.6, Sledgehammer@10.0, Diamond Hammer@11.2 / C2 Awl@0.3, Brass Mallet@0.6, Steel Hammer@1.3, Sledgehammer@2.1, Diamond Hammer@2.7 / C3 Awl@0.1, Brass Mallet@0.3, Steel Hammer@0.6, Sledgehammer@0.8, Diamond Hammer@1.2 / C4 Awl@0.1, Brass Mallet@0.2, Steel Hammer@0.4, Sledgehammer@0.7, Diamond Hammer@1.1 / C5 Awl@0.0, Brass Mallet@0.2, Steel Hammer@0.5, Sledgehammer@0.8, Diamond Hammer@1.0 / C6 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.3, Sledgehammer@0.5, Diamond Hammer@0.6
+Largest values (whole cycles, all 6): juice held 243470609084, run juice 813825598133, single pop 20000380400, income/s 676580018, cost on offer 379264066136
 
 ### engaged (2.5 taps/s, skill 0.7, seed 2)
 
 | cycle | Fresh Batch ready (min) | first helper (min) | taken (min) | run juice | Flavors gained | Flavors total | payout x after | nothing-to-want (min) | same, ignoring Sharp | income/s at end | furthest pearl | away 1 h at first helper | away 1 h at ready |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 6.0 | 4.8 | 25.0 | 7029M | +74 | 74 | 8.4 | 0.1 | 18.3 | 8.9M | black | 224K | 5.0M |
-| 2 | 3.9 | 0.8 | 25.0 | 87538M | +201 | 275 | 28.5 | 0.1 | 23.8 | 68.1M | black | 1.8M | 535M |
-| 3 | 10.5 | 0.5 | 25.0 | 313174M | +296 | 571 | 58.1 | 0.1 | 24.4 | 173M | black | 6.4M | 2056M |
-| 4 | 18.9 | 0.4 | 25.0 | 689903M | +366 | 937 | 94.7 | 0.2 | 24.5 | 615M | black | 13.0M | 4520M |
-| 5 | 28.7 | 0.3 | 28.7 | 1374078M | +469 | 1406 | 141.6 | 0.1 | 28.3 | 817M | black | 20.6M | 7635M |
-| 6 | 44.1 | 0.2 | 44.1 | 3091239M | +703 | 2109 | 211.9 | 0.2 | 43.8 | 888M | black | 30.7M | 11817M |
+Achievements granted by the end of each cycle: 29 (x1.165) / 32 (x1.185) / 32 (x1.185) / 34 (x1.205) / 35 (x1.21) / 36 (x1.215)
+
+| 1 | 4.5 | 3.7 | 25.0 | 8210M | +81 | 81 | 10.6 | 0.1 | 19.2 | 5.8M | black | 225K | 7.8M |
+| 2 | 4.6 | 0.6 | 25.0 | 111910M | +228 | 309 | 37.8 | 0.2 | 24.0 | 130M | black | 2.3M | 693M |
+| 3 | 9.9 | 0.4 | 25.0 | 430809M | +354 | 663 | 79.8 | 0.2 | 24.4 | 321M | black | 8.2M | 2780M |
+| 4 | 19.0 | 0.2 | 25.0 | 944119M | +430 | 1093 | 132.9 | 0.2 | 24.7 | 543M | black | 17.3M | 6257M |
+| 5 | 26.7 | 0.3 | 26.7 | 1870496M | +547 | 1640 | 199.7 | 0.2 | 26.4 | 1049M | black | 29.7M | 10950M |
+| 6 | 40.3 | 0.2 | 40.3 | 4201580M | +820 | 2460 | 300.1 | 0.2 | 40.1 | 1871M | black | 44.6M | 17014M |
 
 Minute each upgrade reaches max level (- = not maxed before Fresh Batch):
 
 | upgrade (max) | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
-| tool (5) | 5.9 | 1.2 | 0.6 | 0.5 | 0.4 | 0.3 |
-| lucky (8) | 2.9 | 0.7 | 0.3 | 0.2 | 0.2 | 0.1 |
-| auto (20) | 6.6 | 1.3 | 0.8 | 0.6 | 0.5 | 0.5 |
+| tool (5) | 4.3 | 0.9 | 0.5 | 0.3 | 0.4 | 0.3 |
+| lucky (8) | 2.6 | 0.5 | 0.2 | 0.1 | 0.1 | 0.1 |
+| auto (20) | 5.9 | 1.1 | 0.8 | 0.5 | 0.5 | 0.4 |
 | sharp (99) | - | - | - | - | - | - |
-| mint (5) | 3.2 | 0.7 | 0.4 | 0.3 | 0.2 | 0.2 |
-| golden (6) | 4.7 | 0.8 | 0.4 | 0.4 | 0.3 | 0.2 |
-| violet (5) | 5.4 | 1.0 | 0.5 | 0.4 | 0.4 | 0.2 |
-| coral (5) | 6.0 | 1.2 | 0.6 | 0.5 | 0.4 | 0.3 |
-| marble (5) | 6.0 | 1.3 | 0.7 | 0.5 | 0.4 | 0.4 |
-| opal (5) | 6.3 | 1.3 | 0.7 | 0.5 | 0.5 | 0.4 |
-| ruby (5) | 6.3 | 1.3 | 0.7 | 0.6 | 0.5 | 0.4 |
-| black (5) | 6.5 | 1.3 | 0.7 | 0.6 | 0.5 | 0.4 |
-| shiny (10) | 6.3 | 1.3 | 0.7 | 0.5 | 0.5 | 0.4 |
-| spawn (12) | 3.2 | 0.7 | 0.4 | 0.3 | 0.2 | 0.2 |
-| combo (10) | 2.6 | 0.6 | 0.3 | 0.2 | 0.1 | 0.1 |
-| fuel (5) | 2.7 | 0.7 | 0.3 | 0.2 | 0.2 | 0.1 |
-| tempo (10) | 6.4 | 1.3 | 0.7 | 0.6 | 0.5 | 0.4 |
-| board (2) | 3.8 | 0.8 | 0.4 | 0.3 | 0.2 | 0.2 |
+| mint (5) | 3.0 | 0.6 | 0.3 | 0.2 | 0.2 | 0.1 |
+| golden (6) | 3.7 | 0.6 | 0.4 | 0.3 | 0.2 | 0.2 |
+| violet (5) | 3.8 | 0.7 | 0.4 | 0.3 | 0.3 | 0.2 |
+| coral (5) | 4.3 | 0.9 | 0.5 | 0.3 | 0.4 | 0.3 |
+| marble (5) | 4.6 | 0.9 | 0.6 | 0.4 | 0.4 | 0.3 |
+| opal (5) | 4.6 | 0.9 | 0.6 | 0.4 | 0.4 | 0.3 |
+| ruby (5) | 4.9 | 0.9 | 0.6 | 0.4 | 0.4 | 0.4 |
+| black (5) | 5.2 | 1.0 | 0.6 | 0.5 | 0.5 | 0.4 |
+| shiny (10) | 4.6 | 0.9 | 0.6 | 0.4 | 0.4 | 0.4 |
+| spawn (12) | 2.9 | 0.6 | 0.2 | 0.2 | 0.2 | 0.1 |
+| combo (10) | 2.2 | 0.4 | 0.2 | 0.1 | 0.1 | 0.1 |
+| fuel (5) | 2.5 | 0.5 | 0.2 | 0.1 | 0.1 | 0.1 |
+| tempo (10) | 4.9 | 1.0 | 0.6 | 0.5 | 0.4 | 0.4 |
+| board (2) | 3.4 | 0.6 | 0.3 | 0.2 | 0.2 | 0.1 |
 
 Share of cycle income by pearl type (%):
 
 | pearl | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
 | pearl | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
-| blue | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
-| mint | 0.1 | 0.0 | 0.0 | 0.0 | 0.0 | 0.1 |
+| blue | 0.1 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| mint | 0.1 | 0.0 | 0.0 | 0.1 | 0.0 | 0.0 |
 | golden | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
-| violet | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 | 0.3 |
-| coral | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 |
-| marble | 1.1 | 0.8 | 1.0 | 1.0 | 0.9 | 1.0 |
-| opal | 3.7 | 3.5 | 4.0 | 4.0 | 3.3 | 4.4 |
-| ruby | 9.0 | 10.4 | 9.8 | 8.3 | 8.6 | 8.9 |
-| black | 85.3 | 84.4 | 84.3 | 85.8 | 86.4 | 84.9 |
+| violet | 0.3 | 0.3 | 0.2 | 0.3 | 0.2 | 0.2 |
+| coral | 0.5 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 |
+| marble | 1.1 | 0.9 | 0.9 | 1.1 | 0.8 | 1.0 |
+| opal | 3.4 | 3.5 | 3.7 | 3.5 | 3.8 | 3.4 |
+| ruby | 10.6 | 9.9 | 9.4 | 9.1 | 8.6 | 8.5 |
+| black | 83.8 | 84.7 | 85.1 | 85.4 | 85.9 | 86.2 |
 
-Tools bought: C1 Awl@0.7, Brass Mallet@1.6, Steel Hammer@3.0, Sledgehammer@4.3, Diamond Hammer@5.9 / C2 Awl@0.1, Brass Mallet@0.3, Steel Hammer@0.7, Sledgehammer@0.8, Diamond Hammer@1.2 / C3 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.3, Sledgehammer@0.4, Diamond Hammer@0.6 / C4 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.2, Sledgehammer@0.3, Diamond Hammer@0.5 / C5 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.2, Sledgehammer@0.2, Diamond Hammer@0.4 / C6 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.1, Sledgehammer@0.2, Diamond Hammer@0.3
-Largest values (whole cycles, all 6): juice held 910238136081, run juice 3091239332628, single pop 34921392000, income/s 2146939462, cost on offer 1412331974281
+Tools bought: C1 Awl@0.7, Brass Mallet@1.6, Steel Hammer@2.6, Sledgehammer@3.7, Diamond Hammer@4.3 / C2 Awl@0.1, Brass Mallet@0.2, Steel Hammer@0.5, Sledgehammer@0.6, Diamond Hammer@0.9 / C3 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.2, Sledgehammer@0.4, Diamond Hammer@0.5 / C4 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.1, Sledgehammer@0.2, Diamond Hammer@0.3 / C5 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.1, Sledgehammer@0.2, Diamond Hammer@0.4 / C6 Awl@0.0, Brass Mallet@0.1, Steel Hammer@0.1, Sledgehammer@0.2, Diamond Hammer@0.3
+Largest values (whole cycles, all 6): juice held 1405172310327, run juice 4201580481635, single pop 49441144500, income/s 3607739614, cost on offer 2189114560136
 
 ## Earlier report (2026-10-22, rule A): 10% per Flavor, an earlier and commoner Black Pearl, the artifact stack
 

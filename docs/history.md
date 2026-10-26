@@ -184,3 +184,16 @@
   42 (+25%, the cap) engaged. The sim does not apply the bonus; its default output is byte-identical.
 - Tests: tests/achievements.test.js (module) and tests/achievement_tests.js (in the game). Payout probes in duck_tests.js and
   relic_tests.js now divide out the achievement part, because a craft can earn achievements.
+
+## 2026-10-26: achievement cap at the table total, the sim applies achievements, one book close
+
+- ACH_CAP is now the table's total (+37.5%), so every achievement keeps paying; tests/achievements.test.js fails if the total
+  passes the cap (an over-cap fixture shows it). The summary no longer says "(the most achievements give)".
+- The book sheet has one close control (the sheet's 44 px X, on both tabs); the spread's red X is gone. Escape closes the book
+  from either tab (tested through the page's own keydown handler: the harness document now keeps its listeners).
+- The tab row is as wide as the card and the spread, so on desktop (1280x800) the tabs and the close sit over them. Checked at
+  390x844 and 1280x800, both tabs (node tools/audit.js ach [1280 800]).
+- tools/sim32.js applies achievements: counters in every run, a grant once a second of play and after each Fresh Batch through
+  the module's tests (44 of 57: no Crafting, no combo tiers above the first), achMult in every payout. --no-ach reproduces the
+  previous outputs byte for byte. docs/balance-report.md and docs/achievement-report.md regenerated: casual C1 12.8 -> 11.4 min,
+  engaged C1 6.0 -> 4.5 min; engaged C3-C6 under 4 min; six cycles end at 29 and 24 Flavors (27 and 37 before).
